@@ -1,0 +1,3 @@
+CREATE TABLE {!table_name} ({column_name}  VARCHAR(20) , {column_name}  CHAR(5), {column_name}  CHAR(2), {column_name}  VARCHAR(20), {column_name}  INT, {column_name}  INT);
+CREATE TABLE {!table_name} AS SELECT * FROM {table_name};
+CREATE TABLE {!table_name}  ({column_name}  VARCHAR(20) , {column_name}  CHAR(5), {column_name}  CHAR(2), {column_name}  VARCHAR(20), {column_name}  INT, {column_name}  INT, {column_name}  INT, {column_name}  INT, {column_name}  INT, {column_name}  INT, {column_name}  INT);

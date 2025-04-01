@@ -1,0 +1,4 @@
+UPDATE {!table_name} SET {!column_name} = {longitude}, {!column_name} = {lattitude} WHERE {!column_name} = '{neighbourhoods}' ;
+UPDATE {!table_name} SET {!column_name} = "{annonce_url}";
+UPDATE {!table_name} SET {!column_name} = {date} WHERE {!column_name}  = "{annonce_name}";
+UPDATE {!table_name} SET {!column_name} = '{database_user_name}' WHERE {!column_name}  = {lattitude} AND {!column_name}  = {longitude};

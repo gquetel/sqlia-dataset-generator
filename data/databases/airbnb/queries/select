@@ -1,0 +1,6 @@
+SELECT {!column_name}, {!column_name} FROM {!table_name} WHERE {!column_name}='{annonce_url}';
+select {!column_name} from {!table_name} where {!column_name}="{listing_id}" or {!column_name}="{date}";
+select * from {!table_name} where {!column_name}="{annonce_name}" UNION select {!column_name}, {!column_name} from {!table_name} where {!column_name}=  {host_listing_count};
+SELECT * FROM {!table_name} WHERE {column_name} = "{annonce_url}";
+SELECT {!column_name}, {!column_name} FROM {!table_name} WHERE {!column_name}='{price}' OR {!column_name}={maximum_nigths};
+SELECT {!column_name} FROM {!table_name} WHERE {!column_name}=number_review  AND NOT {!column_name}='{database_user_name}';

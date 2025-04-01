@@ -1,0 +1,5 @@
+delete  from {!table_name} where {!column_name}="{city_name}";
+DELETE from {!table_name} WHERE {!column_name}={lattitude} AND {!column_name}={longitude};
+delete from {table_name};
+DELETE FROM {!table_name} WHERE {!column_name} IN (SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = '{gps_code}');
+DELETE FROM {!table_name} WHERE {!column_name} IN ((SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = '{comment_subject}')  UNION (SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = "{city_name}"));
