@@ -3,6 +3,8 @@ from .payload_generators.sqlmap_generator import sqlmapGenerator
 import random
 from typing import Tuple, List
 
+# TODO: Refaire une passe sur les variables nécéssaires
+# ATM, target_counts & total_count ne sont pas utilisés.
 
 class PayloadDistributionManager:
     def __init__(self, payloads: list[dict], n_attack_queries: int):
@@ -13,16 +15,17 @@ class PayloadDistributionManager:
         # tuple-based index dict, returning target counts for
         # given (family, type)
         self.target_counts = defaultdict(int)
-        # tuple-based index dict, returning current counts for
-        # given (family, type)
-        self.current_counts = defaultdict(int)
+        # tuple-based index dict, returning counter of remaining payloads
+        # to be generated given (family, type)
+        self.remaining_counts = defaultdict(int)
 
         self._family_types = set()
         for payload in self.payloads_config:
-            self.target_counts[(payload["family"], payload["type"])] = (
-                payload["proportion"] * self._n_attacks
+            target = int(payload["proportion"] * self._n_attacks)
+            self.target_counts[(payload["family"], payload["type"])] = target
+            self.remaining_counts[(payload["family"], payload["type"])] = (
+                target
             )
-            self.current_counts[(payload["family"], payload["type"])] = 0
             self._family_types.add(payload["family"])
 
         self.generators = {}
@@ -37,20 +40,22 @@ class PayloadDistributionManager:
         """
         for family in self._family_types:
             if family == "sqlmap":
-                self.generators[family] = sqlmapGenerator
+                self.generators[family] = sqlmapGenerator()
             else:
                 raise ValueError(f"No configuration for family '{family}'")
 
-    def _get_current_proportion(self, family, payload_type):
-        """Get the current proportion of a specific type across all payloads."""
-        if self.total_count == 0:
-            return 0.0
-        return self.current_counts[(family, payload_type)] / self.total_count
-
     def select_next_family_and_type(self):
-        if self.total_count == 0:
-            print(self.current_counts.keys())
-        return "", ""
+        # Randomly select a family and type using remaining_count as weights
+        keys = list(self.remaining_counts.keys())
+        weights = self.remaining_counts.values()
+        choice = random.choices(keys, weights=weights, k=1)[0]
 
-    def generate_payload(self):
+        # Increment total, update weights.
+        self.total_count += 1
+        self.remaining_counts[choice] -= 1
+        return choice
+
+    def generate_payload(self)-> tuple[str, str]:
         family, payload_type = self.select_next_family_and_type()
+        
+        return self.generators[family].generate_payload_from_type(payload_type)

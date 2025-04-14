@@ -32,8 +32,10 @@ class DatasetBuilder:
         )
         n_n, n_a, n_u = config_parser.get_queries_numbers(config)
         pdm = PayloadDistributionManager(payloads_to_use, n_attack_queries=n_a)
-        pdm.generate_payload()
+        payload, payload_id = pdm.generate_payload()
+        print(payload,payload_id)
         exit(1)
+        
         # self.payloads = load_payloads(payloads_to_use)
         # self.verify_paths()
 
