@@ -1,5 +1,0 @@
-UPDATE {!table_name} SET {!column_name} = "{club_name}" WHERE {!column_name} = "{player_name}" ;
-UPDATE {!table_name} SET {!column_name} = '{player_position}';
-UPDATE {!table_name} SET {!column_name} = '{nationality}' WHERE {!column_name} > {goalkeper_succes};
-UPDATE {!table_name} SET {!column_name} = {pass_completion} WHERE {!column_name}  < {nb_pass_de} AND {!column_name}  < {nb_takkles};
-UPDATE {!table_name} SET {!column_name} = {nb_interception}, {!column_name} = {nb_pass_attempt}, {!column_name} = {nb_pass_de} WHERE {!column_name}  = "{player_name}" AND NOT {!column_name}  = '{club_name}';

@@ -1,4 +1,0 @@
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name}, {!column_name}, {!column_name}, {!column_name}, {!column_name} ) VALUES ({listing_id}, "{date}", "{date}", 'f', {price} , 3, {maximum_nigths});
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name}, {!column_name}, {!column_name},  {!column_name}) VALUES ({listing_id}, {listing_id}, "{date}", {listing_id}, "{database_user_name}", "{comment}");
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name}, {!column_name}, {!column_name},  {!column_name}) VALUES ({listing_id}, {listing_id}, "{date}", NULL, NULL, "{comment}");
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name}, {!column_name}) VALUES ("{annonce_name}", {listing_id}, "{date}", '{annonce_url}' );

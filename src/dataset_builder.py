@@ -1,7 +1,8 @@
 import pandas as pd
 import os
 import random
-from .payloads.sqlmap_generator import sqlmapGenerator
+
+from .payload_generator import PayloadDistributionManager
 from .queries_generator import (
     FILEPATHS,
     load_dictionnaries,
@@ -18,17 +19,23 @@ class DatasetBuilder:
         self.seed = config.get("RANDOM", "seed")
         random.seed(self.seed)
 
-        self.templates_config = config_parser.get_statement_types_and_proportions(
+        # self.templates_config = config_parser.get_statement_types_and_proportions(
+        #     config
+        # )
+        # self.used_databases = config_parser.get_used_databases(config)
+        # self.n_normal_queries, self.n_attack_queries = (
+        #     config_parser.get_queries_numbers(config)
+        # )
+        # self.outpath = config_parser.get_output_path(config)
+        payloads_to_use = config_parser.get_payload_types_and_proportions(
             config
         )
-        self.used_databases = config_parser.get_used_databases(config)
-        self.n_normal_queries, self.n_attack_queries = (
-            config_parser.get_queries_numbers(config)
-        )
-        self.outpath = config_parser.get_output_path(config)
-        payloads_to_use = config_parser.get_payload_types_and_proportions(config)
-        self.payloads = load_payloads(payloads_to_use)
-        self.verify_paths()
+        n_n, n_a, n_u = config_parser.get_queries_numbers(config)
+        pdm = PayloadDistributionManager(payloads_to_use, n_attack_queries=n_a)
+        pdm.generate_payload()
+        exit(1)
+        # self.payloads = load_payloads(payloads_to_use)
+        # self.verify_paths()
 
     def verify_paths(self):
         for database in self.used_databases:
@@ -57,26 +64,34 @@ class DatasetBuilder:
         picked_template = self.generator.generate_payload(picked_template)
         for dictionnary in d_dictionnaries:
             picked_template = picked_template.replace(
-                f"{{{dictionnary}}}", pick_from_dict(d_dictionnaries, dictionnary)
+                f"{{{dictionnary}}}",
+                pick_from_dict(d_dictionnaries, dictionnary),
             )
             picked_template = picked_template.replace(
-                f"{{!{dictionnary}}}", pick_from_dict(d_dictionnaries, dictionnary)
+                f"{{!{dictionnary}}}",
+                pick_from_dict(d_dictionnaries, dictionnary),
             )
 
         return picked_template
 
     def init_generator(self, payload: dict, d_dictionnaries: dict, database):
         if payload["family"] == "sqlmap":
-            self.generator = sqlmapGenerator(payload["templates"], d_dictionnaries, database)
+            self.generator = sqlmapGenerator(
+                payload["templates"], d_dictionnaries, database
+            )
         else:
-            raise ValueError(f"Payload family '{payload['family']}' is not supported.")
+            raise ValueError(
+                f"Payload family '{payload['family']}' is not supported."
+            )
 
     def build(
         self,
     ) -> pd.DataFrame:
         # Compute the number of queries to generate for each database
         n_queries_per_db = self.n_normal_queries // len(self.used_databases)
-        n_queries_per_db_attack = self.n_attack_queries // len(self.used_databases)
+        n_queries_per_db_attack = self.n_attack_queries // len(
+            self.used_databases
+        )
 
         l_n_queries = []
         l_a_queries = []
@@ -90,7 +105,9 @@ class DatasetBuilder:
                 )
 
                 # Generate normal queries
-                n_queries_from_type = int(n_queries_per_db * statement["proportion"])
+                n_queries_from_type = int(
+                    n_queries_per_db * statement["proportion"]
+                )
                 while n_queries_from_type > 0:
                     query = construct_normal_query(
                         l_available_templates, d_dictionnaries
@@ -124,8 +141,12 @@ class DatasetBuilder:
 
         self.df = pd.concat(
             [
-                pd.DataFrame({"query": l_n_queries, "label": 0}),  # Normal queries
-                pd.DataFrame({"query": l_a_queries, "label": 1}),  # Attack queries
+                pd.DataFrame(
+                    {"query": l_n_queries, "label": 0}
+                ),  # Normal queries
+                pd.DataFrame(
+                    {"query": l_a_queries, "label": 1}
+                ),  # Attack queries
             ]
         )
         return self.df

@@ -1,0 +1,9 @@
+template,ID,description,injection_point,clause,where
+"DELETE FROM {!table_name} WHERE{column_name}=""{city_name}"";",airport-D1,,,,
+"DELETE FROM {table_name} WHERE{!column_name}=""{city_name}"";",airport-D2,,,,
+"DELETE FROM {table_name} WHERE{column_name}=""{!city_name}"";",airport-D3,,,,
+DELETE from {!table_name} WHERE {!column_name}={lattitude} AND {!column_name}={longitude};,airport-D1,,,,
+DELETE FROM {!table_name} WHERE {!column_name} IN (SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = '{gps_code}');,airport-D1,,,,
+"DELETE FROM {!table_name} WHERE {!column_name} IN ((SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = '{comment_subject}')  UNION (SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = ""{city_name}""));",airport-D1,,,,
+,airport-D1,,,,
+,airport-D1,,,,

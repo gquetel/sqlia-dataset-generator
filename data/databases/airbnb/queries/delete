@@ -1,6 +1,0 @@
-delete  from {!table_name} where {!column_name}={listing_id};
-DELETE from {!table_name} WHERE {!column_name}={lattitude} AND {!column_name}={longitude};
-delete from {table_name};
-DELETE FROM {!table_name} WHERE {!column_name} IN (SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = "{neighbourhoods}");
-DELETE FROM {!table_name} WHERE {!column_name} IN ((SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = "{database_user_name}" AND NOT  {!column_name} = "{date}")  UNION (SELECT {!column_name} FROM {!table_name} WHERE {!column_name} = "{host_response_time}"));
-DELETE from {!table_name} WHERE {!column_name}="{host_response_time}" AND {!column_name}="{neighbourhoods}";

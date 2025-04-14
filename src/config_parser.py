@@ -11,8 +11,10 @@ def get_used_databases(config: configparser.ConfigParser):
 
 
 def get_queries_numbers(config: configparser.ConfigParser):
-    return config.getint("GENERAL", "n_normal_queries"), config.getint(
-        "GENERAL", "n_attack_queries"
+    return (
+        config.getint("GENERAL", "n_normal_queries"),
+        config.getint("GENERAL", "n_attack_queries"),
+        config.getint("GENERAL", "n_undefined_queries"),
     )
 
 
@@ -22,7 +24,9 @@ def get_statement_types_and_proportions(config: configparser.ConfigParser):
     for section in config.sections():
         if section == "SQL_STATEMENTS":
             for key, value in config.items(section):
-                stmts.append({"type": key, "proportion": float(Fraction(value))})
+                stmts.append(
+                    {"type": key, "proportion": float(Fraction(value))}
+                )
 
     if sum([stmt["proportion"] for stmt in stmts]) != 1:
         raise ValueError("Proportions of queries types must sum up to 1.")
@@ -31,6 +35,7 @@ def get_statement_types_and_proportions(config: configparser.ConfigParser):
 
 
 def get_payload_types_and_proportions(config: configparser.ConfigParser):
+    """Return a dictionnary of each payload type per family and its target proportion."""
     payloads = []
 
     for section in config.sections():
@@ -44,8 +49,7 @@ def get_payload_types_and_proportions(config: configparser.ConfigParser):
                         "proportion": float(Fraction(value)),
                     }
                 )
-                
-    if sum([payload["proportion"] for payload in payloads]) != 1:
+    if abs(sum([payload["proportion"] for payload in payloads]) - 1.0) > 1e-10:
         raise ValueError("Proportions of payloads types must sum up to 1.")
 
     return payloads

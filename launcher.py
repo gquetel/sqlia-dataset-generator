@@ -20,7 +20,9 @@ def init_args() -> argparse.Namespace:
 def init_config(args: argparse.Namespace) -> configparser.ConfigParser:
     # Interpolation required to use values from other sections in the same file:
     # https://docs.python.org/3/library/configparser.html
-    config = configparser.ConfigParser(interpolation=configparser.BasicInterpolation())
+    config = configparser.ConfigParser(
+        interpolation=configparser.BasicInterpolation()
+    )
     config.read(args.ini)
 
     return config
