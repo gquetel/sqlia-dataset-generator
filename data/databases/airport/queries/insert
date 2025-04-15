@@ -1,4 +1,0 @@
-INSERT INTO {!table_name} ({!column_name}, {!column_name} ) VALUES ("{database_user_name}", '{comment_subject}'), ("{database_user_name}", '{comment_subject}');
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name} , {!column_name}, {!column_name}, {!column_name}) VALUES ({airport_ref}, {airport_ref}, "{airport_type}", "{airport_name}", {lattitude}, {longitude});
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name} , {!column_name}, {!column_name}, {!column_name}) VALUES ({airport_ref}, {airport_ref}, {lattitude}, {longitude});
-INSERT INTO {!table_name} ({!column_name}, {!column_name}, {!column_name}, {!column_name}, {!column_name}) VALUES ({airport_ref}, '{country}', "{city_name}", '{gps_code}', NULL);

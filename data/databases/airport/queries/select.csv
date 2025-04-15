@@ -1,0 +1,6 @@
+full_query,ID,description,payload_type
+"SELECT * FROM airport WHERE icao_code = {!icao_code}",airport-S1,A select statement filtering by ICAO code that's vulnerable to SQL injection through the icao_code parameter.,string
+"SELECT * FROM airport WHERE elevation_ft BETWEEN {!elevation_ft} AND {elevation_ft}",airport-S2,A select statement with a BETWEEN clause on elevation that's vulnerable to SQL injection through first elevation_ft parameters.,int int
+"SELECT * FROM airport WHERE gps_code = {!gps_code} OR local_code = {local_code}",airport-S3,A select statement filtering by GPS code or local code with a SQL injection point on the gps_code parameter.,string string
+"SELECT id, ident, name FROM airport WHERE iso_country = {!iso_country} LIMIT {number}",airport-S4,A select statement that allows SQL injection through country filter. Possess a limit clause.,string int
+"SELECT id, ident, name FROM airport WHERE iso_country = {!iso_country}",airport-S5,A select statement that allows SQL injection through country filter.,string

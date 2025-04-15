@@ -1,4 +1,0 @@
-UPDATE {!table_name} SET {!column_name} = '{wikipedia_countrie}', {!column_name} = '{country}' WHERE {!column_name} = '{country_name}' ;
-UPDATE {!table_name} SET {!column_name} = {length_run_ways};
-UPDATE {!table_name} SET {!column_name} = '{comment_subject}' WHERE {!column_name}  = "{regions_name}";
-UPDATE {!table_name} SET {!column_name} = '{country}' WHERE {!column_name}  = {lattitude} AND {!column_name}  = {longitude};

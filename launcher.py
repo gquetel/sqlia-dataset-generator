@@ -24,7 +24,6 @@ def init_config(args: argparse.Namespace) -> configparser.ConfigParser:
         interpolation=configparser.BasicInterpolation()
     )
     config.read(args.ini)
-
     return config
 
 

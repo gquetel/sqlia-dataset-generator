@@ -1,6 +1,0 @@
-SELECT {!column_name}, {!column_name} FROM {!table_name} WHERE {!column_name}='{wikipedia_countrie}';
-select {!column_name} from {!table_name} where {!column_name}="{length_run_ways}" or {!column_name}="{regions_name}";
-select * from {!table_name} where {!column_name}="{gps_code}" UNION select {!column_name}, {!column_name} from {!table_name} where {!column_name}="{country_name}";
-SELECT * FROM {!table_name} WHERE {column_name} IS NULL;
-SELECT {!column_name}, {!column_name} FROM {!table_name} WHERE {!column_name}='{country}' OR {!column_name}='{regions_name}';
-SELECT {!column_name} FROM {!table_name} WHERE {!column_name}="{country_name}";

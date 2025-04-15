@@ -1,157 +1,170 @@
-import pandas as pd
 import os
+import pandas as pd
 import random
+import re
 
 from .payload_generator import PayloadDistributionManager
-from .queries_generator import (
-    FILEPATHS,
-    load_dictionnaries,
-    load_payloads,
-    load_query_templates,
-    pick_from_dict,
-    construct_normal_query,
-)
 import src.config_parser as config_parser
 
 
 class DatasetBuilder:
     def __init__(self, config) -> None:
-        self.seed = config.get("RANDOM", "seed")
+        self.config = config
+        self.seed = int(self.config.get("RANDOM", "seed"))
         random.seed(self.seed)
 
-        # self.templates_config = config_parser.get_statement_types_and_proportions(
-        #     config
-        # )
-        # self.used_databases = config_parser.get_used_databases(config)
-        # self.n_normal_queries, self.n_attack_queries = (
-        #     config_parser.get_queries_numbers(config)
-        # )
-        # self.outpath = config_parser.get_output_path(config)
-        payloads_to_use = config_parser.get_payload_types_and_proportions(
-            config
+        self.outpath = config_parser.get_output_path(config)
+        payloads_type = config_parser.get_payload_types_and_proportions(
+            self.config
+        )
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
         )
         n_n, n_a, n_u = config_parser.get_queries_numbers(config)
-        pdm = PayloadDistributionManager(payloads_to_use, n_attack_queries=n_a)
-        payload, payload_id = pdm.generate_payload()
-        print(payload,payload_id)
-        exit(1)
-        
-        # self.payloads = load_payloads(payloads_to_use)
-        # self.verify_paths()
 
-    def verify_paths(self):
-        for database in self.used_databases:
-            db_fp = FILEPATHS["databasesdir"] + database
-            if not os.path.exists(db_fp):
-                raise ValueError(
-                    f"Specified database folder '{database}' must be found in '{FILEPATHS['databasesdir']}'."
+        # Initialize Payload generation component
+        self.pdm = PayloadDistributionManager(
+            payloads_type, n_attack_queries=n_a
+        )
+
+        # Randomly select templates given the config file distribution
+        self._df_templates_a = pd.DataFrame()
+        self._df_templates_n = pd.DataFrame()
+        self._df_templates_u = pd.DataFrame()
+
+        self.populate_templates(
+            n_n=n_n, n_a=n_a, n_u=n_u, statements_type=statements_type
+        )
+
+        #  Dict holding all possible filler values
+        # Keys are tuple of the form (db_name, dictionnary_name)
+        self.dictionnaries = {}
+        self.populate_dictionnaries()
+
+    def populate_dictionnaries(self):
+        # Iterate over all datasets, check under data/databases/$dataset/dicts
+        # And load all existing file into self.dictionnaries[(family,dict)]
+        used_databases = config_parser.get_used_databases(self.config)
+
+        for db in used_databases:
+            dicts_dir = "".join(["./data/databases/", db, "/dicts/"])
+            for filename in os.listdir(dicts_dir):
+                with open(dicts_dir + filename, "r") as f:
+                    self.dictionnaries[(db, filename)] = f.read().splitlines()
+
+    def populate_templates(
+        self, n_n: int, n_a: int, n_u: int, statements_type: dict
+    ):
+        used_databases = config_parser.get_used_databases(self.config)
+
+        n_n_per_db = int(n_n / len(used_databases))
+        n_a_per_db = int(n_a / len(used_databases))
+        n_u_per_db = int(n_u / len(used_databases))
+
+        for db in used_databases:
+
+            dir_path = "".join(["./data/databases/", db, "/queries/"])
+            for stmt_type in statements_type:
+                # Iterate  statements_type,
+                # Load relevant csv file, and sample templates.
+                type = stmt_type["type"]
+                proportion = stmt_type["proportion"]
+
+                df_templates = pd.read_csv(dir_path + type + ".csv")
+
+                # Sample normal queries
+                _dft = df_templates.sample(
+                    n=int(proportion * n_n_per_db),
+                    replace=True,
+                    random_state=self.seed,
                 )
+                self._df_templates_n = pd.concat([self._df_templates_n, _dft])
 
-            for template in self.templates_config:
-                if template["proportion"] > 0:  # Skip check if unused
-                    continue
+                # Sample attack queries
+                _dft = df_templates.sample(
+                    n=int(proportion * n_a_per_db),
+                    replace=True,
+                    random_state=self.seed,
+                )
+                self._df_templates_a = pd.concat([self._df_templates_a, _dft])
 
-                query_fp = db_fp + "/queries/" + template["type"]
-                if not os.path.exists(query_fp):
-                    raise ValueError(
-                        f"Template file {template['type']} not found in {db_fp}/queries/."
+                # Sample undefined queries
+                _dft = df_templates.sample(
+                    n=int(proportion * n_u_per_db),
+                    replace=True,
+                    random_state=self.seed,
+                )
+                self._df_templates_u = pd.concat([self._df_templates_u, _dft])
+
+    def generate_normal_queries(self):
+        # Iterate over placeholders, and payload clause for type
+        # Randomly choose a value in dict for that placeholder
+        # And encapsulate based on type
+        generated_normal_queries = []
+        for template_row in self._df_templates_n.itertuples():
+            placeholders_pattern = r"\{([!]?[^}]*)\}"
+            all_placeholders = [
+                m.group(1)
+                for m in re.finditer(
+                    placeholders_pattern, template_row.full_query
+                )
+            ]
+            all_types = template_row.payload_type.split()
+            assert len(all_types) == len(all_placeholders)
+            db_name = template_row.ID.split("-")[0]
+
+            # Replace 1 by 1 all placeholders by a randomly choosen dict value
+            query = template_row.full_query
+            for placeholder, type in zip(all_placeholders, all_types):
+                if placeholder[0] == "!":
+                    # Choose value
+                    filler = random.choice(
+                        self.dictionnaries[(db_name, placeholder[1:])]
                     )
+                else:
+                    # Some edge cases:
+                    if placeholder == "number":
+                        # TODO, which values to set here ?
+                        filler = random.randint(-64000, 64000)
+                    else:
+                        filler = random.choice(
+                            self.dictionnaries[(db_name, placeholder)]
+                        )
+                match type:
+                    case "int":
+                        query = query.replace(f"{{{placeholder}}}", str(filler))
+                    case "string":
+                        # String should be escaped
+                        escape_char = random.choice(['"', "'"])
+                        query = query.replace(
+                            f"{{{placeholder}}}",
+                            f"{escape_char}{filler}{escape_char}",
+                        )
+                    case _:
+                        raise ValueError(f"Unknown payload type: {type}.")
+            # Append query, tempalte ID and label to dataset.
+            generated_normal_queries.append(
+                {
+                    "full_query": query,
+                    "label": 0,
+                    "template_id": template_row.ID,
+                    "malicious_input": None,
+                }
+            )
+        self.df = pd.DataFrame(generated_normal_queries)
 
-    def construct_attack_query(
-        self,
-        l_available_templates: list[str],
-        d_dictionnaries: dict,
-    ) -> str:
-        picked_template = random.choice(l_available_templates)
-        picked_template = self.generator.generate_payload(picked_template)
-        for dictionnary in d_dictionnaries:
-            picked_template = picked_template.replace(
-                f"{{{dictionnary}}}",
-                pick_from_dict(d_dictionnaries, dictionnary),
-            )
-            picked_template = picked_template.replace(
-                f"{{!{dictionnary}}}",
-                pick_from_dict(d_dictionnaries, dictionnary),
-            )
+    def generate_attack_queries(self):
+        pass
 
-        return picked_template
-
-    def init_generator(self, payload: dict, d_dictionnaries: dict, database):
-        if payload["family"] == "sqlmap":
-            self.generator = sqlmapGenerator(
-                payload["templates"], d_dictionnaries, database
-            )
-        else:
-            raise ValueError(
-                f"Payload family '{payload['family']}' is not supported."
-            )
+    def generate_undefined_queries(self):
+        pass
 
     def build(
         self,
     ) -> pd.DataFrame:
-        # Compute the number of queries to generate for each database
-        n_queries_per_db = self.n_normal_queries // len(self.used_databases)
-        n_queries_per_db_attack = self.n_attack_queries // len(
-            self.used_databases
-        )
-
-        l_n_queries = []
-        l_a_queries = []
-
-        for database in self.used_databases:
-            d_dictionnaries = load_dictionnaries(database)
-
-            for statement in self.templates_config:
-                l_available_templates = load_query_templates(
-                    database, statement["type"]
-                )
-
-                # Generate normal queries
-                n_queries_from_type = int(
-                    n_queries_per_db * statement["proportion"]
-                )
-                while n_queries_from_type > 0:
-                    query = construct_normal_query(
-                        l_available_templates, d_dictionnaries
-                    )
-                    l_n_queries.append(query)
-                    n_queries_from_type -= 1
-
-                # Generate attack queries
-                n_a_queries_from_type = int(
-                    n_queries_per_db_attack * statement["proportion"]
-                )
-                print(
-                    "Generating",
-                    n_a_queries_from_type,
-                    "queries of type",
-                    statement["type"],
-                )
-
-                for payload in self.payloads:
-                    n_queries_from_payload = int(
-                        n_a_queries_from_type * payload["proportion"]
-                    )
-                    self.init_generator(payload, d_dictionnaries, database)
-
-                    while n_queries_from_payload > 0:
-                        query = self.construct_attack_query(
-                            l_available_templates, d_dictionnaries
-                        )
-                        l_a_queries.append(query)
-                        n_queries_from_payload -= 1
-
-        self.df = pd.concat(
-            [
-                pd.DataFrame(
-                    {"query": l_n_queries, "label": 0}
-                ),  # Normal queries
-                pd.DataFrame(
-                    {"query": l_a_queries, "label": 1}
-                ),  # Attack queries
-            ]
-        )
-        return self.df
+        self.generate_normal_queries()
+        self.generate_attack_queries()
+        self.generate_undefined_queries()
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
