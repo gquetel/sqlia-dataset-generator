@@ -41,7 +41,7 @@ def get_payload_types_and_proportions(config: configparser.ConfigParser):
     for section in config.sections():
         if section == "PAYLOADS":
             for key, value in config.items(section):
-                family, paytype = key.split("_")
+                family, paytype = key.split(".")
                 payloads.append(
                     {
                         "type": paytype,

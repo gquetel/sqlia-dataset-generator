@@ -6,6 +6,7 @@ from typing import Tuple, List
 # TODO: Refaire une passe sur les variables nécéssaires
 # ATM, target_counts & total_count ne sont pas utilisés.
 
+
 class PayloadDistributionManager:
     def __init__(self, payloads: list[dict], n_attack_queries: int):
         self.payloads_config = payloads
@@ -23,9 +24,7 @@ class PayloadDistributionManager:
         for payload in self.payloads_config:
             target = int(payload["proportion"] * self._n_attacks)
             self.target_counts[(payload["family"], payload["type"])] = target
-            self.remaining_counts[(payload["family"], payload["type"])] = (
-                target
-            )
+            self.remaining_counts[(payload["family"], payload["type"])] = target
             self._family_types.add(payload["family"])
 
         self.generators = {}
@@ -55,7 +54,7 @@ class PayloadDistributionManager:
         self.remaining_counts[choice] -= 1
         return choice
 
-    def generate_payload(self)-> tuple[str, str]:
+    def generate_payload(self, clause: str) -> tuple[str, str]:
         family, payload_type = self.select_next_family_and_type()
-        
-        return self.generators[family].generate_payload_from_type(payload_type)
+
+        return self.generators[family].generate_payload_from_type(payload_type, clause)

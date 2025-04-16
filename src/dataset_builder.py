@@ -14,18 +14,12 @@ class DatasetBuilder:
         random.seed(self.seed)
 
         self.outpath = config_parser.get_output_path(config)
-        payloads_type = config_parser.get_payload_types_and_proportions(
-            self.config
-        )
-        statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
-        )
+        payloads_type = config_parser.get_payload_types_and_proportions(self.config)
+        statements_type = config_parser.get_statement_types_and_proportions(self.config)
         n_n, n_a, n_u = config_parser.get_queries_numbers(config)
 
         # Initialize Payload generation component
-        self.pdm = PayloadDistributionManager(
-            payloads_type, n_attack_queries=n_a
-        )
+        self.pdm = PayloadDistributionManager(payloads_type, n_attack_queries=n_a)
 
         # Randomly select templates given the config file distribution
         self._df_templates_a = pd.DataFrame()
@@ -52,9 +46,7 @@ class DatasetBuilder:
                 with open(dicts_dir + filename, "r") as f:
                     self.dictionnaries[(db, filename)] = f.read().splitlines()
 
-    def populate_templates(
-        self, n_n: int, n_a: int, n_u: int, statements_type: dict
-    ):
+    def populate_templates(self, n_n: int, n_a: int, n_u: int, statements_type: dict):
         used_databases = config_parser.get_used_databases(self.config)
 
         n_n_per_db = int(n_n / len(used_databases))
@@ -105,9 +97,7 @@ class DatasetBuilder:
             placeholders_pattern = r"\{([!]?[^}]*)\}"
             all_placeholders = [
                 m.group(1)
-                for m in re.finditer(
-                    placeholders_pattern, template_row.full_query
-                )
+                for m in re.finditer(placeholders_pattern, template_row.full_query)
             ]
             all_types = template_row.payload_type.split()
             assert len(all_types) == len(all_placeholders)
@@ -154,7 +144,55 @@ class DatasetBuilder:
         self.df = pd.DataFrame(generated_normal_queries)
 
     def generate_attack_queries(self):
-        pass
+        generated_attack_queries = []
+        for template_row in self._df_templates_a.itertuples():
+            placeholders_pattern = r"\{([!]?[^}]*)\}"
+            all_placeholders = [
+                m.group(1)
+                for m in re.finditer(placeholders_pattern, template_row.full_query)
+            ]
+            all_types = template_row.payload_type.split()
+            assert len(all_types) == len(all_placeholders)
+            db_name = template_row.ID.split("-")[0]
+
+            # Replace 1 by 1 all placeholders by a randomly choosen dict value
+            query = template_row.full_query
+            for placeholder, type in zip(all_placeholders, all_types):
+                if placeholder[0] == "!":
+                    # Use PayloadDistributionManager to generate payload
+                    payload, id = self.pdm.generate_payload(template_row.payload_clause)
+                    filler = payload
+                else:
+                    # Some edge cases:
+                    if placeholder == "number":
+                        # TODO, which values to set here ?
+                        filler = random.randint(-64000, 64000)
+                    else:
+                        filler = random.choice(
+                            self.dictionnaries[(db_name, placeholder)]
+                        )
+                match type:
+                    case "int":
+                        query = query.replace(f"{{{placeholder}}}", str(filler))
+                    case "string":
+                        # String should be escaped
+                        escape_char = random.choice(['"', "'"])
+                        query = query.replace(
+                            f"{{{placeholder}}}",
+                            f"{escape_char}{filler}{escape_char}",
+                        )
+                    case _:
+                        raise ValueError(f"Unknown payload type: {type}.")
+            generated_attack_queries.append(
+                {
+                    "full_query": query,
+                    "label": 0,
+                    "template_id": template_row.ID,
+                    "malicious_input": payload,
+                    "malicious_input_id": id,
+                }
+            )
+        self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
 
     def generate_undefined_queries(self):
         pass
