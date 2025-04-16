@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import xml.etree.ElementTree as ET
 
 from .payload_generator import PayloadGenerator
@@ -21,7 +22,6 @@ class sqlmapGenerator(PayloadGenerator):
         # First, we load all xml files
         self.payloads = {}
         self._load_all_payloads()
-        print(self.payloads)
 
     def _load_all_payloads(self):
         # Read all files under ./data/payloads/sqlmap ending with .xml
@@ -41,21 +41,30 @@ class sqlmapGenerator(PayloadGenerator):
                         # - <clause>, we only collect clause for WHERE or Always. Subject to evolution
                         # - <where>, what to do with parameter original value
                         # - <request>, the payload to use, and some of its settings.
-                        title = child.find("title").text
-                        clauses = set(_normalize_ranges(child.find("clause").text))
-                        where = child.find("where").text
-                        request_payload = child.find("request/payload").text
+                        # <details/dbms>, to check wether the payload can by used by MySQL servers.
 
-                        clauses = clauses.intersection(accepted_clauses)
-                        if len(clauses) > 0:
-                            payload_family.append(
-                                {
-                                    "title": title,
-                                    "clauses": clauses,
-                                    "where": int(where),
-                                    "payload": request_payload,
-                                }
-                            )
+                        # We only select MySQL applicable payloads.
+                        # If no details/dbms => Is generic
+                        # Else, evaluate wether MySQL is present in field.
+                        dbms_node = child.find("details/dbms")
+                        if dbms_node is None or "MySQL" in dbms_node.text:
+                            title = child.find("title").text
+                            clauses = set(_normalize_ranges(child.find("clause").text))
+                            if(9 in clauses):
+                                print(title)
+                            where = child.find("where").text
+                            request_payload = child.find("request/payload").text
+
+                            clauses = clauses.intersection(accepted_clauses)
+                            if len(clauses) > 0:
+                                payload_family.append(
+                                    {
+                                        "title": title,
+                                        "clauses": clauses,
+                                        "where": int(where),
+                                        "payload": request_payload,
+                                    }
+                                )
 
                     except AttributeError:
                         title = (
@@ -67,9 +76,14 @@ class sqlmapGenerator(PayloadGenerator):
                             "_load_all_payloads: failed to fetch all informations for child: ",
                             title,
                         )
-                self.payloads[filename[:-4]] = payload_family
+                self.payloads[filename[:-4]] = pd.DataFrame(payload_family)
 
-
+    def _map_clause_name_to_int(clause_name : str )-> int:
+        match(clause_name):
+            case "where":
+                pass
+            case "values":
+                pass
     def generate_payload_from_type(
         self, payload_type: str, payload_clause
     ) -> tuple[str, str]:
