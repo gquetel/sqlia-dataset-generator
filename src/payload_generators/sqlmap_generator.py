@@ -23,6 +23,26 @@ class sqlmapGenerator(PayloadGenerator):
         self.payloads = {}
         self._load_all_payloads()
 
+    def get_possible_types_from_clause(self, clause: str) -> list:
+        all_types = [
+            "boolean_blind",
+            "error_based",
+            "inline_query",
+            "stacked_queries",
+            "time_blind",
+            "union_query",
+        ]
+        match (clause):
+            case "where":
+                return all_types
+            case "values":
+                # TODO: voir si on peut rajouter d'autres injections qui font sens.
+                return ["stacked_queries"]
+            case _:
+                raise ValueError(
+                    "get_possible_types_from_clause: unknown clause ", clause
+                )
+
     def _load_all_payloads(self):
         # Read all files under ./data/payloads/sqlmap ending with .xml
         payloads_dir = "./data/payloads/sqlmap/"
@@ -50,8 +70,7 @@ class sqlmapGenerator(PayloadGenerator):
                         if dbms_node is None or "MySQL" in dbms_node.text:
                             title = child.find("title").text
                             clauses = set(_normalize_ranges(child.find("clause").text))
-                            if(9 in clauses):
-                                print(title)
+    
                             where = child.find("where").text
                             request_payload = child.find("request/payload").text
 
@@ -78,12 +97,13 @@ class sqlmapGenerator(PayloadGenerator):
                         )
                 self.payloads[filename[:-4]] = pd.DataFrame(payload_family)
 
-    def _map_clause_name_to_int(clause_name : str )-> int:
-        match(clause_name):
+    def _map_clause_name_to_int(clause_name: str) -> int:
+        match (clause_name):
             case "where":
                 pass
             case "values":
                 pass
+
     def generate_payload_from_type(
         self, payload_type: str, payload_clause
     ) -> tuple[str, str]:

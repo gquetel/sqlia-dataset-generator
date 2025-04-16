@@ -202,7 +202,9 @@ class DatasetBuilder:
     ) -> pd.DataFrame:
         self.generate_normal_queries()
         self.generate_attack_queries()
+        print(self.pdm.get_final_stats())
         self.generate_undefined_queries()
+        
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
