@@ -5,5 +5,7 @@ from abc import ABC, abstractmethod
 
 class PayloadGenerator(ABC):
     @abstractmethod
-    def generate_payload_from_type(self, type: str, clause: str) -> tuple[str, str]:
+    def generate_payload_from_type(
+        self, original_value : str | int, payload_type: str, payload_clause : str
+    ) -> tuple[str, str]:
         pass
