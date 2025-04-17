@@ -12,7 +12,7 @@ import src.config_parser as config_parser
 class DatasetBuilder:
     def __init__(self, config) -> None:
         self.config = config
-        self.seed = int(self.config.get("RANDOM", "seed"))
+        self.seed = config_parser.get_seed(self.config)
         random.seed(self.seed)
 
         self.outpath = config_parser.get_output_path(config)
@@ -26,7 +26,7 @@ class DatasetBuilder:
 
         # Initialize Payload generation component
         self.pdm = PayloadDistributionManager(
-            payloads_type, n_attack_queries=n_a
+            payloads_type, n_attack_queries=n_a, config=config
         )
 
         # Randomly select templates given the config file distribution
@@ -198,7 +198,7 @@ class DatasetBuilder:
                             self.dictionnaries[(db_name, expected_value)]
                         )
                     # Now use PayloadDistributionManager to generate payload
-                    payload, desc, where = self.pdm.generate_payload(
+                    payload, desc = self.pdm.generate_payload(
                         original_value, template_row.payload_clause
                     )
                     # Then directly integrate payload.

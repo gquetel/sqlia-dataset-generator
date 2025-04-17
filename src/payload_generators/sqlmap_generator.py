@@ -1,9 +1,12 @@
+import configparser
 import os
 import pandas as pd
 import re
 import string
 import random
 import xml.etree.ElementTree as ET
+
+from ..config_parser import get_seed
 
 from .payload_generator import PayloadGenerator
 
@@ -20,11 +23,13 @@ def _normalize_ranges(text: str):
 
 
 class sqlmapGenerator(PayloadGenerator):
-    def __init__(self):
+    def __init__(self, config: configparser.ConfigParser):
         """Initialize data structures for payload generation."""
         # First, we load all xml files
         self.payloads = {}
         self._load_all_payloads()
+        self.config = config
+        self.seed = get_seed(self.config)
 
     def get_possible_types_from_clause(self, clause: str) -> list:
         all_types = [
@@ -163,7 +168,7 @@ class sqlmapGenerator(PayloadGenerator):
 
     def generate_payload_from_type(
         self, original_value: str | int, payload_type: str, payload_clause: str
-    ) -> tuple[str, str, str]:
+    ) -> tuple[str, str]:
         """Return malicious payload of given type."""
 
         payload = None
@@ -179,9 +184,11 @@ class sqlmapGenerator(PayloadGenerator):
             _df = self.payloads[payload_type]
             _df = _df[_df["where"] != 2]
             assert len(_df) > 0  # No such case has been seen so far
-            _choosen_payload = _df.sample(n=1)
+            _choosen_payload = _df.sample(n=1, random_state=self.seed)
         else:
-            _choosen_payload = self.payloads[payload_type].sample(n=1)
+            _choosen_payload = self.payloads[payload_type].sample(
+                n=1, random_state=self.seed
+            )
 
         desc = _choosen_payload.iloc[0]["title"]
         where = _choosen_payload.iloc[0]["where"]
@@ -251,4 +258,4 @@ class sqlmapGenerator(PayloadGenerator):
                     type(original_value),
                 )
 
-        return (payload, desc, where)
+        return (payload, desc)

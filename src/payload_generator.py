@@ -1,4 +1,5 @@
 from collections import defaultdict
+import configparser
 from .payload_generators.sqlmap_generator import sqlmapGenerator
 import random
 from typing import Tuple, List
@@ -8,11 +9,16 @@ from typing import Tuple, List
 
 
 class PayloadDistributionManager:
-    def __init__(self, payloads: list[dict], n_attack_queries: int):
+    def __init__(
+        self,
+        payloads: list[dict],
+        n_attack_queries: int,
+        config: configparser.ConfigParser,
+    ):
         self.payloads_config = payloads
         self.total_count = 0
         self._n_attacks = n_attack_queries
-
+        self.config = config
         # tuple-based index dict, returning target counts for
         # given (family, type)
         self.target_counts = defaultdict(int)
@@ -42,7 +48,7 @@ class PayloadDistributionManager:
         """
         for family in self._family_types:
             if family == "sqlmap":
-                self.generators[family] = sqlmapGenerator()
+                self.generators[family] = sqlmapGenerator(config=self.config)
             else:
                 raise ValueError(f"No configuration for family '{family}'")
 
@@ -97,7 +103,7 @@ class PayloadDistributionManager:
 
     def generate_payload(
         self, original_value: str | int, clause: str
-    ) -> tuple[str, str, str]:
+    ) -> tuple[str, str]:
         # Given the clause, randomly select a possible payload
         # If possible payload count is target count, still generate.
 

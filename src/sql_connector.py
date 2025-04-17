@@ -6,7 +6,6 @@ from .config_parser import get_mysql_info
 
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
-
         user, pwd, socket_path = get_mysql_info(config=config)
         self.user = user
         self.pwd = pwd
