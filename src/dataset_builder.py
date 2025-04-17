@@ -3,6 +3,8 @@ import pandas as pd
 import random
 import re
 
+from .sql_connector import SQLConnector
+
 from .payload_generator import PayloadDistributionManager
 import src.config_parser as config_parser
 
@@ -122,9 +124,8 @@ class DatasetBuilder:
                     )
                 else:
                     # Some edge cases:
-                    if placeholder == "number":
-                        # TODO, which values to set here ?
-                        filler = random.randint(-64000, 64000)
+                    if placeholder == "pos_number":
+                        filler = random.randint(0, 64000)
                     else:
                         filler = random.choice(
                             self.dictionnaries[(db_name, placeholder)]
@@ -137,6 +138,9 @@ class DatasetBuilder:
                     case "string":
                         # String should be escaped
                         escape_char = random.choice(['"', "'"])
+                        filler = filler.replace(
+                            escape_char, f"\\{escape_char}"
+                        )
                         query = query.replace(
                             f"{{{placeholder}}}",
                             f"{escape_char}{filler}{escape_char}",
@@ -152,7 +156,19 @@ class DatasetBuilder:
                     "malicious_input": None,
                 }
             )
+
+        self._verify_syntactic_validity(queries=generated_normal_queries)
         self.df = pd.DataFrame(generated_normal_queries)
+
+    def _verify_syntactic_validity(self, queries: list):
+        sqlc = SQLConnector(self.config)
+        c_invalid = 0
+        for d in queries:
+            query = d["full_query"]
+            if not sqlc.is_query_syntvalid(query=query):
+                print("Invalid query: ", query)
+                c_invalid += 1
+        print(f"{c_invalid} invalid queries out of {len(queries)}")
 
     def generate_attack_queries(self):
         generated_attack_queries = []
@@ -175,8 +191,8 @@ class DatasetBuilder:
                     # First, generate original value
                     # It is used to know how to integrate payload in query.
                     expected_value = placeholder[1::]
-                    if expected_value == "number":
-                        original_value = random.randint(-64000, 64000)
+                    if expected_value == "pos_number":
+                        original_value = random.randint(0, 64000)
                     else:
                         original_value = random.choice(
                             self.dictionnaries[(db_name, expected_value)]
@@ -189,8 +205,8 @@ class DatasetBuilder:
                     query = query.replace(f"{{{placeholder}}}", payload)
 
                 else:
-                    if placeholder == "number":
-                        filler = random.randint(-64000, 64000)
+                    if placeholder == "pos_number":
+                        filler = random.randint(0, 64000)
                     else:
                         filler = random.choice(
                             self.dictionnaries[(db_name, placeholder)]
@@ -219,6 +235,7 @@ class DatasetBuilder:
                 }
             )
         assert len(self._df_templates_a) == len(generated_attack_queries)
+        self._verify_syntactic_validity(queries=generated_attack_queries)
         self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
 
     def generate_undefined_queries(self):

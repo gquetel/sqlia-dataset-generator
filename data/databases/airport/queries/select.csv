@@ -3,5 +3,5 @@ full_query,ID,description,payload_type,payload_clause
 "SELECT * FROM airport WHERE elevation_ft BETWEEN {!elevation_ft} AND {elevation_ft}",airport-S2,A select statement with a BETWEEN clause on elevation that's vulnerable to SQL injection through first elevation_ft parameters.,int int,where
 SELECT * FROM airport WHERE elevation_ft BETWEEN {elevation_ft} AND {!elevation_ft},airport-S3,A select statement with a BETWEEN clause on elevation that's vulnerable to SQL injection through the second elevation_ft parameters.,int int,where
 "SELECT * FROM airport WHERE gps_code = {!gps_code} OR local_code = {local_code}",airport-S4,A select statement filtering by GPS code or local code with a SQL injection point on the gps_code parameter.,string string,where
-"SELECT id, ident, name FROM airport WHERE iso_country = {!iso_country} LIMIT {number}",airport-S5,A select statement that allows SQL injection through country filter. Possess a limit clause.,string int,where
+"SELECT id, ident, name FROM airport WHERE iso_country = {!iso_country} LIMIT {pos_number}",airport-S5,A select statement that allows SQL injection through country filter. Possess a limit clause.,string int,where
 "SELECT id, ident, name FROM airport WHERE iso_country = {!iso_country}",airport-S6,A select statement that allows SQL injection through country filter.,string,where
