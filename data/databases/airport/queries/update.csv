@@ -1,5 +1,5 @@
 full_query,ID,description,payload_type,payload_clause
-"UPDATE airport SET elevation_ft = {elevation_ft} WHERE ident = {!ident}",airport-U1,An update statement allowing SQL injection through the ident parameter.,int string,where
+"UPDATE airport SET elevation_ft = {elevation_ft} WHERE ident = {!ident}",airport-U1,An update statement allowing SQL injection through the ident parameter.,float string,where
 "UPDATE airport SET municipality = {municipality} WHERE iso_country = {!iso_country}",airport-U2,An update statement vulnerable to SQL injection through the municipality string field.,string string,where
 "UPDATE airport SET wikipedia_link = {wikipedia_link} WHERE type = {!type}",airport-U3,An update statement with SQL injection vulnerability in the type field from its where clause.,string string,where
 "UPDATE airport SET gps_code = {gps_code} WHERE continent = {continent} AND iso_region = {!iso_region}",airport-U4,An update statement allowing SQL injection through the gps_code parameter.,string string string,where

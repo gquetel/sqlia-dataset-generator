@@ -68,7 +68,8 @@ class sqlmapGenerator(PayloadGenerator):
                         # - <title>, the description of the payload.
                         # - <clause>, we only collect clause for WHERE or Always. Subject to evolution
                         # - <where>, what to do with parameter original value
-                        # - <request>, the payload to use, and some of its settings.
+                        # - request/payload, the payload to use, and some of its settings.
+                        # - request/comment, if exist, suffix comment char to payload.
                         # <details/dbms>, to check wether the payload can by used by MySQL servers.
 
                         # We only select MySQL applicable payloads.
@@ -81,11 +82,14 @@ class sqlmapGenerator(PayloadGenerator):
                             clauses = set(
                                 _normalize_ranges(child.find("clause").text)
                             )
-
                             where = child.find("where").text
                             request_payload = child.find(
                                 "request/payload"
                             ).text
+
+                            comment = child.find("request/comment")
+                            if comment:
+                                request_payload += comment.text
 
                             clauses = clauses.intersection(accepted_clauses)
                             if len(clauses) > 0:
@@ -108,6 +112,9 @@ class sqlmapGenerator(PayloadGenerator):
                             "_load_all_payloads: failed to fetch all informations for child: ",
                             title,
                         )
+                print(
+                    f"Loaded {len(payload_type)} payloads of type {filename[:-4]}"
+                )
                 self.payloads[filename[:-4]] = pd.DataFrame(payload_type)
 
     def _fill_payload_template(
@@ -138,7 +145,9 @@ class sqlmapGenerator(PayloadGenerator):
                             field,
                             f"{escape_char}{original_value}{escape_char}",
                         )
-                    elif isinstance(original_value, int):
+                    elif isinstance(original_value, int) or isinstance(
+                        original_value, float
+                    ):
                         template = template.replace(field, str(original_value))
                     else:
                         raise ValueError(
@@ -178,17 +187,19 @@ class sqlmapGenerator(PayloadGenerator):
         escape_char = random.choice(['"', "'"])
         comments_char = random.choice(["#", "--"])
 
-        # Randomly select a payload in self.payloads[payload_type] (type = pd.df)
+        # Randomly select a payload in self.payloads[payload_type]
         # When a string is expected, we avoid type 2 where payloads.
+        # Also, escape escape_char in original_value.
         if isinstance(original_value, str):
+            original_value = original_value.replace(
+                escape_char, f"{escape_char}{escape_char}"
+            )
             _df = self.payloads[payload_type]
             _df = _df[_df["where"] != 2]
             assert len(_df) > 0  # No such case has been seen so far
-            _choosen_payload = _df.sample(n=1, random_state=self.seed)
+            _choosen_payload = _df.sample(n=1)
         else:
-            _choosen_payload = self.payloads[payload_type].sample(
-                n=1, random_state=self.seed
-            )
+            _choosen_payload = self.payloads[payload_type].sample(n=1)
 
         desc = _choosen_payload.iloc[0]["title"]
         where = _choosen_payload.iloc[0]["where"]
@@ -199,13 +210,16 @@ class sqlmapGenerator(PayloadGenerator):
         )
         # Now we need to build prefix / suffix depending on value type and clause
         # if clause = values, we only support stacked queries, we need to close parenthesis.
-        if payload_clause == "stacked_queries":
+        if payload_clause == "values":
             if isinstance(original_value, str):
+                # Escape quoting char in original value
                 payload = (
                     escape_char + original_value + escape_char + ")" + payload
                 )
-            elif isinstance(original_value, int):
-                payload = original_value + ")" + payload
+            elif isinstance(original_value, int) or isinstance(
+                original_value, float
+            ):
+                payload = str(original_value) + ")" + payload
             else:
                 raise ValueError(
                     "generate_payload_from_type: original_value is of unknown type:",
@@ -235,15 +249,17 @@ class sqlmapGenerator(PayloadGenerator):
                         raise ValueError(
                             "generate_payload_from_type: where is of incorrect value:"
                         )
-            elif isinstance(original_value, int):
+            elif isinstance(original_value, int) or isinstance(
+                original_value, float
+            ):
                 match (where):
                     case 1:
                         #  Append the payload to the parameter original value
-                        payload = +original_value + " " + payload
+                        payload = str(original_value) + " " + payload
                     case 2:
                         # Random negative int + payload
                         payload = (
-                            random.randint(-100000, -1000) + " " + payload
+                            str(random.randint(-100000, -1000)) + " " + payload
                         )
                     case 3:
                         # Replace the parameter original value with our payload
@@ -257,5 +273,4 @@ class sqlmapGenerator(PayloadGenerator):
                     "generate_payload_from_type: original_value is of unknown type:",
                     type(original_value),
                 )
-
         return (payload, desc)

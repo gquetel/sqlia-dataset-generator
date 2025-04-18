@@ -2,8 +2,8 @@ import mysql.connector
 import configparser
 import mysql
 
-from .config_parser import get_mysql_info
 
+from .config_parser import get_mysql_info
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
         user, pwd, socket_path = get_mysql_info(config=config)
@@ -27,7 +27,6 @@ class SQLConnector:
                 cursor.execute(query)
             except mysql.connector.Error as e:
                 if e.errno == 1064:
-                    print(e)
                     return False
                 else:
                     return True
