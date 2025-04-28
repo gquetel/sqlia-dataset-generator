@@ -9,16 +9,17 @@ from typing import Tuple, List
 # TODO: Refaire une passe sur les variables nécéssaires
 # ATM, target_counts & total_count ne sont pas utilisés.
 
-
 class PayloadDistributionManager:
-    def __init__(
-        self,
-        config: configparser.ConfigParser,
-    ):
+    def __init__(self, config: configparser.ConfigParser, mode: str):
         self.payloads_config = get_payload_types_and_proportions(config)
         self.total_count = 0
-        _, n_a, _ = get_queries_numbers(config=config)
-        self._n_attacks = n_a
+        _, n_a, n_u = get_queries_numbers(config=config)
+
+        if mode == "attack":
+            self._n_queries = n_a
+        elif mode == "undefined":
+            self._n_queries = n_u
+
         self.config = config
         # tuple-based index dict, returning target counts for
         # given (family, type)
@@ -29,7 +30,7 @@ class PayloadDistributionManager:
 
         self._family_types = set()
         for payload in self.payloads_config:
-            target = int(payload["proportion"] * self._n_attacks)
+            target = int(payload["proportion"] * self._n_queries)
             self.target_counts[(payload["family"], payload["type"])] = target
             self.remaining_counts[(payload["family"], payload["type"])] = target
             self._family_types.add(payload["family"])
@@ -102,5 +103,14 @@ class PayloadDistributionManager:
         family, payload_type = self._select_next_family_and_type(clause)
 
         return self.generators[family].generate_payload_from_type(
+            original_value, payload_type, clause
+        )
+    
+    def generate_undefined(
+        self, original_value: str | int, clause: str
+    ) -> tuple[str, str]:
+        family, payload_type = self._select_next_family_and_type(clause)
+
+        return self.generators[family].generate_undefined_from_type(
             original_value, payload_type, clause
         )

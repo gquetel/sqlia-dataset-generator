@@ -169,8 +169,6 @@ class sqlmapGenerator(PayloadGenerator):
     def generate_payload_from_type(
         self, original_value: str | int, payload_type: str, payload_clause: str
     ) -> tuple[str, str]:
-        """Return malicious payload of given type."""
-
         payload = None
         desc = None
         where = None
@@ -252,4 +250,195 @@ class sqlmapGenerator(PayloadGenerator):
                     "generate_payload_from_type: original_value is of unknown type:",
                     type(original_value),
                 )
+        return (payload, desc)
+
+    def generate_undefined_from_type(
+        self,
+        original_value: str | int,
+        payload_type: str,
+        payload_clause: str,
+    ) -> tuple[str, str]:
+        """Return malicious payload of given type."""
+        # TODO: remove scenario from args.
+
+        payload = None
+        desc = None
+        where = None
+
+        escape_char = random.choice(['"', "'"])
+        comments_char = random.choice(["# ", "-- "])
+
+        # TODO, add weights for higher occurence of improper escaping.
+
+        match (payload_type):
+            case "boolean_blind" | "error_based" | "inline_query" | "time_blind":
+                scenario = random.choices(
+                    population=["escaping", "comment", "keyword", "truncate"],
+                    weights=[10, 3, 1, 1],
+                )[0]
+            case "stacked_queries":
+                scenario = random.choices(
+                    population=["comment", "keyword", "truncate", "no_semicolon"],
+                    weights=[3, 1, 1, 3],
+                )[0]
+
+        # Randomly select a payload in self.payloads[payload_type]
+        # When a string is expected, we avoid type 2 where payloads.
+        # Also, escape escape_char in original_value.
+        if isinstance(original_value, str):
+            original_value = original_value.replace(
+                escape_char, f"{escape_char}{escape_char}"
+            )
+            _df = self.payloads[payload_type]
+            _df = _df[_df["where"] != 2]
+            assert len(_df) > 0  # No such case has been seen so far
+            _choosen_payload = _df.sample(n=1)
+        else:
+            _choosen_payload = self.payloads[payload_type].sample(n=1)
+
+        where = _choosen_payload.iloc[0]["where"]
+
+        payload = self._fill_payload_template(
+            original_value=original_value,
+            template=_choosen_payload.iloc[0]["payload"],
+        )
+
+        if scenario == "no_semicolon":
+            payload = payload.replace(";", " ")
+            desc = "Improper stacked queries construction"
+
+        if scenario == "comment":
+            _w = payload.split()
+            _random_i = random.randint(0, len(_w) - 1)
+            _w[_random_i] = random.choice(["# ", "-- "]) + _w[_random_i]
+            payload = " ".join(_w)
+            desc = "Improper comment addition"
+
+        if scenario == "keyword":
+            keywords = ["OR ", "AND ", "HAVING ", "WHERE ", "UNION"]
+            _w = payload.split()
+            _random_i = random.randint(0, len(_w) - 1)
+            _w[_random_i] = random.choice(keywords) + _w[_random_i]
+            payload = " ".join(_w)
+            desc = "Presence of invalid SQL keyword"
+
+        if scenario == "truncate":
+            _w = payload.split()
+            # -2 so that we never select the full query.
+            try:
+                _random_i = random.randint(0, len(_w) - 2)
+                payload = " ".join(_w[:_random_i])
+            except ValueError as e:
+                # No space, cut at random
+                _random_i = random.randint(0, len(payload) - 1)
+                payload = payload[:_random_i]
+            desc = "Incorrect truncation of query"
+
+        if payload_clause == "values":
+            if isinstance(original_value, str):
+                # Escape quoting char in original value
+                payload = escape_char + original_value + escape_char + ")" + payload
+            elif isinstance(original_value, int) or isinstance(original_value, float):
+                payload = str(original_value) + ")" + payload
+            else:
+                raise ValueError(
+                    "generate_undefined_from_type: original_value is of unknown type:",
+                    type(original_value),
+                )
+
+            # Then add comments to ignore rest of query.
+            # TODO, append random comments.
+            payload += comments_char
+        else:
+            if isinstance(original_value, str):
+                match (where):
+                    case 1:
+                        #  Append the payload to the parameter original value
+                        if scenario == "escaping":
+                            desc = "Improper escaping strategy"
+                            _inv_esc_char_list = [
+                                '")',
+                                '"))',
+                                "')",
+                                "'))",
+                                "''",
+                                "`",
+                                "'\"",
+                                "`'",
+                            ]
+
+                            if escape_char == "'":
+                                invalid_escape_char = random.choice(
+                                    _inv_esc_char_list + ['"']
+                                )
+                            elif escape_char == '"':
+                                invalid_escape_char = random.choice(
+                                    _inv_esc_char_list + ["'"]
+                                )
+                            payload = (
+                                escape_char
+                                + original_value
+                                + invalid_escape_char
+                                + " "
+                                + payload
+                            )
+
+                        else:
+                            payload = (
+                                escape_char
+                                + original_value
+                                + escape_char
+                                + " "
+                                + payload
+                            )
+                    case 3:
+                        # Replace the parameter original value with payload
+                        # No need to escape ?
+                        pass
+                    case _:
+                        raise ValueError(
+                            "generate_undefined_from_type: where is of incorrect value:"
+                        )
+            elif isinstance(original_value, int) or isinstance(original_value, float):
+                match (where):
+                    case 1:
+                        #  Append the payload to the parameter original value
+                        if scenario == "escaping":
+                            # Add invalid string quote
+                            desc = "Improper escaping strategy"
+                            payload = str(original_value) + "'" + payload
+
+                        else:
+                            payload = str(original_value) + " " + payload
+
+                    case 2:
+                        # Random negative int + payload
+                        if scenario == "escaping":
+                            # Add invalid string quote
+                            desc = "Improper escaping strategy"
+                            payload = (
+                                str(random.randint(-100000, -1000)) + '"' + payload
+                            )
+                        else:
+                            payload = (
+                                str(random.randint(-100000, -1000)) + " " + payload
+                            )
+                    case 3:
+                        # Replace the parameter original value with our payload
+                        if scenario == "escaping":
+                            # Add invalid string quote
+                            desc = "Improper escaping strategy"
+                            payload += "'"
+                        else:
+                            pass
+                    case _:
+                        raise ValueError(
+                            "generate_undefined_from_type: where is of incorrect value:"
+                        )
+            else:
+                raise ValueError(
+                    "generate_undefined_from_type: original_value is of unknown type:",
+                    type(original_value),
+                )
+
         return (payload, desc)
