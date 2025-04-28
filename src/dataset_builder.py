@@ -32,22 +32,16 @@ class DatasetBuilder:
         self.outpath = config_parser.get_output_path(config)
 
         # Payload types specified to be generated
-        payloads_type = config_parser.get_payload_types_and_proportions(
-            self.config
-        )
+        payloads_type = config_parser.get_payload_types_and_proportions(self.config)
 
         # Statements types specified to be generated
-        statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
-        )
+        statements_type = config_parser.get_statement_types_and_proportions(self.config)
 
         # Proportions of normal, attacks, undefined queries.
         n_n, n_a, n_u = config_parser.get_queries_numbers(config)
 
         # Initialize Payload generation component
-        self.pdm = PayloadDistributionManager(
-            payloads_type, n_attack_queries=n_a, config=config
-        )
+        self.pdm = PayloadDistributionManager(config=config)
 
         # Randomly select templates given the config file distribution
         self._df_templates_a = pd.DataFrame()
@@ -73,9 +67,7 @@ class DatasetBuilder:
                 with open(dicts_dir + filename, "r") as f:
                     self.dictionnaries[(db, filename)] = f.read().splitlines()
 
-    def populate_templates(
-        self, n_n: int, n_a: int, n_u: int, statements_type: dict
-    ):
+    def populate_templates(self, n_n: int, n_a: int, n_u: int, statements_type: dict):
         used_databases = config_parser.get_used_databases(self.config)
 
         n_n_per_db = int(n_n / len(used_databases))
@@ -122,9 +114,7 @@ class DatasetBuilder:
             placeholders_pattern = r"\{([!]?[^}]*)\}"
             all_placeholders = [
                 m.group(1)
-                for m in re.finditer(
-                    placeholders_pattern, template_row.full_query
-                )
+                for m in re.finditer(placeholders_pattern, template_row.full_query)
             ]
             all_types = template_row.payload_type.split()
             assert len(all_types) == len(all_placeholders)
@@ -148,9 +138,7 @@ class DatasetBuilder:
                         )
                 match type:
                     case "int" | "float":
-                        query = query.replace(
-                            f"{{{placeholder}}}", str(filler)
-                        )
+                        query = query.replace(f"{{{placeholder}}}", str(filler))
                     case "string":
                         # String should be escaped
                         escape_char = random.choice(['"', "'"])
@@ -234,15 +222,11 @@ class DatasetBuilder:
                 if placeholder == "pos_number":
                     filler = random.randint(0, 64000)
                 else:
-                    filler = random.choice(
-                        self.dictionnaries[(db_name, placeholder)]
-                    )
+                    filler = random.choice(self.dictionnaries[(db_name, placeholder)])
                 # Then, integrate filler:
                 match type:
                     case "int" | "float":
-                        query = query.replace(
-                            f"{{{placeholder}}}", str(filler)
-                        )
+                        query = query.replace(f"{{{placeholder}}}", str(filler))
                     case "string":
                         escape_char = random.choice(['"', "'"])
                         filler = filler.replace(
@@ -266,9 +250,7 @@ class DatasetBuilder:
         generated_attack_queries = []
         for template_row in self._df_templates_a.itertuples():
             # Generate query:
-            attempt_query = self._get_query_with_payload(
-                template_row=template_row
-            )
+            attempt_query = self._get_query_with_payload(template_row=template_row)
 
             # Here, verify that query is syntactically valid. If not, add it to undefined ones. Then try to regenerate one from same template 10 times, then give up
             remaining_attempts = 10
@@ -279,9 +261,7 @@ class DatasetBuilder:
             while remaining_attempts >= 0 and not is_valid:
                 self._failed_attacks.append(attempt_query)
                 remaining_attempts -= 1
-                attempt_query = self._get_query_with_payload(
-                    template_row=template_row
-                )
+                attempt_query = self._get_query_with_payload(template_row=template_row)
                 is_valid = self._verify_syntactic_validity_query(
                     query=attempt_query["full_query"]
                 )
@@ -299,7 +279,6 @@ class DatasetBuilder:
         print(self._failed_attacks)
         # TODO, penser à des scénarios.
 
-        
     def build(
         self,
     ) -> pd.DataFrame:

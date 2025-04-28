@@ -6,7 +6,7 @@ import string
 import random
 import xml.etree.ElementTree as ET
 
-from ..config_parser import get_seed
+from ..config_parser import get_payload_types_and_proportions, get_seed
 
 from .payload_generator import PayloadGenerator
 
@@ -25,9 +25,12 @@ def _normalize_ranges(text: str):
 class sqlmapGenerator(PayloadGenerator):
     def __init__(self, config: configparser.ConfigParser):
         """Initialize data structures for payload generation."""
-        # First, we load all xml files
+        # First, we load all payload xml files
+
+        payload_config = get_payload_types_and_proportions(config)
+        _valid_payloads = [d["type"] for d in payload_config if d["family"] == "sqlmap"]
         self.payloads = {}
-        self._load_all_payloads()
+        self._load_all_payloads(_valid_payloads)
         self.config = config
         self.seed = get_seed(self.config)
 
@@ -51,12 +54,12 @@ class sqlmapGenerator(PayloadGenerator):
                     "get_possible_types_from_clause: unknown clause ", clause
                 )
 
-    def _load_all_payloads(self):
+    def _load_all_payloads(self, valid_payloads: list):
         # Read all files under ./data/payloads/sqlmap ending with .xml
         payloads_dir = "./data/payloads/sqlmap/"
         accepted_clauses = set([0, 1])
         for filename in os.listdir(payloads_dir):
-            if filename.endswith(".xml"):
+            if filename.endswith(".xml") and filename[:-4] in valid_payloads:
                 payload_type = []
                 tree = ET.parse(payloads_dir + filename)
                 root = tree.getroot()
@@ -79,13 +82,9 @@ class sqlmapGenerator(PayloadGenerator):
                         dbms_node = child.find("details/dbms")
                         if dbms_node is None or "MySQL" in dbms_node.text:
                             title = child.find("title").text
-                            clauses = set(
-                                _normalize_ranges(child.find("clause").text)
-                            )
+                            clauses = set(_normalize_ranges(child.find("clause").text))
                             where = child.find("where").text
-                            request_payload = child.find(
-                                "request/payload"
-                            ).text
+                            request_payload = child.find("request/payload").text
 
                             comment = child.find("request/comment")
                             if comment:
@@ -113,13 +112,11 @@ class sqlmapGenerator(PayloadGenerator):
                             title,
                         )
                 print(
-                    f"Loaded {len(payload_type)} payloads of type {filename[:-4]}"
+                    f"Found {len(payload_type)} payloads templates of type {filename[:-4]}"
                 )
                 self.payloads[filename[:-4]] = pd.DataFrame(payload_type)
 
-    def _fill_payload_template(
-        self, original_value: str | int, template: str
-    ) -> str:
+    def _fill_payload_template(self, original_value: str | int, template: str) -> str:
         sqlmap_fields = re.findall(r"(\[.*?\])", template)
         for field in sqlmap_fields:
             match field:
@@ -131,13 +128,9 @@ class sqlmapGenerator(PayloadGenerator):
                     | "[RANDNUM4]"
                     | "[RANDNUM5]"
                 ):
-                    template = template.replace(
-                        field, str(random.randint(0, 10000))
-                    )
+                    template = template.replace(field, str(random.randint(0, 10000)))
                 case "[SLEEPTIME]":
-                    template = template.replace(
-                        field, str(random.randint(0, 5)), 1
-                    )
+                    template = template.replace(field, str(random.randint(0, 5)), 1)
                 case "[ORIGVALUE]":
                     if isinstance(original_value, str):
                         escape_char = random.choice(['"', "'"])
@@ -166,9 +159,7 @@ class sqlmapGenerator(PayloadGenerator):
                     # In SQLMAP corresponds to 3 low frequency characters that act as delimiters, to be easily recognized in the response.
                     # Here we don't mind about the responds, let's just replace it with random characters.
                     _rdmstr = "".join(
-                        random.choices(
-                            string.digits + string.ascii_letters, k=3
-                        )
+                        random.choices(string.digits + string.ascii_letters, k=3)
                     )
                     template = template.replace(field, _rdmstr, 1)
                 case _:
@@ -213,12 +204,8 @@ class sqlmapGenerator(PayloadGenerator):
         if payload_clause == "values":
             if isinstance(original_value, str):
                 # Escape quoting char in original value
-                payload = (
-                    escape_char + original_value + escape_char + ")" + payload
-                )
-            elif isinstance(original_value, int) or isinstance(
-                original_value, float
-            ):
+                payload = escape_char + original_value + escape_char + ")" + payload
+            elif isinstance(original_value, int) or isinstance(original_value, float):
                 payload = str(original_value) + ")" + payload
             else:
                 raise ValueError(
@@ -235,11 +222,7 @@ class sqlmapGenerator(PayloadGenerator):
                     case 1:
                         #  Append the payload to the parameter original value
                         payload = (
-                            escape_char
-                            + original_value
-                            + escape_char
-                            + " "
-                            + payload
+                            escape_char + original_value + escape_char + " " + payload
                         )
                     case 3:
                         # Replace the parameter original value with payload
@@ -249,18 +232,14 @@ class sqlmapGenerator(PayloadGenerator):
                         raise ValueError(
                             "generate_payload_from_type: where is of incorrect value:"
                         )
-            elif isinstance(original_value, int) or isinstance(
-                original_value, float
-            ):
+            elif isinstance(original_value, int) or isinstance(original_value, float):
                 match (where):
                     case 1:
                         #  Append the payload to the parameter original value
                         payload = str(original_value) + " " + payload
                     case 2:
                         # Random negative int + payload
-                        payload = (
-                            str(random.randint(-100000, -1000)) + " " + payload
-                        )
+                        payload = str(random.randint(-100000, -1000)) + " " + payload
                     case 3:
                         # Replace the parameter original value with our payload
                         pass

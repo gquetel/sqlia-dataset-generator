@@ -1,5 +1,7 @@
 from collections import defaultdict
 import configparser
+
+from .config_parser import get_payload_types_and_proportions, get_queries_numbers
 from .payload_generators.sqlmap_generator import sqlmapGenerator
 import random
 from typing import Tuple, List
@@ -11,13 +13,12 @@ from typing import Tuple, List
 class PayloadDistributionManager:
     def __init__(
         self,
-        payloads: list[dict],
-        n_attack_queries: int,
         config: configparser.ConfigParser,
     ):
-        self.payloads_config = payloads
+        self.payloads_config = get_payload_types_and_proportions(config)
         self.total_count = 0
-        self._n_attacks = n_attack_queries
+        _, n_a, _ = get_queries_numbers(config=config)
+        self._n_attacks = n_a
         self.config = config
         # tuple-based index dict, returning target counts for
         # given (family, type)
@@ -28,12 +29,9 @@ class PayloadDistributionManager:
 
         self._family_types = set()
         for payload in self.payloads_config:
-
             target = int(payload["proportion"] * self._n_attacks)
             self.target_counts[(payload["family"], payload["type"])] = target
-            self.remaining_counts[(payload["family"], payload["type"])] = (
-                target
-            )
+            self.remaining_counts[(payload["family"], payload["type"])] = target
             self._family_types.add(payload["family"])
 
         self.generators = {}
@@ -59,19 +57,15 @@ class PayloadDistributionManager:
         # current clause.
         possible_indexes = []
         for family in self._family_types:
-            possible_payloads = self.generators[
-                family
-            ].get_possible_types_from_clause(clause)
-
-            # Only study valid keys
-            possible_indexes.extend(
-                [(family, type) for type in possible_payloads]
+            possible_payloads = self.generators[family].get_possible_types_from_clause(
+                clause
             )
 
+            # Only study valid keys
+            possible_indexes.extend([(family, type) for type in possible_payloads])
+
         valid_keys = [
-            key
-            for key in self.remaining_counts.keys()
-            if key in possible_indexes
+            key for key in self.remaining_counts.keys() if key in possible_indexes
         ]
         assert len(valid_keys) > 0
 
@@ -95,9 +89,7 @@ class PayloadDistributionManager:
         s = f"Generated {self.total_count} attacks."
         for index in self.target_counts.keys():
             f, t = index
-            generated = (
-                self.target_counts[index] - self.remaining_counts[index]
-            )
+            generated = self.target_counts[index] - self.remaining_counts[index]
             s += "\n" + f"- {generated} {t} attacks from {f}."
         return s
 
