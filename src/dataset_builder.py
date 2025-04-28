@@ -19,6 +19,9 @@ class DatasetBuilder:
         # Keys are tuple of the form (db_name, dictionnary_name)
         self.dictionnaries = {}
 
+        # Array of attack queries not correctly constructed
+        self._failed_attacks = []
+
         # Connection wrapper to SQL server.
         self.sqlc = None
 
@@ -272,9 +275,9 @@ class DatasetBuilder:
             is_valid = self._verify_syntactic_validity_query(
                 query=attempt_query["full_query"]
             )
-            while remaining_attempts >= 0 and not is_valid:
-                # TODO: append to undefined
 
+            while remaining_attempts >= 0 and not is_valid:
+                self._failed_attacks.append(attempt_query)
                 remaining_attempts -= 1
                 attempt_query = self._get_query_with_payload(
                     template_row=template_row
@@ -285,6 +288,7 @@ class DatasetBuilder:
             if is_valid:
                 generated_attack_queries.append(attempt_query)
             else:
+                self._failed_attacks.append(attempt_query)
                 print(
                     "Could not generate attack query for template:",
                     template_row.full_query,
@@ -292,8 +296,10 @@ class DatasetBuilder:
         self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
 
     def generate_undefined_queries(self):
-        pass
+        print(self._failed_attacks)
+        # TODO, penser à des scénarios.
 
+        
     def build(
         self,
     ) -> pd.DataFrame:
