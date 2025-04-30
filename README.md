@@ -16,12 +16,12 @@ python3 ./main.py -ini ini.ini
 
 ```
 CREATE TABLE airport (
-    id INT PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     ident VARCHAR(10) NOT NULL,
     type VARCHAR(20) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    latitude_deg DECIMAL(10, 6) NOT NULL,
-    longitude_deg DECIMAL(10, 6) NOT NULL,
+    latitude_deg DECIMAL(10, 6),
+    longitude_deg DECIMAL(10, 6),
     elevation_ft INT,
     continent CHAR(2),
     iso_country CHAR(2),

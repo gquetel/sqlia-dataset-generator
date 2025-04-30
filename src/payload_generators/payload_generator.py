@@ -9,12 +9,7 @@ class PayloadGenerator(ABC):
         self, original_value: str | int, payload_type: str, payload_clause: str
     ) -> tuple[str, str]:
         pass
-
+    
     @abstractmethod
-    def generate_undefined_from_type(
-        self,
-        original_value: str | int,
-        payload_type: str,
-        payload_clause: str,
-    ) -> tuple[str, str]:
+    def get_possible_types_from_clause(self, clause : str) -> list: 
         pass

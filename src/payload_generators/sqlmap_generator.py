@@ -28,7 +28,9 @@ class sqlmapGenerator(PayloadGenerator):
         # First, we load all payload xml files
 
         payload_config = get_payload_types_and_proportions(config)
-        _valid_payloads = [d["type"] for d in payload_config if d["family"] == "sqlmap"]
+        _valid_payloads = [
+            d["type"] for d in payload_config if d["family"] == "sqlmap"
+        ]
         self.payloads = {}
         self._load_all_payloads(_valid_payloads)
         self.config = config
@@ -47,12 +49,20 @@ class sqlmapGenerator(PayloadGenerator):
             case "where":
                 return all_types
             case "values":
-                # TODO: voir si on peut rajouter d'autres injections qui font sens.
+                # WARNING: Mettre stacked queries nous foire nos proportions,
+                # Sqlmap ne semble pas réussir à exploiter de telles requêtes de toute façon.
+                return all_types
                 return ["stacked_queries"]
             case _:
                 raise ValueError(
                     "get_possible_types_from_clause: unknown clause ", clause
                 )
+            
+    def _sanitize_payload(self, payload : str):
+        # For some payloads, there is a '\' that needs to be replaced to 
+        # a '\\' so that it does not become syntactically invalid.
+        payload = payload.replace("'\\'", "'\\\\'")
+        return payload 
 
     def _load_all_payloads(self, valid_payloads: list):
         # Read all files under ./data/payloads/sqlmap ending with .xml
@@ -82,15 +92,21 @@ class sqlmapGenerator(PayloadGenerator):
                         dbms_node = child.find("details/dbms")
                         if dbms_node is None or "MySQL" in dbms_node.text:
                             title = child.find("title").text
-                            clauses = set(_normalize_ranges(child.find("clause").text))
+                            clauses = set(
+                                _normalize_ranges(child.find("clause").text)
+                            )
                             where = child.find("where").text
-                            request_payload = child.find("request/payload").text
+                            request_payload = child.find(
+                                "request/payload"
+                            ).text
 
                             comment = child.find("request/comment")
                             if comment:
                                 request_payload += comment.text
 
                             clauses = clauses.intersection(accepted_clauses)
+                            request_payload = self._sanitize_payload(request_payload)
+
                             if len(clauses) > 0:
                                 payload_type.append(
                                     {
@@ -111,12 +127,14 @@ class sqlmapGenerator(PayloadGenerator):
                             "_load_all_payloads: failed to fetch all informations for child: ",
                             title,
                         )
-                print(
-                    f"Found {len(payload_type)} payloads templates of type {filename[:-4]}"
-                )
+                # print(
+                #     f"Found {len(payload_type)} payloads templates of type {filename[:-4]}"
+                # )
                 self.payloads[filename[:-4]] = pd.DataFrame(payload_type)
 
-    def _fill_payload_template(self, original_value: str | int, template: str) -> str:
+    def _fill_payload_template(
+        self, original_value: str | int, template: str
+    ) -> str:
         sqlmap_fields = re.findall(r"(\[.*?\])", template)
         for field in sqlmap_fields:
             match field:
@@ -128,9 +146,12 @@ class sqlmapGenerator(PayloadGenerator):
                     | "[RANDNUM4]"
                     | "[RANDNUM5]"
                 ):
-                    template = template.replace(field, str(random.randint(0, 10000)))
+                    template = template.replace(
+                        field, str(random.randint(0, 10000))
+                    )
                 case "[SLEEPTIME]":
-                    template = template.replace(field, str(random.randint(0, 5)), 1)
+                    # template = template.replace(field, str(random.randint(0, )), 1)
+                    template = template.replace(field, "0")
                 case "[ORIGVALUE]":
                     if isinstance(original_value, str):
                         escape_char = random.choice(['"', "'"])
@@ -159,7 +180,9 @@ class sqlmapGenerator(PayloadGenerator):
                     # In SQLMAP corresponds to 3 low frequency characters that act as delimiters, to be easily recognized in the response.
                     # Here we don't mind about the responds, let's just replace it with random characters.
                     _rdmstr = "".join(
-                        random.choices(string.digits + string.ascii_letters, k=3)
+                        random.choices(
+                            string.digits + string.ascii_letters, k=3
+                        )
                     )
                     template = template.replace(field, _rdmstr, 1)
                 case _:
@@ -202,8 +225,12 @@ class sqlmapGenerator(PayloadGenerator):
         if payload_clause == "values":
             if isinstance(original_value, str):
                 # Escape quoting char in original value
-                payload = escape_char + original_value + escape_char + ")" + payload
-            elif isinstance(original_value, int) or isinstance(original_value, float):
+                payload = (
+                    escape_char + original_value + escape_char + ")" + payload
+                )
+            elif isinstance(original_value, int) or isinstance(
+                original_value, float
+            ):
                 payload = str(original_value) + ")" + payload
             else:
                 raise ValueError(
@@ -212,7 +239,6 @@ class sqlmapGenerator(PayloadGenerator):
                 )
 
             # Then add comments to ignore rest of query.
-            # TODO, append random comments.
             payload += comments_char
         else:
             if isinstance(original_value, str):
@@ -220,7 +246,11 @@ class sqlmapGenerator(PayloadGenerator):
                     case 1:
                         #  Append the payload to the parameter original value
                         payload = (
-                            escape_char + original_value + escape_char + " " + payload
+                            escape_char
+                            + original_value
+                            + escape_char
+                            + " "
+                            + payload
                         )
                     case 3:
                         # Replace the parameter original value with payload
@@ -230,14 +260,18 @@ class sqlmapGenerator(PayloadGenerator):
                         raise ValueError(
                             "generate_payload_from_type: where is of incorrect value:"
                         )
-            elif isinstance(original_value, int) or isinstance(original_value, float):
+            elif isinstance(original_value, int) or isinstance(
+                original_value, float
+            ):
                 match (where):
                     case 1:
                         #  Append the payload to the parameter original value
                         payload = str(original_value) + " " + payload
                     case 2:
                         # Random negative int + payload
-                        payload = str(random.randint(-100000, -1000)) + " " + payload
+                        payload = (
+                            str(random.randint(-100000, -1000)) + " " + payload
+                        )
                     case 3:
                         # Replace the parameter original value with our payload
                         pass
@@ -250,195 +284,4 @@ class sqlmapGenerator(PayloadGenerator):
                     "generate_payload_from_type: original_value is of unknown type:",
                     type(original_value),
                 )
-        return (payload, desc)
-
-    def generate_undefined_from_type(
-        self,
-        original_value: str | int,
-        payload_type: str,
-        payload_clause: str,
-    ) -> tuple[str, str]:
-        """Return malicious payload of given type."""
-        # TODO: remove scenario from args.
-
-        payload = None
-        desc = None
-        where = None
-
-        escape_char = random.choice(['"', "'"])
-        comments_char = random.choice(["# ", "-- "])
-
-        # TODO, add weights for higher occurence of improper escaping.
-
-        match (payload_type):
-            case "boolean_blind" | "error_based" | "inline_query" | "time_blind":
-                scenario = random.choices(
-                    population=["escaping", "comment", "keyword", "truncate"],
-                    weights=[10, 3, 1, 1],
-                )[0]
-            case "stacked_queries":
-                scenario = random.choices(
-                    population=["comment", "keyword", "truncate", "no_semicolon"],
-                    weights=[3, 1, 1, 3],
-                )[0]
-
-        # Randomly select a payload in self.payloads[payload_type]
-        # When a string is expected, we avoid type 2 where payloads.
-        # Also, escape escape_char in original_value.
-        if isinstance(original_value, str):
-            original_value = original_value.replace(
-                escape_char, f"{escape_char}{escape_char}"
-            )
-            _df = self.payloads[payload_type]
-            _df = _df[_df["where"] != 2]
-            assert len(_df) > 0  # No such case has been seen so far
-            _choosen_payload = _df.sample(n=1)
-        else:
-            _choosen_payload = self.payloads[payload_type].sample(n=1)
-
-        where = _choosen_payload.iloc[0]["where"]
-
-        payload = self._fill_payload_template(
-            original_value=original_value,
-            template=_choosen_payload.iloc[0]["payload"],
-        )
-
-        if scenario == "no_semicolon":
-            payload = payload.replace(";", " ")
-            desc = "Improper stacked queries construction"
-
-        if scenario == "comment":
-            _w = payload.split()
-            _random_i = random.randint(0, len(_w) - 1)
-            _w[_random_i] = random.choice(["# ", "-- "]) + _w[_random_i]
-            payload = " ".join(_w)
-            desc = "Improper comment addition"
-
-        if scenario == "keyword":
-            keywords = ["OR ", "AND ", "HAVING ", "WHERE ", "UNION"]
-            _w = payload.split()
-            _random_i = random.randint(0, len(_w) - 1)
-            _w[_random_i] = random.choice(keywords) + _w[_random_i]
-            payload = " ".join(_w)
-            desc = "Presence of invalid SQL keyword"
-
-        if scenario == "truncate":
-            _w = payload.split()
-            # -2 so that we never select the full query.
-            try:
-                _random_i = random.randint(0, len(_w) - 2)
-                payload = " ".join(_w[:_random_i])
-            except ValueError as e:
-                # No space, cut at random
-                _random_i = random.randint(0, len(payload) - 1)
-                payload = payload[:_random_i]
-            desc = "Incorrect truncation of query"
-
-        if payload_clause == "values":
-            if isinstance(original_value, str):
-                # Escape quoting char in original value
-                payload = escape_char + original_value + escape_char + ")" + payload
-            elif isinstance(original_value, int) or isinstance(original_value, float):
-                payload = str(original_value) + ")" + payload
-            else:
-                raise ValueError(
-                    "generate_undefined_from_type: original_value is of unknown type:",
-                    type(original_value),
-                )
-
-            # Then add comments to ignore rest of query.
-            # TODO, append random comments.
-            payload += comments_char
-        else:
-            if isinstance(original_value, str):
-                match (where):
-                    case 1:
-                        #  Append the payload to the parameter original value
-                        if scenario == "escaping":
-                            desc = "Improper escaping strategy"
-                            _inv_esc_char_list = [
-                                '")',
-                                '"))',
-                                "')",
-                                "'))",
-                                "''",
-                                "`",
-                                "'\"",
-                                "`'",
-                            ]
-
-                            if escape_char == "'":
-                                invalid_escape_char = random.choice(
-                                    _inv_esc_char_list + ['"']
-                                )
-                            elif escape_char == '"':
-                                invalid_escape_char = random.choice(
-                                    _inv_esc_char_list + ["'"]
-                                )
-                            payload = (
-                                escape_char
-                                + original_value
-                                + invalid_escape_char
-                                + " "
-                                + payload
-                            )
-
-                        else:
-                            payload = (
-                                escape_char
-                                + original_value
-                                + escape_char
-                                + " "
-                                + payload
-                            )
-                    case 3:
-                        # Replace the parameter original value with payload
-                        # No need to escape ?
-                        pass
-                    case _:
-                        raise ValueError(
-                            "generate_undefined_from_type: where is of incorrect value:"
-                        )
-            elif isinstance(original_value, int) or isinstance(original_value, float):
-                match (where):
-                    case 1:
-                        #  Append the payload to the parameter original value
-                        if scenario == "escaping":
-                            # Add invalid string quote
-                            desc = "Improper escaping strategy"
-                            payload = str(original_value) + "'" + payload
-
-                        else:
-                            payload = str(original_value) + " " + payload
-
-                    case 2:
-                        # Random negative int + payload
-                        if scenario == "escaping":
-                            # Add invalid string quote
-                            desc = "Improper escaping strategy"
-                            payload = (
-                                str(random.randint(-100000, -1000)) + '"' + payload
-                            )
-                        else:
-                            payload = (
-                                str(random.randint(-100000, -1000)) + " " + payload
-                            )
-                    case 3:
-                        # Replace the parameter original value with our payload
-                        if scenario == "escaping":
-                            # Add invalid string quote
-                            desc = "Improper escaping strategy"
-                            payload += "'"
-                        else:
-                            pass
-                    case _:
-                        raise ValueError(
-                            "generate_undefined_from_type: where is of incorrect value:"
-                        )
-            else:
-                raise ValueError(
-                    "generate_undefined_from_type: original_value is of unknown type:",
-                    type(original_value),
-                )
-
         return (payload, desc)

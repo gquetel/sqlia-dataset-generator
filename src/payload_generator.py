@@ -1,24 +1,28 @@
+import random
+from typing import Tuple, List
 from collections import defaultdict
 import configparser
 
-from .config_parser import get_payload_types_and_proportions, get_queries_numbers
+
+from .config_parser import (
+    get_payload_types_and_proportions,
+    get_queries_numbers,
+)
+
 from .payload_generators.sqlmap_generator import sqlmapGenerator
-import random
-from typing import Tuple, List
+from .payload_generators.crawled_generator import crawledGenerator
+
 
 # TODO: Refaire une passe sur les variables nécéssaires
 # ATM, target_counts & total_count ne sont pas utilisés.
 
 class PayloadDistributionManager:
-    def __init__(self, config: configparser.ConfigParser, mode: str):
+    def __init__(self, config: configparser.ConfigParser):
         self.payloads_config = get_payload_types_and_proportions(config)
         self.total_count = 0
-        _, n_a, n_u = get_queries_numbers(config=config)
+        
+        _, n_a = get_queries_numbers(config=config)
 
-        if mode == "attack":
-            self._n_queries = n_a
-        elif mode == "undefined":
-            self._n_queries = n_u
 
         self.config = config
         # tuple-based index dict, returning target counts for
@@ -30,9 +34,11 @@ class PayloadDistributionManager:
 
         self._family_types = set()
         for payload in self.payloads_config:
-            target = int(payload["proportion"] * self._n_queries)
+            target = int(payload["proportion"] * n_a)
             self.target_counts[(payload["family"], payload["type"])] = target
-            self.remaining_counts[(payload["family"], payload["type"])] = target
+            self.remaining_counts[(payload["family"], payload["type"])] = (
+                target
+            )
             self._family_types.add(payload["family"])
 
         self.generators = {}
@@ -48,6 +54,8 @@ class PayloadDistributionManager:
         for family in self._family_types:
             if family == "sqlmap":
                 self.generators[family] = sqlmapGenerator(config=self.config)
+            elif family == "crawled":
+                self.generators[family] = crawledGenerator(config=self.config)
             else:
                 raise ValueError(f"No configuration for family '{family}'")
 
@@ -58,15 +66,19 @@ class PayloadDistributionManager:
         # current clause.
         possible_indexes = []
         for family in self._family_types:
-            possible_payloads = self.generators[family].get_possible_types_from_clause(
-                clause
-            )
+            possible_payloads = self.generators[
+                family
+            ].get_possible_types_from_clause(clause)
 
             # Only study valid keys
-            possible_indexes.extend([(family, type) for type in possible_payloads])
+            possible_indexes.extend(
+                [(family, type) for type in possible_payloads]
+            )
 
         valid_keys = [
-            key for key in self.remaining_counts.keys() if key in possible_indexes
+            key
+            for key in self.remaining_counts.keys()
+            if key in possible_indexes
         ]
         assert len(valid_keys) > 0
 
@@ -90,7 +102,9 @@ class PayloadDistributionManager:
         s = f"Generated {self.total_count} attacks."
         for index in self.target_counts.keys():
             f, t = index
-            generated = self.target_counts[index] - self.remaining_counts[index]
+            generated = (
+                self.target_counts[index] - self.remaining_counts[index]
+            )
             s += "\n" + f"- {generated} {t} attacks from {f}."
         return s
 
@@ -105,12 +119,5 @@ class PayloadDistributionManager:
         return self.generators[family].generate_payload_from_type(
             original_value, payload_type, clause
         )
-    
-    def generate_undefined(
-        self, original_value: str | int, clause: str
-    ) -> tuple[str, str]:
-        family, payload_type = self._select_next_family_and_type(clause)
 
-        return self.generators[family].generate_undefined_from_type(
-            original_value, payload_type, clause
-        )
+

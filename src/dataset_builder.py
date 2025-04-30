@@ -31,26 +31,24 @@ class DatasetBuilder:
         # Dataset output path
         self.outpath = config_parser.get_output_path(config)
 
-        # Payload types specified to be generated
-        payloads_type = config_parser.get_payload_types_and_proportions(self.config)
-
         # Statements types specified to be generated
-        statements_type = config_parser.get_statement_types_and_proportions(self.config)
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
+        )
 
-        # Proportions of normal, attacks, undefined queries.
-        n_n, n_a, n_u = config_parser.get_queries_numbers(config)
+        # Proportions of normal and attack queries.
+        n_n, n_a = config_parser.get_queries_numbers(config)
 
         # Initialize Payload generation component
-        self.pdm = PayloadDistributionManager(config=config, mode="attack")
+        self.pdm = PayloadDistributionManager(config=config)
 
         # Randomly select templates given the config file distribution
         self._df_templates_a = pd.DataFrame()
         self._df_templates_n = pd.DataFrame()
-        self._df_templates_u = pd.DataFrame()
 
         # Select all query templates.
         self.populate_templates(
-            n_n=n_n, n_a=n_a, n_u=n_u, statements_type=statements_type
+            n_n=n_n, n_a=n_a, statements_type=statements_type
         )
 
         # Load all dictionnaries in memory to prevent many file read.
@@ -67,12 +65,13 @@ class DatasetBuilder:
                 with open(dicts_dir + filename, "r") as f:
                     self.dictionnaries[(db, filename)] = f.read().splitlines()
 
-    def populate_templates(self, n_n: int, n_a: int, n_u: int, statements_type: dict):
+    def populate_templates(
+        self, n_n: int, n_a: int, statements_type: dict
+    ):
         used_databases = config_parser.get_used_databases(self.config)
 
         n_n_per_db = int(n_n / len(used_databases))
         n_a_per_db = int(n_a / len(used_databases))
-        n_u_per_db = int(n_u / len(used_databases))
 
         for db in used_databases:
 
@@ -98,12 +97,7 @@ class DatasetBuilder:
                     replace=True,
                 )
                 self._df_templates_a = pd.concat([self._df_templates_a, _dft])
-                # Sample undefined queries
-                _dft = df_templates.sample(
-                    n=int(proportion * n_u_per_db),
-                    replace=True,
-                )
-                self._df_templates_u = pd.concat([self._df_templates_u, _dft])
+
 
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
@@ -114,14 +108,16 @@ class DatasetBuilder:
             placeholders_pattern = r"\{([!]?[^}]*)\}"
             all_placeholders = [
                 m.group(1)
-                for m in re.finditer(placeholders_pattern, template_row.full_query)
+                for m in re.finditer(
+                    placeholders_pattern, template_row.template
+                )
             ]
             all_types = template_row.payload_type.split()
             assert len(all_types) == len(all_placeholders)
             db_name = template_row.ID.split("-")[0]
 
             # Replace 1 by 1 all placeholders by a randomly choosen dict value
-            query = template_row.full_query
+            query = template_row.template
             for placeholder, type in zip(all_placeholders, all_types):
                 if placeholder[0] == "!":
                     # Choose value
@@ -138,7 +134,9 @@ class DatasetBuilder:
                         )
                 match type:
                     case "int" | "float":
-                        query = query.replace(f"{{{placeholder}}}", str(filler))
+                        query = query.replace(
+                            f"{{{placeholder}}}", str(filler)
+                        )
                     case "string":
                         # String should be escaped
                         escape_char = random.choice(['"', "'"])
@@ -161,43 +159,26 @@ class DatasetBuilder:
                     "malicious_input": None,
                 }
             )
-        # c = 0
-        # for query in generated_normal_queries:
-        #     s = query["full_query"]
-        #     if not self._verify_syntactic_validity_query(s):
-        #         c+=1
-        #         print(s)
-        # print(c)
-
         self.df = pd.DataFrame(generated_normal_queries)
 
     def _verify_syntactic_validity_query(self, query: str):
         if self.sqlc == None:
             self.sqlc = SQLConnector(self.config)
-        res =  self.sqlc.is_query_syntvalid(query=query)
+        res = self.sqlc.is_query_syntvalid(query=query)
         return res
-    
-    def _is_all_queries_syntactically_valid(self, queries: list):
-        self.sqlc = SQLConnector(self.config)
-        for d in queries:
-            query = d["full_query"]
-            if not self.sqlc.is_query_syntvalid(query=query):
-                print("Invalid query: ", query)
-                return False
-        return True
 
     def _get_query_with_payload(self, template_row):
         placeholders_pattern = r"\{([!]?[^}]*)\}"
         all_placeholders = [
             m.group(1)
-            for m in re.finditer(placeholders_pattern, template_row.full_query)
+            for m in re.finditer(placeholders_pattern, template_row.template)
         ]
         all_types = template_row.payload_type.split()
         assert len(all_types) == len(all_placeholders)
         db_name = template_row.ID.split("-")[0]
 
         # Replace 1 by 1 all placeholders by a randomly choosen dict value
-        query = template_row.full_query
+        query = template_row.template
         for placeholder, type in zip(all_placeholders, all_types):
             if placeholder[0] == "!":
                 # First, generate original value
@@ -227,11 +208,15 @@ class DatasetBuilder:
                 if placeholder == "pos_number":
                     filler = random.randint(0, 64000)
                 else:
-                    filler = random.choice(self.dictionnaries[(db_name, placeholder)])
+                    filler = random.choice(
+                        self.dictionnaries[(db_name, placeholder)]
+                    )
                 # Then, integrate filler:
                 match type:
                     case "int" | "float":
-                        query = query.replace(f"{{{placeholder}}}", str(filler))
+                        query = query.replace(
+                            f"{{{placeholder}}}", str(filler)
+                        )
                     case "string":
                         escape_char = random.choice(['"', "'"])
                         filler = filler.replace(
@@ -251,170 +236,34 @@ class DatasetBuilder:
             "malicious_input_desc": desc,
         }
 
-    def _get_query_undefined(self, template_row):
-
-        placeholders_pattern = r"\{([!]?[^}]*)\}"
-        all_placeholders = [
-            m.group(1)
-            for m in re.finditer(placeholders_pattern, template_row.full_query)
-        ]
-        all_types = template_row.payload_type.split()
-        assert len(all_types) == len(all_placeholders)
-        db_name = template_row.ID.split("-")[0]
-
-        query = template_row.full_query
-        for placeholder, type in zip(all_placeholders, all_types):
-            if placeholder[0] == "!":
-                expected_value = placeholder[1::]
-                if expected_value == "pos_number":
-                    original_value = random.randint(0, 64000)
-                else:
-                    original_value = random.choice(
-                        self.dictionnaries[(db_name, expected_value)]
-                    )
-
-                    if type == "int":
-                        original_value = int(original_value)
-                    elif type == "float":
-                        original_value = float(original_value)
-
-                # Now use PayloadDistributionManager to generate syntactically invalid payload
-                payload, desc = self.pdm.generate_undefined(
-                    original_value, template_row.payload_clause
-                )
-                # Then directly integrate payload.
-                query = query.replace(f"{{{placeholder}}}", payload)
-
-            else:
-                if placeholder == "pos_number":
-                    filler = random.randint(0, 64000)
-                else:
-                    filler = random.choice(self.dictionnaries[(db_name, placeholder)])
-                # Then, integrate filler:
-                match type:
-                    case "int" | "float":
-                        query = query.replace(f"{{{placeholder}}}", str(filler))
-                    case "string":
-                        escape_char = random.choice(['"', "'"])
-                        filler = filler.replace(
-                            escape_char, f"{escape_char}{escape_char}"
-                        )
-                        query = query.replace(
-                            f"{{{placeholder}}}",
-                            f"{escape_char}{filler}{escape_char}",
-                        )
-                    case _:
-                        raise ValueError(f"Unknown payload type: {type}.")
-        return {
-            "full_query": query,
-            "label": 2,
-            "template_id": template_row.ID,
-            "malicious_input": payload,
-            "malicious_input_desc": desc,
-        }
-
-    def generate_attack_queries(self) -> dict:
+    def generate_attack_queries_no_syntax_check(self) -> dict:
         generated_attack_queries = []
+        valid_counter = 0
         for template_row in self._df_templates_a.itertuples():
-            # Generate query:
-            attempt_query = self._get_query_with_payload(template_row=template_row)
-
-            # Here, verify that query is syntactically valid. If not, add it to undefined ones. Then try to regenerate one from same template 10 times, then give up
-            remaining_attempts = 10
-            is_valid = self._verify_syntactic_validity_query(
-                query=attempt_query["full_query"]
-            )
-
-            while remaining_attempts >= 0 and not is_valid:
-                self._failed_attacks.append(
-                    {
-                        "full_query": attempt_query["full_query"],
-                        "label": 2,
-                        "template_id": template_row.ID,
-                        "malicious_input": attempt_query["malicious_input"],
-                        "malicious_input_desc": "Incorrectly built "
-                        + attempt_query["malicious_input_desc"],
-                    }
-                )
-                remaining_attempts -= 1
-                attempt_query = self._get_query_with_payload(template_row=template_row)
-                is_valid = self._verify_syntactic_validity_query(
-                    query=attempt_query["full_query"]
-                )
-            if is_valid:
-                generated_attack_queries.append(attempt_query)
-            else:
-                self._failed_attacks.append(attempt_query)
-                print(
-                    "Could not generate attack query for template:",
-                    template_row.full_query,
-                )
-        self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
-
-    def generate_undefined_queries(self):
-        # Get new DistributionManager:
-        self.pdm = PayloadDistributionManager(config=self.config, mode="undefined")
-
-        generated_undefined_queries = []
-
-        # Compute how many undefined queries to generate.
-        _, _, n_u = config_parser.get_queries_numbers(self.config)
-        _undefined_to_generate = n_u - len(self._failed_attacks)
-        print(
-            f"Already generated {len(self._failed_attacks)} undefined queries out of {n_u}."
-        )
-
-        if _undefined_to_generate < 0:
-            # TODO: Quelle stratégie ici ?
-            return
-
-        _templates = self._df_templates_u.head(_undefined_to_generate)
-
-        for template_row in _templates.itertuples():
-            attempt_query = self._get_query_undefined(
+            attempt_query = self._get_query_with_payload(
                 template_row=template_row
             )
-
-            is_valid = self._verify_syntactic_validity_query(
+            if self._verify_syntactic_validity_query(
                 query=attempt_query["full_query"]
-            )
-
-            remaining_attempts = 10
-            _tmp_attempt_list = []
-
-            while remaining_attempts >= 0 and is_valid:
-                remaining_attempts -= 1
-                _tmp_attempt_list.append((attempt_query["full_query"],attempt_query["malicious_input_desc"]))
-
-                attempt_query = self._get_query_undefined(
-                    template_row=template_row
-                )
-
-                is_valid = self._verify_syntactic_validity_query(
-                    query=attempt_query["full_query"]
-                )
-
-            if is_valid:
-                print(
-                    "Could not generate undefined query for template:",
-                    template_row.full_query, 
-                    _tmp_attempt_list,
-                )
-                exit()
-
+            ):
+                valid_counter += 1
             else:
-                generated_undefined_queries.append(attempt_query)
+                
+                print(attempt_query["full_query"])
+            generated_attack_queries.append(attempt_query)
 
-        self.df = pd.concat(
-            [self.df, pd.DataFrame(generated_undefined_queries + self._failed_attacks)]
+        print(
+            f"Generated {valid_counter} syntactically valid attacks out of {len(generated_attack_queries)} total"
         )
+        self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
+
 
     def build(
         self,
     ) -> pd.DataFrame:
         self.generate_normal_queries()
-        self.generate_attack_queries()
-        self.generate_undefined_queries()
+        self.generate_attack_queries_no_syntax_check()
+        print(self.pdm.get_final_stats())
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
