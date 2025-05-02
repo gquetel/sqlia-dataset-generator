@@ -12,7 +12,6 @@ from .config_parser import (
 from .payload_generators.sqlmap_generator import sqlmapGenerator
 from .payload_generators.crawled_generator import crawledGenerator
 
-
 # TODO: Refaire une passe sur les variables nécéssaires
 # ATM, target_counts & total_count ne sont pas utilisés.
 

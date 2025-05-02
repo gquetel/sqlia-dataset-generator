@@ -1,12 +1,13 @@
+import numpy as np
 import os
 import pandas as pd
-import numpy as np
+from tqdm import tqdm
 import random
 import re
 
 from .sql_connector import SQLConnector
 
-from .payload_generator import PayloadDistributionManager
+from .payload_injector import PayloadDistributionManager
 import src.config_parser as config_parser
 
 
@@ -65,9 +66,7 @@ class DatasetBuilder:
                 with open(dicts_dir + filename, "r") as f:
                     self.dictionnaries[(db, filename)] = f.read().splitlines()
 
-    def populate_templates(
-        self, n_n: int, n_a: int, statements_type: dict
-    ):
+    def populate_templates(self, n_n: int, n_a: int, statements_type: dict):
         used_databases = config_parser.get_used_databases(self.config)
 
         n_n_per_db = int(n_n / len(used_databases))
@@ -98,13 +97,12 @@ class DatasetBuilder:
                 )
                 self._df_templates_a = pd.concat([self._df_templates_a, _dft])
 
-
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
         # Randomly choose a value in dict for that placeholder
         # And encapsulate based on type
         generated_normal_queries = []
-        for template_row in self._df_templates_n.itertuples():
+        for template_row in tqdm(self._df_templates_n.itertuples()):
             placeholders_pattern = r"\{([!]?[^}]*)\}"
             all_placeholders = [
                 m.group(1)
@@ -151,6 +149,10 @@ class DatasetBuilder:
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
             # Append query, tempalte ID and label to dataset.
+
+            if not self._verify_syntactic_validity_query(query=query):
+                raise ValueError("Failed normal query: ", query)
+
             generated_normal_queries.append(
                 {
                     "full_query": query,
@@ -239,7 +241,9 @@ class DatasetBuilder:
     def generate_attack_queries_no_syntax_check(self) -> dict:
         generated_attack_queries = []
         valid_counter = 0
-        for template_row in self._df_templates_a.itertuples():
+        for template_row in tqdm(
+            self._df_templates_a.itertuples(), total=len(self._df_templates_a)
+        ):
             attempt_query = self._get_query_with_payload(
                 template_row=template_row
             )
@@ -248,15 +252,14 @@ class DatasetBuilder:
             ):
                 valid_counter += 1
             else:
-                
-                print(attempt_query["full_query"])
+                pass
+                # print(attempt_query["full_query"])
             generated_attack_queries.append(attempt_query)
 
         print(
             f"Generated {valid_counter} syntactically valid attacks out of {len(generated_attack_queries)} total"
         )
         self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
-
 
     def build(
         self,

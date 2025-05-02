@@ -26,6 +26,7 @@ let
       [
         ps.pandas
         ps.numpy
+        ps.tqdm
       ]
       ++ [ mysql-connector ]
     )).override
