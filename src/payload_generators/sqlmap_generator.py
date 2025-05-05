@@ -2,6 +2,7 @@ from collections import namedtuple
 import configparser
 import os
 import pandas as pd
+import numpy as np
 import re
 import string
 import random
@@ -179,29 +180,14 @@ class sqlmapGenerator(PayloadGenerator):
         # Try to retrieve information provided by select statement
         # When not present -> Other type of statement, will lead to
         # Syntax error anyway, we chose a random value.
-        if hasattr(query_template, "expected_column_number"):
-            payload_expected_cols = query_template.expected_column_number
-        else:
+        if np.isnan(query_template.expected_column_number):
             payload_expected_cols = random.randint(1, 11)
+        else:
+            payload_expected_cols = query_template.expected_column_number
+        
 
         escape_char = random.choice(['"', "'"])
         comments_char = random.choice(["#", "--"])
-
-        # Randomly select a payload in self.payloads[payload_type]
-        # When a string is expected, we avoid type 2 where payloads.
-        # Also, escape escape_char in original_value.
-        if isinstance(original_value, str) and payload_type != "union_query":
-            original_value = original_value.replace(
-                escape_char, f"{escape_char}{escape_char}"
-            )
-            _df = self.payloads[payload_type]
-            _df = _df[_df["where"] != 2]
-            assert len(_df) > 0  # No such case has been seen so far
-            _choosen_payload = _df.sample(n=1)
-        else:
-            _choosen_payload = self.payloads[payload_type].sample(n=1)
-
-
 
         # Hack, Union queries templates are different
         # Just construct them directly based on payload_expected_cols.
@@ -210,10 +196,26 @@ class sqlmapGenerator(PayloadGenerator):
             desc = "UNION ALL based injection attack."
             payload = (
                 "UNION ALL SELECT "
-                + f"{choice}," * (payload_expected_cols - 1)
+                + f"{choice}," * (int(payload_expected_cols) - 1)
                 + f"{choice} -- "
             )
+            # Manually set where so that we append payload to value.
+            where = 1
         else:
+            # Randomly select a payload in self.payloads[payload_type]
+            # When a string is expected, we avoid type 2 where payloads.
+            # Also, escape escape_char in original_value.
+            if isinstance(original_value, str):
+                original_value = original_value.replace(
+                    escape_char, f"{escape_char}{escape_char}"
+                )
+                _df = self.payloads[payload_type]
+                _df = _df[_df["where"] != 2]
+                assert len(_df) > 0  # No such case has been seen so far
+                _choosen_payload = _df.sample(n=1)
+            else:
+                _choosen_payload = self.payloads[payload_type].sample(n=1)
+            
             desc = _choosen_payload.iloc[0]["title"]
             where = _choosen_payload.iloc[0]["where"]
             
