@@ -1,5 +1,5 @@
 template,ID,description,payload_type,payload_clause
-"DELETE FROM airport WHERE municipality={!municipality};",airport-D1,A delete statement with on a condition on the municipality column vulnerable to SQL Injection.,string,where
-"DELETE from airport WHERE latitude_deg={!latitude_deg} AND longitude_deg={longitude_deg};",airport-D2,"A delete statement using a condition on coordinates columns (latitude_deg, longitude_deg). A malicious payload can be injected in the latitude_deg field. ",float float,where
-"DELETE from airport WHERE latitude_deg={latitude_deg} AND longitude_deg={!longitude_deg};",airport-D3,"A delete statement using a condition on coordinates columns (latitude_deg, longitude_deg). A malicious payload can be injected in the latitude_deg field. ",float float,where
-"DELETE FROM airport WHERE keywords LIKE {!keywords};  ",airport-D4," A delete statement removing airports matching a keyword search, vulnerable to SQL injection.",string,where
+"DELETE FROM airport WHERE municipality={!airports_municipality};",airport-D1,A delete statement with on a condition on the municipality column vulnerable to SQL Injection.,string,where
+"DELETE from airport WHERE latitude_deg={!airports_latitude_deg} AND longitude_deg={airports_longitude_deg};",airport-D2,"A delete statement using a condition on coordinates columns (latitude_deg, longitude_deg). A malicious payload can be injected in the latitude_deg field. ",float float,where
+"DELETE from airport WHERE latitude_deg={airports_latitude_deg} AND longitude_deg={!airports_longitude_deg};",airport-D3,"A delete statement using a condition on coordinates columns (latitude_deg, longitude_deg). A malicious payload can be injected in the latitude_deg field. ",float float,where
+"DELETE FROM airport WHERE keywords LIKE {!airports_keywords};  ",airport-D4," A delete statement removing airports matching a keyword search, vulnerable to SQL injection.",string,where

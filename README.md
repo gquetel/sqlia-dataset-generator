@@ -13,7 +13,6 @@ The program accepts one parameter, `-ini`, which should point to a `.ini` file c
 python3 ./main.py -ini ini.ini 
 ```
 
-
 ```
 CREATE TABLE airport (
     id INT PRIMARY KEY AUTO_INCREMENT,

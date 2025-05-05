@@ -1,7 +1,9 @@
 import random
 from typing import Tuple, List
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import configparser
+
+import pandas
 
 
 from .config_parser import (
@@ -108,15 +110,14 @@ class PayloadDistributionManager:
         return s
 
     def generate_payload(
-        self, original_value: str | int, clause: str
+        self, original_value: str | int, query_template   
     ) -> tuple[str, str]:
         # Given the clause, randomly select a possible payload
         # If possible payload count is target count, still generate.
-
-        family, payload_type = self._select_next_family_and_type(clause)
+        family, payload_type = self._select_next_family_and_type(query_template.payload_clause)
 
         return self.generators[family].generate_payload_from_type(
-            original_value, payload_type, clause
+            original_value, payload_type, query_template
         )
 
 

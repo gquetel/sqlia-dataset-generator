@@ -1,3 +1,4 @@
+from collections import namedtuple
 import configparser
 import os
 import pandas as pd
@@ -28,9 +29,7 @@ class sqlmapGenerator(PayloadGenerator):
         # First, we load all payload xml files
 
         payload_config = get_payload_types_and_proportions(config)
-        _valid_payloads = [
-            d["type"] for d in payload_config if d["family"] == "sqlmap"
-        ]
+        _valid_payloads = [d["type"] for d in payload_config if d["family"] == "sqlmap"]
         self.payloads = {}
         self._load_all_payloads(_valid_payloads)
         self.config = config
@@ -43,26 +42,15 @@ class sqlmapGenerator(PayloadGenerator):
             "inline_query",
             "stacked_queries",
             "time_blind",
-            # "union_query", # TODO, support union.
+            "union_query",
         ]
-        match (clause):
-            case "where":
-                return all_types
-            case "values":
-                # WARNING: Mettre stacked queries nous foire nos proportions,
-                # Sqlmap ne semble pas réussir à exploiter de telles requêtes de toute façon.
-                return all_types
-                return ["stacked_queries"]
-            case _:
-                raise ValueError(
-                    "get_possible_types_from_clause: unknown clause ", clause
-                )
-            
-    def _sanitize_payload(self, payload : str):
-        # For some payloads, there is a '\' that needs to be replaced to 
+        return all_types
+
+    def _sanitize_payload(self, payload: str):
+        # For some payloads, there is a '\' that needs to be replaced to
         # a '\\' so that it does not become syntactically invalid.
         payload = payload.replace("'\\'", "'\\\\'")
-        return payload 
+        return payload
 
     def _load_all_payloads(self, valid_payloads: list):
         # Read all files under ./data/payloads/sqlmap ending with .xml
@@ -92,13 +80,9 @@ class sqlmapGenerator(PayloadGenerator):
                         dbms_node = child.find("details/dbms")
                         if dbms_node is None or "MySQL" in dbms_node.text:
                             title = child.find("title").text
-                            clauses = set(
-                                _normalize_ranges(child.find("clause").text)
-                            )
+                            clauses = set(_normalize_ranges(child.find("clause").text))
                             where = child.find("where").text
-                            request_payload = child.find(
-                                "request/payload"
-                            ).text
+                            request_payload = child.find("request/payload").text
 
                             comment = child.find("request/comment")
                             if comment:
@@ -132,9 +116,7 @@ class sqlmapGenerator(PayloadGenerator):
                 # )
                 self.payloads[filename[:-4]] = pd.DataFrame(payload_type)
 
-    def _fill_payload_template(
-        self, original_value: str | int, template: str
-    ) -> str:
+    def _fill_payload_template(self, original_value: str | int, template: str) -> str:
         sqlmap_fields = re.findall(r"(\[.*?\])", template)
         for field in sqlmap_fields:
             match field:
@@ -146,9 +128,7 @@ class sqlmapGenerator(PayloadGenerator):
                     | "[RANDNUM4]"
                     | "[RANDNUM5]"
                 ):
-                    template = template.replace(
-                        field, str(random.randint(0, 10000))
-                    )
+                    template = template.replace(field, str(random.randint(0, 10000)))
                 case "[SLEEPTIME]":
                     # template = template.replace(field, str(random.randint(0, )), 1)
                     template = template.replace(field, "0")
@@ -180,9 +160,7 @@ class sqlmapGenerator(PayloadGenerator):
                     # In SQLMAP corresponds to 3 low frequency characters that act as delimiters, to be easily recognized in the response.
                     # Here we don't mind about the responds, let's just replace it with random characters.
                     _rdmstr = "".join(
-                        random.choices(
-                            string.digits + string.ascii_letters, k=3
-                        )
+                        random.choices(string.digits + string.ascii_letters, k=3)
                     )
                     template = template.replace(field, _rdmstr, 1)
                 case _:
@@ -190,11 +168,21 @@ class sqlmapGenerator(PayloadGenerator):
         return template
 
     def generate_payload_from_type(
-        self, original_value: str | int, payload_type: str, payload_clause: str
+        self, original_value: str | int, payload_type: str, query_template: namedtuple
     ) -> tuple[str, str]:
         payload = None
         desc = None
         where = None
+
+        payload_clause = query_template.payload_clause
+
+        # Try to retrieve information provided by select statement
+        # When not present -> Other type of statement, will lead to
+        # Syntax error anyway, we chose a random value.
+        if hasattr(query_template, "expected_column_number"):
+            payload_expected_cols = query_template.expected_column_number
+        else:
+            payload_expected_cols = random.randint(1, 11)
 
         escape_char = random.choice(['"', "'"])
         comments_char = random.choice(["#", "--"])
@@ -202,7 +190,7 @@ class sqlmapGenerator(PayloadGenerator):
         # Randomly select a payload in self.payloads[payload_type]
         # When a string is expected, we avoid type 2 where payloads.
         # Also, escape escape_char in original_value.
-        if isinstance(original_value, str):
+        if isinstance(original_value, str) and payload_type != "union_query":
             original_value = original_value.replace(
                 escape_char, f"{escape_char}{escape_char}"
             )
@@ -213,24 +201,37 @@ class sqlmapGenerator(PayloadGenerator):
         else:
             _choosen_payload = self.payloads[payload_type].sample(n=1)
 
-        desc = _choosen_payload.iloc[0]["title"]
-        where = _choosen_payload.iloc[0]["where"]
 
-        payload = self._fill_payload_template(
-            original_value=original_value,
-            template=_choosen_payload.iloc[0]["payload"],
-        )
-        # Now we need to build prefix / suffix depending on value type and clause
-        # if clause = values, we only support stacked queries, we need to close parenthesis.
+
+        # Hack, Union queries templates are different
+        # Just construct them directly based on payload_expected_cols.
+        if payload_type == "union_query":
+            choice = random.choice([random.randint(1, 10000), "NULL"])
+            desc = "UNION ALL based injection attack."
+            payload = (
+                "UNION ALL SELECT "
+                + f"{choice}," * (payload_expected_cols - 1)
+                + f"{choice} -- "
+            )
+        else:
+            desc = _choosen_payload.iloc[0]["title"]
+            where = _choosen_payload.iloc[0]["where"]
+            
+            payload = self._fill_payload_template(
+                original_value=original_value,
+                template=_choosen_payload.iloc[0]["payload"],
+            )
+
+        # if(random.choice([0,1]) == 1):
+        #     payload = str.lower(payload)
+
+        # Now we need to build prefix / suffix depending on value type and clause.  .
         if payload_clause == "values":
+            # we need to try to close parenthesis of INSERT ... INTO (...)
             if isinstance(original_value, str):
                 # Escape quoting char in original value
-                payload = (
-                    escape_char + original_value + escape_char + ")" + payload
-                )
-            elif isinstance(original_value, int) or isinstance(
-                original_value, float
-            ):
+                payload = escape_char + original_value + escape_char + ")" + payload
+            elif isinstance(original_value, int) or isinstance(original_value, float):
                 payload = str(original_value) + ")" + payload
             else:
                 raise ValueError(
@@ -240,17 +241,13 @@ class sqlmapGenerator(PayloadGenerator):
 
             # Then add comments to ignore rest of query.
             payload += comments_char
-        else:
+        elif payload_clause == "where" or payload_clause == "subquery where":
             if isinstance(original_value, str):
                 match (where):
                     case 1:
                         #  Append the payload to the parameter original value
                         payload = (
-                            escape_char
-                            + original_value
-                            + escape_char
-                            + " "
-                            + payload
+                            escape_char + original_value + escape_char + " " + payload
                         )
                     case 3:
                         # Replace the parameter original value with payload
@@ -260,18 +257,14 @@ class sqlmapGenerator(PayloadGenerator):
                         raise ValueError(
                             "generate_payload_from_type: where is of incorrect value:"
                         )
-            elif isinstance(original_value, int) or isinstance(
-                original_value, float
-            ):
+            elif isinstance(original_value, int) or isinstance(original_value, float):
                 match (where):
                     case 1:
                         #  Append the payload to the parameter original value
                         payload = str(original_value) + " " + payload
                     case 2:
                         # Random negative int + payload
-                        payload = (
-                            str(random.randint(-100000, -1000)) + " " + payload
-                        )
+                        payload = str(random.randint(-100000, -1000)) + " " + payload
                     case 3:
                         # Replace the parameter original value with our payload
                         pass
@@ -284,4 +277,9 @@ class sqlmapGenerator(PayloadGenerator):
                     "generate_payload_from_type: original_value is of unknown type:",
                     type(original_value),
                 )
+        else:
+            raise ValueError(
+                "generate_payload_from_type: payload_clause is of unknown type:",
+                payload_clause,
+            )
         return (payload, desc)
