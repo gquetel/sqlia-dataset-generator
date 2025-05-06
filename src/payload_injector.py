@@ -5,7 +5,6 @@ import configparser
 
 import pandas
 
-
 from .config_parser import (
     get_payload_types_and_proportions,
     get_queries_numbers,

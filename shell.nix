@@ -38,6 +38,7 @@ in
 pkgs.mkShell rec {
   packages = [
     pythonEnv
+    pkgs.sqlmap
   ];
 
   catchConflicts = false;

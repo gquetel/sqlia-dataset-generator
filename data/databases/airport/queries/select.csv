@@ -1,5 +1,5 @@
 template,ID,description,payload_type,payload_clause,expected_column_number
-"SELECT * FROM airport WHERE icao_code = {!airports_icao_code}",airport-S1,A select statement filtering by ICAO code that's vulnerable to SQL injection through the icao_code parameter.,string,where,18
+"SELECT * FROM airport WHERE icao_code = ""{!airports_icao_code}""",airport-S1,A select statement filtering by ICAO code that's vulnerable to SQL injection through the icao_code parameter.,string,where,18
 "SELECT id, name, icao_code FROM airport WHERE elevation_ft BETWEEN {airports_elevation_ft} AND {!airports_elevation_ft}",airport-S2,A select statement with a BETWEEN clause on elevation that's vulnerable to SQL injection through the second elevation_ft parameters.,float float,where,3
 "SELECT icao_code, iata_code, local_code FROM airport WHERE name LIKE {!airports_name}",airport-S3,A select statement to search airports by name vulnerable in the name field.,string,where,3
 "SELECT * FROM airport WHERE gps_code = {!airports_gps_code} OR local_code = {airports_local_code}",airport-S4,A select statement filtering by GPS code or local code with a SQL injection point on the gps_code parameter.,string string,where,18
