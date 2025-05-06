@@ -5,10 +5,11 @@ import os
 import re
 import csv
 import threading
+import subprocess
 
 # Database configuration
 DB_CONFIG = {
-    "unix_socket": "/home/gquetel/tmp/scylla/mysqld_1/socket",
+    "unix_socket": "/home/gquetel/tmp/hydra/mysqld_1/socket",
     "user": "root",
     "password": "root",
     "database": "dataset",
@@ -76,9 +77,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
             with open(csv_path, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(headers)
-            print(
-                f"Created new CSV file at {csv_path} with headers: {headers}"
-            )
+            print(f"Created new CSV file at {csv_path} with headers: {headers}")
             return True
         else:
             print(f"CSV file already exists at {csv_path}")
@@ -136,9 +135,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
-                response = (
-                    f"Missing required parameters: {', '.join(missing_params)}"
-                )
+                response = f"Missing required parameters: {', '.join(missing_params)}"
                 self.wfile.write(bytes(response, "UTF-8"))
                 return
 
@@ -200,18 +197,25 @@ def run_server(port=8080):
     server_thread = threading.Thread(target=httpd.serve_forever)
     server_thread.daemon = True
     server_thread.start()
-
+    
     return httpd
 
 
 def invoke_sqlmap_instances():
     urls = ['"http://localhost:8080/airport-S1?airports_icao_code=AGBT"']
-    settings = ["--technique=U --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u "]
+    settings = [
+        "--technique=B --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u ",
+        "--technique=E --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u ",
+        "--technique=U --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u ",
+        "--technique=S --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u ",
+        "--technique=T --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u ",
+        "--technique=Q --level=5 --risk=3 --schema --users --current-db -- tables  --batch --flush-session -u ",
+    ]
     for url in urls:
         for setting in settings:
             command = "".join(["sqlmap ", setting, url])
-            #os.popen(command)
-            print(command)
+            os.popen(command)
+            #print(command)
 
 if __name__ == "__main__":
     httpd = run_server()
