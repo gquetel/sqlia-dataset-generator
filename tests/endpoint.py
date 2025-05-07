@@ -36,7 +36,7 @@ def load_query_templates(csv_file):
             expected_column_number = int(row[5])
 
             # Extract parameter names from the template using regex
-            param_names = re.findall(r"\{(!?)([a-zA-Z_]+)\}", template)
+            param_names = re.findall(r"\{([a-zA-Z_]+)\}", template)
             params = [name for _, name in param_names]
 
             templates.append(

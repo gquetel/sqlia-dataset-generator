@@ -5,10 +5,17 @@ from tqdm import tqdm
 import random
 import re
 
+from .payload_generators.sqlmap_generator import sqlmapGenerator
+
+from .endpoints_controller import ServerManager
 from .sql_connector import SQLConnector
 
-from .payload_injector import PayloadDistributionManager
 import src.config_parser as config_parser
+
+
+def _extract_params(template):
+    param_names = re.findall(r"\{([a-zA-Z_]+)\}", template)
+    return param_names
 
 
 class DatasetBuilder:
@@ -60,6 +67,9 @@ class DatasetBuilder:
                 _t = pd.read_csv(dir_path + type + ".csv")
                 _all_templates = pd.concat([_t, _all_templates])
 
+        _all_templates["placeholders"] = _all_templates["template"].apply(
+            _extract_params
+        )
         return _all_templates
 
     def populate_normal_templates(self, n_n: int):
@@ -97,7 +107,7 @@ class DatasetBuilder:
 
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
-            placeholders_pattern = r"\{([!]?[^}]*)\}"
+            placeholders_pattern = r"\{([^}]*)\}"
             all_placeholders = [
                 m.group(1)
                 for m in re.finditer(
@@ -165,11 +175,33 @@ class DatasetBuilder:
         return res
 
     def generate_attack_queries_sqlmapapi(self) -> dict:
+        server_port = 8081
         generated_attack_queries = []
 
         # First, initialize all HTTP endpoints for each template.
         templates = self.get_all_templates()
-        print(templates)
+        if self.sqlc == None:
+            self.sqlc = SQLConnector(self.config)
+        # Prune all sent_queries for attacks
+        _ = self.sqlc.get_and_empty_sent_queries()
+
+        server = ServerManager(
+            templates=templates, sqlconnector=self.sqlc, port=server_port
+        )
+        server.start_server()
+
+        # Now iterate over templates and techniques to generate payloads.
+        sqlg = sqlmapGenerator(
+            config=self.config,
+            templates=templates,
+            sqlconnector=self.sqlc,
+            placeholders_dictionnaries_list=self.dictionnaries,
+            port=server_port,
+        )
+        sqlg.generate_attacks()
+        input()
+        server.stop_server()
+
         self._n_attacks = len(generated_attack_queries)
         self.df = pd.DataFrame(generated_attack_queries)
 

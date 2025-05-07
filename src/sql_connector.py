@@ -13,6 +13,9 @@ class SQLConnector:
         self.socket_path = socket_path
         self.init_new_cnx()
 
+        # Array of sent queries by self.execute_query
+        self.sent_queries = []
+
     def init_new_cnx(self):
         self.cnx = mysql.connector.connect(
             user=self.user,
@@ -21,6 +24,11 @@ class SQLConnector:
             database="dataset",
         )
 
+    def get_and_empty_sent_queries(self) -> list:
+        res = self.sent_queries.copy()
+        self.sent_queries = []
+        return res
+    
     def execute_query(self, query):
         # https://dev.mysql.com/doc/connector-python/en/connector-python-multi.html
         if self.cnx is None or not self.cnx.is_connected():

@@ -1,5 +1,5 @@
 template,ID,description,payload_type,payload_clause
-"UPDATE airport SET elevation_ft = {airports_elevation_ft} WHERE ident = {!airports_ident}",airport-U1,An update statement allowing SQL injection through the ident parameter.,float string,where
-"UPDATE airport SET municipality = {airports_municipality} WHERE iso_country = {!airports_iso_country}",airport-U2,An update statement vulnerable to SQL injection through the municipality string field.,string string,where
-"UPDATE airport SET wikipedia_link = {airports_wikipedia_link} WHERE type = {!airports_type}",airport-U3,An update statement with SQL injection vulnerability in the type field from its where clause.,string string,where
-"UPDATE airport SET gps_code = {airports_gps_code} WHERE continent = {airports_continent} AND iso_region = {!airports_iso_region}",airport-U4,An update statement allowing SQL injection through the gps_code parameter.,string string string,where
+"UPDATE airport SET elevation_ft = {airports_elevation_ft} WHERE ident = {airports_ident}",airport-U1,An update statement allowing SQL injection through the ident parameter.,float string,where
+"UPDATE airport SET municipality = {airports_municipality} WHERE iso_country = {airports_iso_country}",airport-U2,An update statement vulnerable to SQL injection through the municipality string field.,string string,where
+"UPDATE airport SET wikipedia_link = {airports_wikipedia_link} WHERE type = {airports_type}",airport-U3,An update statement with SQL injection vulnerability in the type field from its where clause.,string string,where
+"UPDATE airport SET gps_code = {airports_gps_code} WHERE continent = {airports_continent} AND iso_region = {airports_iso_region}",airport-U4,An update statement allowing SQL injection through the gps_code parameter.,string string string,where
