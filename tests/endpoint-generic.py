@@ -5,11 +5,10 @@ import os
 import re
 import csv
 import threading
-import subprocess
 
 # Database configuration
 DB_CONFIG = {
-    "unix_socket": "/home/gquetel/tmp/hydra/mysqld_1/socket",
+    "unix_socket": "/home/gquetel/tmp/scylla/mysqld_1/socket",
     "user": "root",
     "password": "root",
     "database": "dataset",
@@ -73,15 +72,17 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
             "malicious_input_desc",
         ]
         csv_path = self.csv_queries_path
+        
         if not os.path.isfile(csv_path):
             with open(csv_path, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(headers)
-            print(f"Created new CSV file at {csv_path} with headers: {headers}")
+            print(
+                f"Created new CSV file at {csv_path} with headers: {headers}"
+            )
             return True
-        else:
-            print(f"CSV file already exists at {csv_path}")
-            return False
+        
+        return False
 
     def log_query(self, query, template_id: int):
         """Log SQL query and whether it encountered an error"""
@@ -89,6 +90,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
         label = 1
         malicious_input = "Unknown"
         malicious_input_desc = "Unknown"
+        
         fields = [
             query,
             label,
@@ -135,7 +137,9 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
-                response = f"Missing required parameters: {', '.join(missing_params)}"
+                response = (
+                    f"Missing required parameters: {', '.join(missing_params)}"
+                )
                 self.wfile.write(bytes(response, "UTF-8"))
                 return
 
@@ -173,14 +177,15 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
     def execute_query(self, query):
         """Execute a SQL query and return the results"""
         try:
-            conn = mysql.connector.connect(**DB_CONFIG)
-            cursor = conn.cursor(dictionary=True)
 
-            cursor.execute(query)
-            results = cursor.fetchall()
-
-            cursor.close()
-            conn.close()
+            cnx = mysql.connector.connect(**DB_CONFIG)
+            results = []
+            # https://dev.mysql.com/doc/connector-python/en/connector-python-multi.html
+            with cnx.cursor(buffered=True) as cur:
+                cur.execute(query)
+                for _, result_set in cur.fetchsets():
+                    results.append(result_set)
+            cnx.close()
 
             return results
 
@@ -197,32 +202,36 @@ def run_server(port=8080):
     server_thread = threading.Thread(target=httpd.serve_forever)
     server_thread.daemon = True
     server_thread.start()
-
     return httpd
 
 
 def invoke_sqlmap_instances():
     urls = [
         "http://localhost:8080/airport-S1?airports_icao_code=AGBT",
-        # "http://localhost:8080/airport-S2?airports_elevation_ft=24" -> on l'évite, les deux champs ont le même nom, le paylaod est inseré deux fois, à gérer.
-        "http://localhost:8080/airport-S3?airports_name=BucksAirport",
-        "http://localhost:8080/airport-S12?airports_name=BucksAirport"
+        # "http://localhost:8080/airport-S2?airports_elevation_ft=24" -> on l'évite, les deux champs ont le même nom, le paylaod est inseré deux fois, à gérer.*
+        # "http://localhost:8080/airport-S3?airports_name=BucksAirport",
+        # "http://localhost:8080/airport-S4?airports_gps_code=8VA1&airports_local_code=MS0549",
+        # "http://localhost:8080/airport-S12?airports_name=BucksAirport",
+        
     ]
     # While level 5 uses more payloads, it also tries to inject stuff on user agent fields
     # without modifying the query, resulting in the same normal query being sent many times to
     # the server. We deactivate this behavior using --skip="user-agent,referer,host"
 
     #  A mechanism to remove the occurence of the default SQL query built using the url from the dataset should be setup.
+
     default_settings = "-D dataset --threads=4 --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
+    
     settings = [
         # "--technique=E --schema --users --tables --count "+ default_settings,
         "--technique=B --users " + default_settings,
         "--technique=E --users " + default_settings,
         "--technique=U --all " + default_settings,
-        "--technique=S " + default_settings,
-        "--technique=T " + default_settings,
+        "--technique=S -f" + default_settings,
+        "--technique=T -f" + default_settings,
         "--technique=Q --all " + default_settings,
     ]
+
     for url in urls:
         for setting in settings:
             command = "".join(["sqlmap ", setting, url])
@@ -234,6 +243,8 @@ if __name__ == "__main__":
 
     try:
         invoke_sqlmap_instances()
+        print("Press Enter to stop the server...")
+        input()
     finally:
         print("Shutting down server...")
         httpd.shutdown()
