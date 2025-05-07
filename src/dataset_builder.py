@@ -33,7 +33,9 @@ class DatasetBuilder:
         self.outpath = config_parser.get_output_path(config)
 
         # Statements types specified to be generated
-        statements_type = config_parser.get_statement_types_and_proportions(self.config)
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
+        )
 
         # Proportions of normal and attack queries.
         n_n, n_a = config_parser.get_queries_numbers(config)
@@ -46,7 +48,9 @@ class DatasetBuilder:
         self._df_templates_n = pd.DataFrame()
 
         # Select all query templates.
-        self.populate_templates(n_n=n_n, n_a=n_a, statements_type=statements_type)
+        self.populate_templates(
+            n_n=n_n, n_a=n_a, statements_type=statements_type
+        )
 
         # Load all dictionnaries in memory to prevent many file read.
         self.populate_dictionnaries()
@@ -102,9 +106,12 @@ class DatasetBuilder:
             placeholders_pattern = r"\{([!]?[^}]*)\}"
             all_placeholders = [
                 m.group(1)
-                for m in re.finditer(placeholders_pattern, template_row.template)
+                for m in re.finditer(
+                    placeholders_pattern, template_row.template
+                )
             ]
             all_types = template_row.payload_type.split()
+
             assert len(all_types) == len(all_placeholders)
             db_name = template_row.ID.split("-")[0]
 
@@ -126,17 +133,18 @@ class DatasetBuilder:
                         )
                 match type:
                     case "int" | "float":
-                        query = query.replace(f"{{{placeholder}}}", str(filler))
-                    case "string":
-                        # String should be escaped
-                        escape_char = random.choice(['"', "'"])
-                        # escape quoting char in string
-                        filler = filler.replace(
-                            escape_char, f"{escape_char}{escape_char}"
+                        query = query.replace(
+                            f"{{{placeholder}}}", str(filler)
                         )
+                    case "string":
+                        # New templating method, the string should
+                        # not be escaped. It is done in the template.
+
+                        # However, we also use double quotes, we need to escape those in filler
+                        filler = filler.replace('"', '""')
                         query = query.replace(
                             f"{{{placeholder}}}",
-                            f"{escape_char}{filler}{escape_char}",
+                            f"{filler}",
                         )
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
@@ -151,6 +159,7 @@ class DatasetBuilder:
                     "label": 0,
                     "template_id": template_row.ID,
                     "malicious_input": None,
+                    "malicious_input_desc": None,
                 }
             )
         self.df = pd.DataFrame(generated_normal_queries)
@@ -164,7 +173,8 @@ class DatasetBuilder:
     def _get_query_with_payload(self, template_row):
         placeholders_pattern = r"\{([!]?[^}]*)\}"
         all_placeholders = [
-            m.group(1) for m in re.finditer(placeholders_pattern, template_row.template)
+            m.group(1)
+            for m in re.finditer(placeholders_pattern, template_row.template)
         ]
         all_types = template_row.payload_type.split()
         assert len(all_types) == len(all_placeholders)
@@ -201,11 +211,15 @@ class DatasetBuilder:
                 if placeholder == "pos_number":
                     filler = random.randint(0, 64000)
                 else:
-                    filler = random.choice(self.dictionnaries[(db_name, placeholder)])
+                    filler = random.choice(
+                        self.dictionnaries[(db_name, placeholder)]
+                    )
                 # Then, integrate filler:
                 match type:
                     case "int" | "float":
-                        query = query.replace(f"{{{placeholder}}}", str(filler))
+                        query = query.replace(
+                            f"{{{placeholder}}}", str(filler)
+                        )
                     case "string":
                         escape_char = random.choice(['"', "'"])
                         filler = filler.replace(
@@ -242,7 +256,9 @@ class DatasetBuilder:
         # }
         template_validity_stats = {}
         for template_row in self._df_templates_a.itertuples():
-            attempt_query = self._get_query_with_payload(template_row=template_row)
+            attempt_query = self._get_query_with_payload(
+                template_row=template_row
+            )
             template_id = attempt_query["template_id"]
 
             if template_id not in template_validity_stats:
@@ -250,10 +266,12 @@ class DatasetBuilder:
                     "valid_count": 0,
                     "total_count": 0,
                 }
-            
+
             template_validity_stats[template_id]["total_count"] += 1
 
-            if self._verify_syntactic_validity_query(query=attempt_query["full_query"]):
+            if self._verify_syntactic_validity_query(
+                query=attempt_query["full_query"]
+            ):
                 valid_counter += 1
                 template_validity_stats[template_id]["valid_count"] += 1
 
@@ -269,8 +287,12 @@ class DatasetBuilder:
         for template_id, stats in template_validity_stats.items():
             valid_count = stats["valid_count"]
             total_count = stats["total_count"]
-            validity_ratio = valid_count / total_count if total_count > 0 else 0
-            template_validity_stats[template_id]["validity_ratio"] = validity_ratio
+            validity_ratio = (
+                valid_count / total_count if total_count > 0 else 0
+            )
+            template_validity_stats[template_id][
+                "validity_ratio"
+            ] = validity_ratio
             print(
                 f"Template ID: {template_id}, Validity Ratio: {stats['validity_ratio']:.2f} ({stats['valid_count']}/{stats['total_count']})"
             )

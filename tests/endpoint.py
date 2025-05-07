@@ -241,12 +241,12 @@ def invoke_sqlmap_instances():
     default_settings = "-v 0 -D dataset --threads=4 --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
 
     settings = [
-        # "--technique=B --users " + default_settings,
-        # "--technique=E --schema --users --tables --count " + default_settings,
-        # "--technique=U --all " + default_settings,
+        "--technique=B --users " + default_settings,
+        "--technique=E --schema --users --tables --count " + default_settings,
+        "--technique=U --all " + default_settings,
         "--technique=S -f " + default_settings,
-        # "--technique=T -f " + default_settings,
-        # "--technique=Q --all " + default_settings,
+        "--technique=T -f " + default_settings,
+        "--technique=Q --all " + default_settings,
     ]
 
     for url in urls:

@@ -16,7 +16,7 @@ python3 ./main.py -ini ini.ini
 ```
 CREATE TABLE airport (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    ident VARCHAR(10) NOT NULL,
+    ident VARCHAR(10) NOT NULL UNIQUE,
     type VARCHAR(20) NOT NULL,
     name VARCHAR(255) NOT NULL,
     latitude_deg DECIMAL(10, 6),
@@ -34,5 +34,30 @@ CREATE TABLE airport (
     home_link VARCHAR(255),
     wikipedia_link VARCHAR(255),
     keywords TEXT
+);
+
+CREATE TABLE runways (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    airport_ref INT NOT NULL,
+    airport_ident VARCHAR(10) NOT NULL,
+    length_ft INT,
+    width_ft INT,
+    surface VARCHAR(20),
+    lighted TINYINT(1),
+    closed TINYINT(1),
+    le_ident VARCHAR(10),
+    le_latitude_deg DECIMAL(10, 6),
+    le_longitude_deg DECIMAL(10, 6),
+    le_elevation_ft INT,
+    le_heading_degT DECIMAL(5, 1),
+    le_displaced_threshold_ft INT,
+    he_ident VARCHAR(10),
+    he_latitude_deg DECIMAL(10, 6),
+    he_longitude_deg DECIMAL(10, 6),
+    he_elevation_ft INT,
+    he_heading_degT DECIMAL(5, 1),
+    he_displaced_threshold_ft INT,
+    FOREIGN KEY (airport_ref) REFERENCES airport(id),
+    FOREIGN KEY (airport_ident) REFERENCES airport(ident)
 );
 ```

@@ -21,6 +21,21 @@ class SQLConnector:
             database="dataset",
         )
 
+    def execute_query(self, query):
+        # https://dev.mysql.com/doc/connector-python/en/connector-python-multi.html
+        if self.cnx is None or not self.cnx.is_connected():
+            self.init_new_cnx()
+        try:            
+            results = []
+            with self.cnx.cursor(buffered=True) as cur:
+                cur.execute(query)
+                for _, result_set in cur.fetchsets():
+                    results.append(result_set)
+            return results
+
+        except mysql.connector.Error as err:
+            raise Exception(f"Database error: {err}")
+        
     def is_query_syntvalid(self, query: str) -> bool:
         if self.cnx is None or not self.cnx.is_connected():
             self.init_new_cnx()
