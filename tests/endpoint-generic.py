@@ -72,7 +72,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
             "malicious_input_desc",
         ]
         csv_path = self.csv_queries_path
-        
+
         if not os.path.isfile(csv_path):
             with open(csv_path, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
@@ -81,7 +81,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
                 f"Created new CSV file at {csv_path} with headers: {headers}"
             )
             return True
-        
+
         return False
 
     def log_query(self, query, template_id: int):
@@ -90,7 +90,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
         label = 1
         malicious_input = "Unknown"
         malicious_input_desc = "Unknown"
-        
+
         fields = [
             query,
             label,
@@ -208,11 +208,15 @@ def run_server(port=8080):
 def invoke_sqlmap_instances():
     urls = [
         "http://localhost:8080/airport-S1?airports_icao_code=AGBT",
-        # "http://localhost:8080/airport-S2?airports_elevation_ft=24" -> on l'évite, les deux champs ont le même nom, le paylaod est inseré deux fois, à gérer.*
-        # "http://localhost:8080/airport-S3?airports_name=BucksAirport",
-        # "http://localhost:8080/airport-S4?airports_gps_code=8VA1&airports_local_code=MS0549",
-        # "http://localhost:8080/airport-S12?airports_name=BucksAirport",
-        
+        "http://localhost:8080/airport-S2?airports_elevation_ft=24",
+        "http://localhost:8080/airport-S3?airports_name=BucksAirport",
+        # "http://localhost:8080/airport-S4?airports_gps_code=8VA1&airports_local_code=MS0549", # a tester
+        # "http://localhost:8080/airport-S5?airports_iso_country=US",  # a tester
+        # "http://localhost:8080/airport-S6?airports_iso_country=US",  # a tester
+        # "http://localhost:8080/airport-S7?airports_name=Pumpuentza Airstrip",  # a tester
+        # "http://localhost:8080/airport-S8?airports_continent=EU&airports_iso_region=DK-82",  # a tester
+        # "http://localhost:8080/airport-S9?airports_continent=FR", # a tester
+        "http://localhost:8080/airport-S12?airports_name=BucksAirport",
     ]
     # While level 5 uses more payloads, it also tries to inject stuff on user agent fields
     # without modifying the query, resulting in the same normal query being sent many times to
@@ -221,14 +225,13 @@ def invoke_sqlmap_instances():
     #  A mechanism to remove the occurence of the default SQL query built using the url from the dataset should be setup.
 
     default_settings = "-D dataset --threads=4 --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
-    
+
     settings = [
-        # "--technique=E --schema --users --tables --count "+ default_settings,
         "--technique=B --users " + default_settings,
-        "--technique=E --users " + default_settings,
+        "--technique=E --schema --users --tables --count " + default_settings,
         "--technique=U --all " + default_settings,
-        "--technique=S -f" + default_settings,
-        "--technique=T -f" + default_settings,
+        "--technique=S -f " + default_settings,
+        "--technique=T -f " + default_settings,
         "--technique=Q --all " + default_settings,
     ]
 
