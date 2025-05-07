@@ -52,6 +52,7 @@ def load_query_templates(csv_file):
             )
     return templates
 
+
 class SQLQueryHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.csv_queries_path = "queries.csv"
@@ -168,9 +169,14 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
+                # Ici ça à l'air de foirer parfois. Voir s'il n'y a pas des
+                # fois où l'on envoit trop de données d'un coup ?
                 self.wfile.write(bytes(str(results), "UTF-8"))
 
+            # except BrokenPipeError as e:
+            #     print("Broken pipe error for query:", query, " and results", results)
             except Exception as e:
+
                 self.log_query(query=query, template_id=template["id"])
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
@@ -219,13 +225,13 @@ def invoke_sqlmap_instances():
         "http://localhost:8080/airport-S1?airports_icao_code=AGBT",
         "http://localhost:8080/airport-S2?airports_elevation_ft=24",
         "http://localhost:8080/airport-S3?airports_name=BucksAirport",
-        "http://localhost:8080/airport-S4?airports_gps_code=8VA1\&airports_local_code=MS0549", 
-        "http://localhost:8080/airport-S5?airports_iso_country=US",  
-        "http://localhost:8080/airport-S6?airports_iso_country=US",  
-        "http://localhost:8080/airport-S7?airports_name=Pumpuentza%20Airstrip",  
-        "http://localhost:8080/airport-S8?airports_continent=EU&airports_iso_region=DK-82", 
-        "http://localhost:8080/airport-S9?airports_continent=FR&airports_iso_country=FR", 
-        "http://localhost:8080/airport-S10?airports_keywords=Laporte", 
+        "http://localhost:8080/airport-S4?airports_gps_code=8VA1\&airports_local_code=MS0549",
+        "http://localhost:8080/airport-S5?airports_iso_country=US",
+        "http://localhost:8080/airport-S6?airports_iso_country=US",
+        "http://localhost:8080/airport-S7?airports_name=Pumpuentza%20Airstrip",
+        "http://localhost:8080/airport-S8?airports_continent=EU\&airports_iso_region=DK-82",
+        "http://localhost:8080/airport-S9?airports_iso_country=FR",
+        "http://localhost:8080/airport-S10?airports_keywords=Laporte",
         "http://localhost:8080/airport-S11?airports_iso_country=US\&airports_elevation_ft=270.0",
         "http://localhost:8080/airport-S12?airports_name=Bucks%20Airport",
     ]
@@ -238,12 +244,12 @@ def invoke_sqlmap_instances():
 
     #  A mechanism to remove the occurence of the default SQL query built using the url from the dataset should be setup.
 
-    default_settings = "-v 0 -D dataset --threads=4 --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
+    default_settings = "-v 0 -D dataset --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
 
     settings = [
         "--technique=B --users " + default_settings,
         "--technique=E --schema --users --tables --count " + default_settings,
-        "--technique=U --all " + default_settings,
+        "--technique=U -all  " + default_settings,
         "--technique=S -f " + default_settings,
         "--technique=T -f " + default_settings,
         "--technique=Q --all " + default_settings,
@@ -252,6 +258,7 @@ def invoke_sqlmap_instances():
     for url in urls:
         for setting in settings:
             command = "".join(["sqlmap ", setting, url])
+            print(command)
             retcode = Popen(command, shell=True).wait()
 
 

@@ -15,7 +15,6 @@ class DatasetBuilder:
     def __init__(self, config) -> None:
         self.config = config
         self.seed = config_parser.get_seed(self.config)
-
         #  Dict holding all possible filler values
         # Keys are tuple of the form (db_name, dictionnary_name)
         self.dictionnaries = {}
@@ -31,28 +30,6 @@ class DatasetBuilder:
 
         # Dataset output path
         self.outpath = config_parser.get_output_path(config)
-
-        # Statements types specified to be generated
-        statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
-        )
-
-        # Proportions of normal and attack queries.
-        n_n, n_a = config_parser.get_queries_numbers(config)
-
-        # Initialize Payload generation component
-        self.pdm = PayloadDistributionManager(config=config)
-
-        # Randomly select templates given the config file distribution
-        self._df_templates_a = pd.DataFrame()
-        self._df_templates_n = pd.DataFrame()
-
-        # Select all query templates.
-        self.populate_templates(
-            n_n=n_n, n_a=n_a, statements_type=statements_type
-        )
-
-        # Load all dictionnaries in memory to prevent many file read.
         self.populate_dictionnaries()
 
     def populate_dictionnaries(self):
@@ -66,14 +43,34 @@ class DatasetBuilder:
                 with open(dicts_dir + filename, "r") as f:
                     self.dictionnaries[(db, filename)] = f.read().splitlines()
 
-    def populate_templates(self, n_n: int, n_a: int, statements_type: dict):
+    def get_all_templates(self):
+        """Return all statements templates."""
         used_databases = config_parser.get_used_databases(self.config)
-
-        n_n_per_db = int(n_n / len(used_databases))
-        n_a_per_db = int(n_a / len(used_databases))
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
+        )
+        _all_templates = pd.DataFrame()
 
         for db in used_databases:
+            dir_path = "".join(["./data/databases/", db, "/queries/"])
+            for stmt_type in statements_type:
+                # Iterate  statements_type,
+                # Load relevant csv file, and sample templates.
+                type = stmt_type["type"]
+                _t = pd.read_csv(dir_path + type + ".csv")
+                _all_templates = pd.concat([_t, _all_templates])
 
+        return _all_templates
+
+    def populate_normal_templates(self, n_n: int):
+        used_databases = config_parser.get_used_databases(self.config)
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
+        )
+
+        n_n_per_db = int(n_n / len(used_databases))
+        self._df_templates_n = pd.DataFrame()
+        for db in used_databases:
             dir_path = "".join(["./data/databases/", db, "/queries/"])
             for stmt_type in statements_type:
                 # Iterate  statements_type,
@@ -90,17 +87,14 @@ class DatasetBuilder:
                 )
                 self._df_templates_n = pd.concat([self._df_templates_n, _dft])
 
-                # Sample attack queries
-                _dft = df_templates.sample(
-                    n=int(proportion * n_a_per_db),
-                    replace=True,
-                )
-                self._df_templates_a = pd.concat([self._df_templates_a, _dft])
-
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
         # Randomly choose a value in dict for that placeholder
         # And encapsulate based on type
+
+        # Generate the same number of normal queries that the number of attacks.
+        self.populate_normal_templates(self._n_attacks)
+
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             placeholders_pattern = r"\{([!]?[^}]*)\}"
@@ -162,7 +156,7 @@ class DatasetBuilder:
                     "malicious_input_desc": None,
                 }
             )
-        self.df = pd.DataFrame(generated_normal_queries)
+        self.df = pd.concat([self.df, pd.DataFrame(generated_normal_queries)])
 
     def _verify_syntactic_validity_query(self, query: str):
         if self.sqlc == None:
@@ -170,141 +164,20 @@ class DatasetBuilder:
         res = self.sqlc.is_query_syntvalid(query=query)
         return res
 
-    def _get_query_with_payload(self, template_row):
-        placeholders_pattern = r"\{([!]?[^}]*)\}"
-        all_placeholders = [
-            m.group(1)
-            for m in re.finditer(placeholders_pattern, template_row.template)
-        ]
-        all_types = template_row.payload_type.split()
-        assert len(all_types) == len(all_placeholders)
-        db_name = template_row.ID.split("-")[0]
-
-        # Replace 1 by 1 all placeholders by a randomly choosen dict value
-        query = template_row.template
-        for placeholder, type in zip(all_placeholders, all_types):
-            if placeholder[0] == "!":
-                # First, generate original value
-                # It is used to know how to integrate payload in query.
-                expected_value = placeholder[1::]
-                if expected_value == "pos_number":
-                    original_value = random.randint(0, 64000)
-                else:
-                    original_value = random.choice(
-                        self.dictionnaries[(db_name, expected_value)]
-                    )
-
-                    # If type == int, then cast, otherwise let as string.
-                    if type == "int":
-                        original_value = int(original_value)
-                    elif type == "float":
-                        original_value = float(original_value)
-
-                # Now use PayloadDistributionManager to generate payload
-                payload, desc = self.pdm.generate_payload(
-                    original_value, template_row
-                )
-                # Then directly integrate payload.
-                query = query.replace(f"{{{placeholder}}}", payload)
-
-            else:
-                if placeholder == "pos_number":
-                    filler = random.randint(0, 64000)
-                else:
-                    filler = random.choice(
-                        self.dictionnaries[(db_name, placeholder)]
-                    )
-                # Then, integrate filler:
-                match type:
-                    case "int" | "float":
-                        query = query.replace(
-                            f"{{{placeholder}}}", str(filler)
-                        )
-                    case "string":
-                        escape_char = random.choice(['"', "'"])
-                        filler = filler.replace(
-                            escape_char, f"{escape_char}{escape_char}"
-                        )
-                        query = query.replace(
-                            f"{{{placeholder}}}",
-                            f"{escape_char}{filler}{escape_char}",
-                        )
-                    case _:
-                        raise ValueError(f"Unknown payload type: {type}.")
-        return {
-            "full_query": query,
-            "label": 1,
-            "template_id": template_row.ID,
-            "malicious_input": payload,
-            "malicious_input_desc": desc,
-        }
-
-    def generate_attack_queries_no_syntax_assert(self) -> dict:
+    def generate_attack_queries_sqlmapapi(self) -> dict:
         generated_attack_queries = []
-        valid_counter = 0
-        # for template_row in tqdm(
-        # self._df_templates_a.itertuples(), total=len(self._df_templates_a)
-        # ):
 
-        # Compute stats per template_id of syntactic validity ratio:
-        # {
-        #     "full_query": query,
-        #     "label": 1,
-        #     "template_id": template_row.ID,
-        #     "malicious_input": payload,
-        #     "malicious_input_desc": desc,
-        # }
-        template_validity_stats = {}
-        for template_row in self._df_templates_a.itertuples():
-            attempt_query = self._get_query_with_payload(
-                template_row=template_row
-            )
-            template_id = attempt_query["template_id"]
-
-            if template_id not in template_validity_stats:
-                template_validity_stats[template_id] = {
-                    "valid_count": 0,
-                    "total_count": 0,
-                }
-
-            template_validity_stats[template_id]["total_count"] += 1
-
-            if self._verify_syntactic_validity_query(
-                query=attempt_query["full_query"]
-            ):
-                valid_counter += 1
-                template_validity_stats[template_id]["valid_count"] += 1
-
-            else:
-                pass
-                print(attempt_query["full_query"])
-            generated_attack_queries.append(attempt_query)
-
-        print(
-            f"Generated {valid_counter} syntactically valid attacks out of {len(generated_attack_queries)} total"
-        )
-
-        for template_id, stats in template_validity_stats.items():
-            valid_count = stats["valid_count"]
-            total_count = stats["total_count"]
-            validity_ratio = (
-                valid_count / total_count if total_count > 0 else 0
-            )
-            template_validity_stats[template_id][
-                "validity_ratio"
-            ] = validity_ratio
-            print(
-                f"Template ID: {template_id}, Validity Ratio: {stats['validity_ratio']:.2f} ({stats['valid_count']}/{stats['total_count']})"
-            )
-
-        self.df = pd.concat([self.df, pd.DataFrame(generated_attack_queries)])
+        # First, initialize all HTTP endpoints for each template.
+        templates = self.get_all_templates()
+        print(templates)
+        self._n_attacks = len(generated_attack_queries)
+        self.df = pd.DataFrame(generated_attack_queries)
 
     def build(
         self,
     ) -> pd.DataFrame:
+        self.generate_attack_queries_sqlmapapi()
         self.generate_normal_queries()
-        self.generate_attack_queries_no_syntax_assert()
-        print(self.pdm.get_final_stats())
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
