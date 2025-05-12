@@ -1,3 +1,5 @@
+from pathlib import Path
+import shutil
 import numpy as np
 import os
 import pandas as pd
@@ -161,9 +163,11 @@ class DatasetBuilder:
                 {
                     "full_query": query,
                     "label": 0,
-                    "template_id": template_row.ID,
-                    "malicious_input": None,
-                    "malicious_input_desc": None,
+                    "query_template_id": template_row.ID,
+                    "attack_payload": None,
+                    "attack_id": None,
+                    "attack_technique": None,
+                    "attack_desc": None,
                 }
             )
         self.df = pd.concat([self.df, pd.DataFrame(generated_normal_queries)])
@@ -205,11 +209,65 @@ class DatasetBuilder:
         self._n_attacks = len(generated_attack_queries)
         self.df = generated_attack_queries
 
+    def _add_split_column(self, train_size=0.7):
+        """
+        Add a 'split' column to dataframe with 'train' or 'test' values.
+        For attack samples, split is done at the attack_id level.
+        For normal samples, random split based on train_size.
+
+        Args:
+            train_size: Fraction of data to use for training (default 0.7)
+        """
+
+        attack_samples = self.df[self.df["label"] == 1]
+        unique_attack_ids = attack_samples["attack_id"].unique()
+        if len(unique_attack_ids) <= 1:
+            print(
+                "_add_split_column: invalid number of columns, cannot split correctly."
+            )
+            self.df["split"] = ""
+            return
+
+        self.df["split"] = "test"
+
+        test_size = (1 - train_size) / 100
+        # sample num_test_attack_ids of scenarios
+        num_test_attack_ids = max(1, int(len(unique_attack_ids) * test_size))
+
+        test_attack_ids = np.random.choice(
+            unique_attack_ids, size=num_test_attack_ids, replace=False
+        )
+
+        # Assign 'train' for attack samples that aren't in test_attack_ids
+        train_mask = (self.df["label"] == 1) & (
+            ~self.df["attack_id"].isin(test_attack_ids)
+        )
+        self.df.loc[train_mask, "split"] = "train"
+
+        normal_indices = self.df[self.df["label"] == 0].index.tolist()
+
+        if normal_indices:
+            num_train = int(len(normal_indices) * train_size)
+
+            train_normal_indices = np.random.choice(
+                normal_indices, size=num_train, replace=False
+            )
+
+            for idx in train_normal_indices:
+                self.df.at[idx, "split"] = "train"
+
+    def _clean_cache_folder(self):
+        shutil.rmtree("./cache/", ignore_errors=True)
+
     def build(
         self,
     ) -> pd.DataFrame:
+        train_size = 0.7
+        Path("./cache/").mkdir(parents=True, exist_ok=True)
         self.generate_attack_queries_sqlmapapi()
         self.generate_normal_queries()
+        self._add_split_column(train_size=train_size)
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
+        self._clean_cache_folder()

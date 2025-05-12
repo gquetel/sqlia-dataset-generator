@@ -4,6 +4,7 @@ import mysql
 
 from .config_parser import get_mysql_info, get_used_databases
 
+
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
         user, pwd, socket_path = get_mysql_info(config=config)
@@ -28,15 +29,16 @@ class SQLConnector:
         res = self.sent_queries.copy()
         self.sent_queries = []
         return res
-    
+
     def execute_query(self, query):
         # https://dev.mysql.com/doc/connector-python/en/connector-python-multi.html
         if self.cnx is None or not self.cnx.is_connected():
             self.init_new_cnx()
-        try:            
+        try:
             results = []
             self.sent_queries.append(query)
             with self.cnx.cursor(buffered=True) as cur:
+                cur.execute("SET SESSION MAX_EXECUTION_TIME=5000")
                 cur.execute(query)
                 for _, result_set in cur.fetchsets():
                     results.append(result_set)
@@ -44,16 +46,16 @@ class SQLConnector:
 
         except mysql.connector.Error as err:
             raise Exception(f"Database error: {err}")
-        
+
     def is_query_syntvalid(self, query: str) -> bool:
         if self.cnx is None or not self.cnx.is_connected():
             self.init_new_cnx()
 
         with self.cnx.cursor(buffered=True) as cursor:
             try:
-                # Set maximum execution time of 2 sec. 
+                # Set maximum execution time of 2 sec.
                 # When query hang -> They are executed, return True
-                
+
                 cursor.execute("SET SESSION MAX_EXECUTION_TIME=2000")
                 cursor.execute(query, map_results=True)
             except mysql.connector.Error as e:
