@@ -99,7 +99,7 @@ class sqlmapGenerator:
             "time": "--technique=T  --current-user ",
             "inline": "--technique=Q --all ",
         }
-        
+
         Path("./cache/").mkdir(parents=True, exist_ok=True)
 
         for template in self.templates:
@@ -113,7 +113,6 @@ class sqlmapGenerator:
                     )
                     self.generated_attacks = pd.read_csv(cache_filepath)
                     continue
-
                 self.perform_attack(i, template)
                 self.generated_attacks.to_csv(cache_filepath)
 

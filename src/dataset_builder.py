@@ -179,7 +179,7 @@ class DatasetBuilder:
         return res
 
     def generate_attack_queries_sqlmapapi(self) -> dict:
-        server_port = 8081
+        server_port = 8080
         generated_attack_queries = []
 
         # First, initialize all HTTP endpoints for each template.
@@ -203,7 +203,7 @@ class DatasetBuilder:
             port=server_port,
         )
         generated_attack_queries = sqlg.generate_attacks()
-        # input()
+        input()
         server.stop_server()
 
         self._n_attacks = len(generated_attack_queries)
@@ -221,6 +221,7 @@ class DatasetBuilder:
 
         attack_samples = self.df[self.df["label"] == 1]
         unique_attack_ids = attack_samples["attack_id"].unique()
+
         if len(unique_attack_ids) <= 1:
             print(
                 "_add_split_column: invalid number of columns, cannot split correctly."

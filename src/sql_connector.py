@@ -34,18 +34,15 @@ class SQLConnector:
         # https://dev.mysql.com/doc/connector-python/en/connector-python-multi.html
         if self.cnx is None or not self.cnx.is_connected():
             self.init_new_cnx()
-        try:
-            results = []
-            self.sent_queries.append(query)
-            with self.cnx.cursor(buffered=True) as cur:
-                cur.execute("SET SESSION MAX_EXECUTION_TIME=5000")
-                cur.execute(query)
-                for _, result_set in cur.fetchsets():
-                    results.append(result_set)
-            return results
-
-        except mysql.connector.Error as err:
-            raise Exception(f"Database error: {err}")
+        
+        results = []
+        self.sent_queries.append(query)
+        with self.cnx.cursor(buffered=True) as cur:
+            cur.execute("SET SESSION MAX_EXECUTION_TIME=5000")
+            cur.execute(query)
+            for _, result_set in cur.fetchsets():
+                results.append(result_set)
+        return results
 
     def is_query_syntvalid(self, query: str) -> bool:
         if self.cnx is None or not self.cnx.is_connected():
