@@ -99,6 +99,8 @@ class sqlmapGenerator:
             "time": "--technique=T  --current-user ",
             "inline": "--technique=Q --all ",
         }
+        
+        Path("./cache/").mkdir(parents=True, exist_ok=True)
 
         for template in self.templates:
             for i in techniques.items():

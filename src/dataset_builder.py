@@ -263,7 +263,6 @@ class DatasetBuilder:
         self,
     ) -> pd.DataFrame:
         train_size = 0.7
-        Path("./cache/").mkdir(parents=True, exist_ok=True)
         self.generate_attack_queries_sqlmapapi()
         self.generate_normal_queries()
         self._add_split_column(train_size=train_size)
