@@ -35,6 +35,7 @@ class SQLConnector:
             self.init_new_cnx()
         try:            
             results = []
+            self.sent_queries.append(query)
             with self.cnx.cursor(buffered=True) as cur:
                 cur.execute(query)
                 for _, result_set in cur.fetchsets():

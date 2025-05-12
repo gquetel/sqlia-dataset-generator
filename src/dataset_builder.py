@@ -198,12 +198,12 @@ class DatasetBuilder:
             placeholders_dictionnaries_list=self.dictionnaries,
             port=server_port,
         )
-        sqlg.generate_attacks()
-        input()
+        generated_attack_queries = sqlg.generate_attacks()
+        # input()
         server.stop_server()
 
         self._n_attacks = len(generated_attack_queries)
-        self.df = pd.DataFrame(generated_attack_queries)
+        self.df = generated_attack_queries
 
     def build(
         self,
