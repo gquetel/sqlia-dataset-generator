@@ -38,7 +38,8 @@ class SQLConnector:
         results = []
         self.sent_queries.append(query)
         with self.cnx.cursor(buffered=True) as cur:
-            cur.execute("SET SESSION MAX_EXECUTION_TIME=7000")
+            # Set maximum execution time of 30 sec.
+            cur.execute("SET SESSION MAX_EXECUTION_TIME=30000")
             cur.execute(query)
             for _, result_set in cur.fetchsets():
                 results.append(result_set)
@@ -50,9 +51,8 @@ class SQLConnector:
 
         with self.cnx.cursor(buffered=True) as cursor:
             try:
-                # Set maximum execution time of 7 sec.
-                # When query hang -> They are executed, return True
-                cursor.execute("SET SESSION MAX_EXECUTION_TIME=7000")
+                # Set maximum execution time of 30 sec.
+                cursor.execute("SET SESSION MAX_EXECUTION_TIME=30000")
                 cursor.execute(query, map_results=True)
             except mysql.connector.Error as e:
                 if e.errno == 1064:

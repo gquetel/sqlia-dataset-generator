@@ -67,6 +67,7 @@ class DatasetBuilder:
                 # Load relevant csv file, and sample templates.
                 type = stmt_type["type"]
                 _t = pd.read_csv(dir_path + type + ".csv")
+                _t["statement_type"] = type
                 _all_templates = pd.concat([_t, _all_templates])
 
         _all_templates["placeholders"] = _all_templates["template"].apply(
@@ -97,6 +98,7 @@ class DatasetBuilder:
                     n=int(proportion * n_n_per_db),
                     replace=True,
                 )
+                _dft["statement_type"] = type
                 self._df_templates_n = pd.concat([self._df_templates_n, _dft])
 
     def generate_normal_queries(self):
@@ -106,7 +108,6 @@ class DatasetBuilder:
 
         # Generate the same number of normal queries that the number of attacks.
         self.populate_normal_templates(self._n_attacks)
-
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             placeholders_pattern = r"\{([^}]*)\}"
@@ -163,6 +164,7 @@ class DatasetBuilder:
                 {
                     "full_query": query,
                     "label": 0,
+                    "statement_type": template_row.statement_type,
                     "query_template_id": template_row.ID,
                     "attack_payload": None,
                     "attack_id": None,
@@ -170,7 +172,10 @@ class DatasetBuilder:
                     "attack_desc": None,
                 }
             )
-        self.df = pd.concat([self.df, pd.DataFrame(generated_normal_queries)],ignore_index=True)
+        self.df = pd.concat(
+            [self.df, pd.DataFrame(generated_normal_queries)],
+            ignore_index=True,
+        )
 
     def _verify_syntactic_validity_query(self, query: str):
         if self.sqlc == None:
@@ -209,16 +214,28 @@ class DatasetBuilder:
         self._n_attacks = len(generated_attack_queries)
         self.df = generated_attack_queries
 
-    def _add_split_column(self, train_size=0.7):
-        """
-        Add a 'split' column to dataframe with 'train' or 'test' values.
-        For attack samples, split is done at the attack_id level.
-        For normal samples, random split based on train_size.
+    def _add_split_column_using_statement_type(self, train_size=0.7):
+        # Then sample
+        # and set their split to train
+        self.df["split"] = "train"
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
+        )
 
-        Args:
-            train_size: Fraction of data to use for training (default 0.7)
-        """
+        # Iterate over statement types and sample
+        # train_size * len(template_statement_type) templates
+        for stmt_type in statements_type:
+            type = stmt_type["type"]
+            _df_type = self.df[self.df["statement_type"] == type]
+            templates_ids = _df_type["query_template_id"].unique()
+            n_ids_test = int((1 - train_size) * len(templates_ids))
+            ids_test = random.sample(templates_ids.tolist(), k=n_ids_test)
 
+            self.df.loc[
+                self.df["query_template_id"].isin(ids_test), "split"
+            ] = "test"
+
+    def _add_split_column_using_attack_id(self, train_size=0.7):
         attack_samples = self.df[self.df["label"] == 1]
         unique_attack_ids = attack_samples["attack_id"].unique()
 
@@ -257,7 +274,7 @@ class DatasetBuilder:
         train_size = 0.7
         self.generate_attack_queries_sqlmapapi()
         self.generate_normal_queries()
-        self._add_split_column(train_size=train_size)
+        self._add_split_column_using_statement_type(train_size=train_size)
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)

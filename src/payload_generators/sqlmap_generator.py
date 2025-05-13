@@ -80,6 +80,7 @@ class sqlmapGenerator:
             {
                 "full_query": full_queries,
                 "label": label,
+                "statement_type": template_info["statement_type"],
                 "query_template_id": template_id,
                 "attack_payload": malicious_input,
                 "attack_id": atk_id,
@@ -96,7 +97,7 @@ class sqlmapGenerator:
             "error": "--technique=E --all ",
             "union": "--technique=U --all  ",
             "stacked": "--technique=S --all ",
-            "time": "--technique=T  --current-user ",
+            "time": "--technique=T --current-user ",
             "inline": "--technique=Q --all ",
         }
 
@@ -115,7 +116,5 @@ class sqlmapGenerator:
                     continue
                 self.perform_attack(i, template)
                 self.generated_attacks.to_csv(cache_filepath)
-
-        # TODO: Supposedly, all non-unique queries right now are "reconnaissance" queries.
 
         return self.generated_attacks
