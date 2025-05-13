@@ -93,9 +93,9 @@ class sqlmapGenerator:
     def generate_attacks(self):
         techniques = {
             "boolean": "--technique=B --users ",
-            "error": "--technique=E --schema --users --tables --count ",
+            "error": "--technique=E --all ",
             "union": "--technique=U --all  ",
-            "stacked": "--technique=S -f ",
+            "stacked": "--technique=S --all ",
             "time": "--technique=T  --current-user ",
             "inline": "--technique=Q --all ",
         }
