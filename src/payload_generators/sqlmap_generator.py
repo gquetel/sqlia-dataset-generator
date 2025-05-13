@@ -43,7 +43,7 @@ class sqlmapGenerator:
 
     def perform_attack(self, technique: tuple, template_info: dict):
         name_technique, settings_technique = technique
-        default_settings = "-v 0 -D dataset --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
+        default_settings = "-v 0 -D dataset  --level=5 --risk=3  --skip='user-agent,referer,host' --batch --flush-session -u "
         db_name = template_info["ID"].split("-")[0]
 
         params = {}
@@ -96,7 +96,7 @@ class sqlmapGenerator:
             "boolean": "--technique=B --users ",
             "error": "--technique=E --all ",
             "union": "--technique=U --all  ",
-            "stacked": "--technique=S --all ",
+            "stacked": "--technique=S --users --banner ",
             "time": "--technique=T --current-user ",
             "inline": "--technique=Q --all ",
         }
