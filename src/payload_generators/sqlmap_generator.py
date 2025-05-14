@@ -69,7 +69,7 @@ class sqlmapGenerator:
         # self.call_sqlmap_subprocess(command=recon_command)
         # full_recon_queries = self.sqlc.get_and_empty_sent_queries()
         default_settings = (
-            f"-v 0 -D dataset --flush-session --skip-waf --level=5 --risk=3  --skip='user-agent,referer,host' "
+            f"-v 0 -D dataset --flush-session --level=5 --risk=3  --skip='user-agent,referer,host' "
             f'--batch --eval="import random; random.seed({self.seed})" -u '
         )
         command = "sqlmap " + settings_technique + default_settings + quoted_url
@@ -125,6 +125,6 @@ class sqlmapGenerator:
                     self.generated_attacks = pd.read_csv(cache_filepath)
                     continue
                 self.perform_attack(i, template)
-                self.generated_attacks.to_csv(cache_filepath)
+                self.generated_attacks.to_csv(cache_filepath,index=False)
 
         return self.generated_attacks
