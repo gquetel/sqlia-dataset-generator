@@ -235,35 +235,6 @@ class DatasetBuilder:
                 self.df["query_template_id"].isin(ids_test), "split"
             ] = "test"
 
-    def _add_split_column_using_attack_id(self, train_size=0.7):
-        attack_samples = self.df[self.df["label"] == 1]
-        unique_attack_ids = attack_samples["attack_id"].unique()
-
-        if len(unique_attack_ids) <= 1:
-            print(
-                "_add_split_column: invalid number of columns, cannot split correctly, no split column created."
-            )
-            return
-
-        self.df["split"] = "train"
-
-        # Sample (1 - train_size)  * len(unique_attack_ids) attack ids
-        n_id_samples = int((1 - train_size) * len(unique_attack_ids))
-        test_attack_ids = np.random.choice(
-            unique_attack_ids, size=n_id_samples, replace=False
-        )
-        # All samples in test_attacks_ids => df['split'] = "test"
-        self.df.loc[self.df["attack_id"].isin(test_attack_ids), "split"] = (
-            "test"
-        )
-
-        # Then, sample from all normal queries:
-        normal_indices = self.df[self.df["label"] == 0].index
-        num_test = int((1 - train_size) * len(normal_indices))
-        test_normal_indices = np.random.choice(
-            normal_indices, size=num_test, replace=False
-        )
-        self.df.loc[test_normal_indices, "split"] = "test"
 
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
