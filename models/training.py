@@ -4,6 +4,7 @@ from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
 from typing import Literal
+from matplotlib import pyplot as plt
 import numpy as np
 import random
 import pandas as pd
@@ -11,6 +12,7 @@ import sys
 import logging
 
 from sklearn.metrics import (
+    ConfusionMatrixDisplay,
     accuracy_score,
     confusion_matrix,
     f1_score,
@@ -123,16 +125,51 @@ def print_and_ret_metrics(
     return accuracy, f1, precision, recall, fpr
 
 
+def test_model_separating_techniques(
+    model, df_test: pd.DataFrame, model_name: str
+):
+    techniques = (
+        df_test.loc[df_test["label"] == 1, "attack_technique"]
+        .unique()
+        .tolist()
+    )
+    # techniques holds all attack techniques in test set.
+    # We iterate over them to compute confusion matrices
+
+    fig, axes = plt.subplots(nrows=1, ncols=len(techniques), figsize=(5*len(techniques), 10))
+    for i, technique in enumerate(techniques):
+        subset_df_test = pd.concat(
+            [
+                df_test[df_test["label"] == 0],
+                df_test[df_test["attack_technique"] == technique],
+            ]
+        )
+        labels, preds = model.predict(subset_df_test)
+        axes[i].set_title(f"{technique} technique")
+        ConfusionMatrixDisplay.from_predictions(
+            y_true=labels,
+            y_pred=preds,
+            ax=axes[i],
+            colorbar=(i == len(techniques) - 1),
+        )
+    fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}.png"
+    plt.savefig(fp_fig)
+
+
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_RF"
     model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
     model.train_model(df=df_train, model_name=model_name)
     labels, preds = model.predict(df_test)
+
     accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
         labels.tolist(),
         preds.tolist(),
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
+    )
+    test_model_separating_techniques(
+        model=model, df_test=df_test, model_name=model_name
     )
 
 
@@ -148,6 +185,9 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
         preds.tolist(),
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
+    )
+    test_model_separating_techniques(
+        model=model, df_test=df_test, model_name=model_name
     )
 
 
@@ -184,6 +224,8 @@ if __name__ == "__main__":
             "split": str,
         },
     )
+    # df = df.sample(5000)  # TODO This is when testing functions, remove later
+
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 

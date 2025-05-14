@@ -26,7 +26,9 @@ let
       [
         ps.pandas
         ps.numpy
+        ps.scikit-learn
         ps.tqdm
+        ps.matplotlib
       ]
       ++ [ mysql-connector ]
     )).override
