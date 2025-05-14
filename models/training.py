@@ -224,9 +224,10 @@ if __name__ == "__main__":
             "split": str,
         },
     )
-    # df = df.sample(5000)  # TODO This is when testing functions, remove later
+    # df = df.sample(5000)  # This is when testing functions, remove later
 
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
+    print(df_test["query_template_id"].unique().tolist())
     train_models(df_train, df_test)

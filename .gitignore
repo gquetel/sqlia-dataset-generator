@@ -1,5 +1,5 @@
 dataset.csv
-output
+models/output
 cache
 cache-old
 cache/**

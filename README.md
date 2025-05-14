@@ -27,7 +27,7 @@ CREATE TABLE airport (
     iso_region VARCHAR(10),
     municipality VARCHAR(100),
     scheduled_service VARCHAR(3),
-    gps_code VARCHAR(10),
+    gps_code VARCHAR(10), 
     icao_code VARCHAR(10),
     iata_code VARCHAR(3),
     local_code VARCHAR(10),
