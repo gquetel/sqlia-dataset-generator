@@ -222,6 +222,11 @@ class DatasetBuilder:
             self.config
         )
 
+        # Placing this here seems weird as we already got such a call earlier
+        # However, without it, the sampled template changes from one
+        # invocation to the other...
+        random.seed(self.seed)
+        
         # Iterate over statement types and sample
         # train_size * len(template_statement_type) templates
         for stmt_type in statements_type:
@@ -230,11 +235,10 @@ class DatasetBuilder:
             templates_ids = _df_type["query_template_id"].unique()
             n_ids_test = int((1 - train_size) * len(templates_ids))
             ids_test = random.sample(templates_ids.tolist(), k=n_ids_test)
-
+            print(ids_test)
             self.df.loc[
                 self.df["query_template_id"].isin(ids_test), "split"
             ] = "test"
-
 
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
@@ -249,4 +253,4 @@ class DatasetBuilder:
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
-        # self._clean_cache_folder()
+        self._clean_cache_folder()
