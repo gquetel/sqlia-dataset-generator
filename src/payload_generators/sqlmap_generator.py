@@ -29,6 +29,12 @@ class sqlmapGenerator:
         self.pdl = placeholders_dictionnaries_list
 
         self.seed = get_seed(self.config)
+        
+        # We want some kind of reproducibility in the resulting dataset, however, using
+        # the same seed  for all sqlmap invocation would lead to the same payloads 
+        # for each of endpoints.  So we add an offset at each invocation. 
+        
+        self.seed_offset = 0
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
 
@@ -68,9 +74,10 @@ class sqlmapGenerator:
         # print(f">> Using recon command: {recon_command}")
         # self.call_sqlmap_subprocess(command=recon_command)
         # full_recon_queries = self.sqlc.get_and_empty_sent_queries()
+        
         default_settings = (
             f"-v 0 -D dataset --flush-session --level=5 --risk=3  --skip='user-agent,referer,host' "
-            f'--batch --eval="import random; random.seed({self.seed})" -u '
+            f'--batch --eval="import random; random.seed({self.seed + self.seed_offset})" -u '
         )
         command = "sqlmap " + settings_technique + default_settings + quoted_url
 
@@ -101,6 +108,7 @@ class sqlmapGenerator:
         )
         self.generated_attacks = pd.concat([self.generated_attacks, _df])
         self._scenario_id += 1
+        self.seed_offset+=1
 
     def generate_attacks(self):
         techniques = {
