@@ -1,5 +1,10 @@
 template,ID,description,payload_type,payload_clause
-"UPDATE airport SET elevation_ft = {airports_elevation_ft} WHERE ident = ""{airports_ident}""",airport-U1,An update statement allowing SQL injection through the ident parameter.,float string,where
-"UPDATE airport SET municipality = ""{airports_municipality}"" WHERE iso_country = ""{airports_iso_country}""",airport-U2,An update statement vulnerable to SQL injection through the municipality string field.,string string,where
-"UPDATE airport SET wikipedia_link = ""{airports_wikipedia_link}"" WHERE type = ""{airports_type}""",airport-U3,An update statement with SQL injection vulnerability in the type field from its where clause.,string string,where
-"UPDATE airport SET gps_code = ""{airports_gps_code}"" WHERE continent = ""{airports_continent}"" AND iso_region = ""{airports_iso_region}""",airport-U4,An update statement allowing SQL injection through the gps_code parameter.,string string string,where
+"UPDATE airport SET name = ""{airports_name}"" WHERE ident = ""{airports_ident}""",airport-U1,An update statement to update the name of the airport.,float string,where
+"UPDATE airport SET municipality = ""{airports_municipality}"" WHERE iso_country = ""{airports_iso_country}""",airport-U2,An update statement to update the municipality of an airport,string string,where
+"UPDATE airport SET wikipedia_link = ""{airports_wikipedia_link}"" WHERE ident = ""{airports_ident}""",airport-U3,An update statement to set the wikipedia link of an airport.,string string,where
+"UPDATE airport SET home_link = ""{airports_home_link}"" WHERE name = ""{airports_name}""",airport-U4,An update statement to set the homepage link of an airport.,string string,where
+"UPDATE airport_frequencies SET description = ""{airport-frequencies_description}"" WHERE airport_ident = ""{airport-frequencies_airport_ident}"";",airport-U5,Updates the description of an airport frequency by its airport identifier.,string string,where
+"UPDATE airport_frequencies SET frequency_mhz = {airport-frequencies_frequency_mhz} WHERE type = ""{airport-frequencies_type}"";",airport-U6,Updates the frequency value for a given frequency type.,float string,where
+"UPDATE navaids SET name = ""{navaids_name}"" WHERE ident = ""{navaids_ident}"";",airport-U7,Updates the name of a navigation aid by its identifier.,string string,where
+"UPDATE countries SET keywords = ""{countries_keywords}"" WHERE code = ""{countries_code}"";",airport-U8,Updates the keywords field for a given country code.,string string,where
+"UPDATE regions SET keywords = ""{regions_keywords}"" WHERE iso_country = ""{regions_iso_country}"";",airport-U9,Updates keywords for all regions in a specified country.,string string,where

@@ -29,11 +29,12 @@ class sqlmapGenerator:
         self.pdl = placeholders_dictionnaries_list
 
         self.seed = get_seed(self.config)
-        
-        # We want some kind of reproducibility in the resulting dataset, however, using
-        # the same seed  for all sqlmap invocation would lead to the same payloads 
-        # for each of endpoints.  So we add an offset at each invocation. 
-        
+
+        # We want some kind of reproducibility in the resulting dataset,
+        # however, using the same seed  for all sqlmap invocation would lead to
+        # the same payloads for each of endpoints.  So we add an offset at each
+        # invocation.
+
         self.seed_offset = 0
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
@@ -54,7 +55,9 @@ class sqlmapGenerator:
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
             param_no_sx = param.rstrip("123456789")
-            random_param_value = random.choice(self.pdl[(db_name, param_no_sx)])
+            random_param_value = random.choice(
+                self.pdl[(db_name, param_no_sx)]
+            )
             params[param] = random_param_value
 
         encoded_params = urllib.parse.urlencode(params)
@@ -75,12 +78,14 @@ class sqlmapGenerator:
         # print(f">> Using recon command: {recon_command}")
         # self.call_sqlmap_subprocess(command=recon_command)
         # full_recon_queries = self.sqlc.get_and_empty_sent_queries()
-        
+
         default_settings = (
             f"-v 0 -D dataset --flush-session --level=5 --risk=3  --skip='user-agent,referer,host' "
             f'--batch --eval="import random; random.seed({self.seed + self.seed_offset})" -u '
         )
-        command = "sqlmap " + settings_technique + default_settings + quoted_url
+        command = (
+            "sqlmap " + settings_technique + default_settings + quoted_url
+        )
 
         print(f">> Using exploit command: {command}")
         self.call_sqlmap_subprocess(command=command)
@@ -109,17 +114,20 @@ class sqlmapGenerator:
         )
         self.generated_attacks = pd.concat([self.generated_attacks, _df])
         self._scenario_id += 1
-        self.seed_offset+=1
+        self.seed_offset += 1
 
     def generate_attacks(self):
         techniques = {
-            # "boolean": "--technique=B --all ", # 49822it --all
-            "error": "--technique=E --all ", # Fast to test ~7k queries --all
-            # "union": "--technique=U --all  ", # 30212 queries --all
-            # "stacked": "--technique=S --users --banner ",
-            # "time": "--technique=T --current-user ",
-            # "inline": "--technique=Q --all ",
+            "boolean": "--technique=B --all ", 
+            "error": "--technique=E --all ",  
+            "union": "--technique=U --all  ",
+            "stacked": "--technique=S --users --banner ",
+            "time": "--technique=T --current-user ",
+            "inline": "--technique=Q --all ",
         }
+
+        # Testing settings, allows for quick iteration over templates.
+        # techniques = {"error": "--technique=E --banner "}
 
         Path("./cache/").mkdir(parents=True, exist_ok=True)
         Path("./sessions/").mkdir(parents=True, exist_ok=True)
@@ -130,10 +138,12 @@ class sqlmapGenerator:
                 cache_filepath = f"./cache/{template['ID']}-{i[0]}"
 
                 if Path(cache_filepath).is_file():
-                    print(f">> Found cached file for scenario {template['ID']}-{i[0]}")
+                    print(
+                        f">> Found cached file for scenario {template['ID']}-{i[0]}"
+                    )
                     self.generated_attacks = pd.read_csv(cache_filepath)
                     continue
                 self.perform_attack(i, template)
-                self.generated_attacks.to_csv(cache_filepath,index=False)
+                self.generated_attacks.to_csv(cache_filepath, index=False)
 
         return self.generated_attacks

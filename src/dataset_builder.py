@@ -126,6 +126,7 @@ class DatasetBuilder:
             all_placeholders = _extract_params(template=template_row.template)
             all_types = template_row.payload_type.split()
 
+            # print(all_placeholders,all_types)
             assert len(all_types) == len(all_placeholders)
             db_name = template_row.ID.split("-")[0]
 

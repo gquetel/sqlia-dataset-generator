@@ -1,5 +1,9 @@
 template,ID,description,payload_type,payload_clause
-"DELETE FROM airport WHERE municipality=""{airports_municipality}"";",airport-D1,A delete statement with on a condition on the municipality column vulnerable to SQL Injection.,string,where
-"DELETE from airport WHERE latitude_deg={airports_latitude_deg} AND longitude_deg={airports_longitude_deg};",airport-D2,"A delete statement using a condition on coordinates columns (latitude_deg, longitude_deg). A malicious payload can be injected in the latitude_deg field. ",float float,where
-"DELETE from airport WHERE latitude_deg={airports_latitude_deg} AND longitude_deg={airports_longitude_deg};",airport-D3,"A delete statement using a condition on coordinates columns (latitude_deg, longitude_deg). A malicious payload can be injected in the latitude_deg field. ",float float,where
-"DELETE FROM airport WHERE keywords LIKE ""{airports_keywords}"";  ",airport-D4," A delete statement removing airports matching a keyword search, vulnerable to SQL injection.",string,where
+"DELETE FROM airport WHERE ident=""{airports_ident}"";",airport-D1,A delete statement on the airport table using the ident field.,string,where
+"DELETE FROM airport WHERE name = ""{airports_name}"";  ",airport-D2," A delete statement removing airports given their name.",string,where
+"DELETE FROM airport WHERE name LIKE ""{airports_name}"" OR keywords LIKE ""{airports_keywords}"";  ",airport-D3," A delete statement removing airports matching their name or one of their keyword.",string string,where
+"DELETE FROM airport_frequencies WHERE type = ""{airport-frequencies_type}"";",airport-D4,A delete statement from airport_frequencies based on the type field.,string,where
+"DELETE FROM runways WHERE airport_ident = ""{runways_airport_ident}"";",airport-D5,A delete statement from runways table targeting runways given an airport ident.,string,where
+"DELETE FROM navaids WHERE ident = ""{navaids_ident}"";",airport-D6,A delete statement from navaids using the ident field.,string,where
+"DELETE FROM countries WHERE code = ""{countries_code}"";",airport-D7,Delete from countries table using the country code,string,where
+"DELETE FROM regions WHERE name = ""{regions_name}"";",airport-D8,A delete statement from regions where region name is used as filter.,string,where
