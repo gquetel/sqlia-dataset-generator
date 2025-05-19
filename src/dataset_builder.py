@@ -17,7 +17,20 @@ import src.config_parser as config_parser
 
 def _extract_params(template):
     param_names = re.findall(r"\{([a-zA-Z_]+)\}", template)
-    return param_names
+    param_counts = {}
+    res = []
+
+    # We artificially suffix parameters with the same name to force
+    # the selection of different values.
+    for param in param_names:
+        if param in param_counts:
+            param_counts[param] += 1
+            sx_param = f"{param}{param_counts[param]}"
+            res.append(sx_param)
+        else:
+            param_counts[param] = 1
+            res.append(param)
+    return res
 
 
 class DatasetBuilder:
@@ -110,13 +123,7 @@ class DatasetBuilder:
         self.populate_normal_templates(self._n_attacks)
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
-            placeholders_pattern = r"\{([^}]*)\}"
-            all_placeholders = [
-                m.group(1)
-                for m in re.finditer(
-                    placeholders_pattern, template_row.template
-                )
-            ]
+            all_placeholders = _extract_params(template=template_row.template)
             all_types = template_row.payload_type.split()
 
             assert len(all_types) == len(all_placeholders)
@@ -124,7 +131,10 @@ class DatasetBuilder:
 
             # Replace 1 by 1 all placeholders by a randomly choosen dict value
             query = template_row.template
+
             for placeholder, type in zip(all_placeholders, all_types):
+                # Remove placeholder's artificial int suffix:
+                placeholder = placeholder.rstrip("123456789")
                 if placeholder[0] == "!":
                     # Choose value
                     filler = random.choice(
@@ -141,7 +151,7 @@ class DatasetBuilder:
                 match type:
                     case "int" | "float":
                         query = query.replace(
-                            f"{{{placeholder}}}", str(filler)
+                            f"{{{placeholder}}}", str(filler), 1
                         )
                     case "string":
                         # New templating method, the string should
@@ -150,8 +160,7 @@ class DatasetBuilder:
                         # However, we also use double quotes, we need to escape those in filler
                         filler = filler.replace('"', '""')
                         query = query.replace(
-                            f"{{{placeholder}}}",
-                            f"{filler}",
+                            f"{{{placeholder}}}", f"{filler}", 1
                         )
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
@@ -226,7 +235,7 @@ class DatasetBuilder:
         # However, without it, the sampled template changes from one
         # invocation to the other...
         random.seed(self.seed)
-        
+
         # Iterate over statement types and sample
         # train_size * len(template_statement_type) templates
         for stmt_type in statements_type:

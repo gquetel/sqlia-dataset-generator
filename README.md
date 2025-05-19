@@ -115,5 +115,4 @@ CREATE TABLE regions (
     wikipedia_link VARCHAR(500),
     keywords TEXT
 );
-
 ```

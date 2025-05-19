@@ -53,7 +53,8 @@ class sqlmapGenerator:
         db_name = template_info["ID"].split("-")[0]
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
-            random_param_value = random.choice(self.pdl[(db_name, param)])
+            param_no_sx = param.rstrip("123456789")
+            random_param_value = random.choice(self.pdl[(db_name, param_no_sx)])
             params[param] = random_param_value
 
         encoded_params = urllib.parse.urlencode(params)
@@ -112,12 +113,12 @@ class sqlmapGenerator:
 
     def generate_attacks(self):
         techniques = {
-            "boolean": "--technique=B --all ", # 49822it --all
+            # "boolean": "--technique=B --all ", # 49822it --all
             "error": "--technique=E --all ", # Fast to test ~7k queries --all
-            "union": "--technique=U --all  ", # 30212 queries --all
-            "stacked": "--technique=S --users --banner ",
-            "time": "--technique=T --current-user ",
-            "inline": "--technique=Q --all ",
+            # "union": "--technique=U --all  ", # 30212 queries --all
+            # "stacked": "--technique=S --users --banner ",
+            # "time": "--technique=T --current-user ",
+            # "inline": "--technique=Q --all ",
         }
 
         Path("./cache/").mkdir(parents=True, exist_ok=True)
