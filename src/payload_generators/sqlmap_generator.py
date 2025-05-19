@@ -162,7 +162,7 @@ class sqlmapGenerator:
         Path("./cache/").mkdir(parents=True, exist_ok=True)
         Path("./sessions/").mkdir(parents=True, exist_ok=True)
 
-        for template in self.templates[0:1]:
+        for template in self.templates:
             for i in techniques.items():
                 # example of cache file: ./cache/airport-I1-union
                 cache_filepath = f"./cache/{template['ID']}-{i[0]}"
