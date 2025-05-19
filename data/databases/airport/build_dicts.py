@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 
-csv_data = "./airports.csv"
-prefix = "airports"
+csv_data = "./navaids.csv"
+prefix = "navaids"
 
 df = pd.read_csv(csv_data)
 output_dir = "dicts"
