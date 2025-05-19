@@ -26,7 +26,6 @@ def init_config(args: argparse.Namespace) -> configparser.ConfigParser:
     config.read(args.ini)
     return config
 
-
 def main():
     args = init_args()
     config = init_config(args)
