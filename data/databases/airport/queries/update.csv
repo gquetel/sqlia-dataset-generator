@@ -1,5 +1,5 @@
 template,ID,description,payload_type,payload_clause
-"UPDATE airport SET name = ""{airports_name}"" WHERE ident = ""{airports_ident}""",airport-U1,An update statement to update the name of the airport.,float string,where
+"UPDATE airport SET name = ""{airports_name}"" WHERE ident = ""{airports_ident}""",airport-U1,An update statement to update the name of the airport.,string string,where
 "UPDATE airport SET municipality = ""{airports_municipality}"" WHERE iso_country = ""{airports_iso_country}""",airport-U2,An update statement to update the municipality of an airport,string string,where
 "UPDATE airport SET wikipedia_link = ""{airports_wikipedia_link}"" WHERE ident = ""{airports_ident}""",airport-U3,An update statement to set the wikipedia link of an airport.,string string,where
 "UPDATE airport SET home_link = ""{airports_home_link}"" WHERE name = ""{airports_name}""",airport-U4,An update statement to set the homepage link of an airport.,string string,where

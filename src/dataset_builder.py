@@ -68,9 +68,7 @@ class DatasetBuilder:
     def get_all_templates(self):
         """Return all statements templates."""
         used_databases = config_parser.get_used_databases(self.config)
-        statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
-        )
+        statements_type = config_parser.get_statement_types_and_proportions(self.config)
         _all_templates = pd.DataFrame()
 
         for db in used_databases:
@@ -90,9 +88,7 @@ class DatasetBuilder:
 
     def populate_normal_templates(self, n_n: int):
         used_databases = config_parser.get_used_databases(self.config)
-        statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
-        )
+        statements_type = config_parser.get_statement_types_and_proportions(self.config)
 
         n_n_per_db = int(n_n / len(used_databases))
         self._df_templates_n = pd.DataFrame()
@@ -151,21 +147,18 @@ class DatasetBuilder:
                         )
                 match type:
                     case "int" | "float":
-                        query = query.replace(
-                            f"{{{placeholder}}}", str(filler), 1
-                        )
+                        query = query.replace(f"{{{placeholder}}}", str(filler), 1)
                     case "string":
                         # New templating method, the string should
                         # not be escaped. It is done in the template.
 
                         # However, we also use double quotes, we need to escape those in filler
                         filler = filler.replace('"', '""')
-                        query = query.replace(
-                            f"{{{placeholder}}}", f"{filler}", 1
-                        )
+
+                        query = query.replace(f"{{{placeholder}}}", f"{filler}", 1)
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
-            # Append query, tempalte ID and label to dataset.
+            # Append query, template ID and label to dataset.
 
             if not self._verify_syntactic_validity_query(query=query):
                 raise ValueError("Failed normal query: ", query)
@@ -180,7 +173,7 @@ class DatasetBuilder:
                     "attack_id": None,
                     "attack_technique": None,
                     "attack_desc": None,
-                    "sqlmap_status": None
+                    "sqlmap_status": None,
                 }
             )
         self.df = pd.concat(
@@ -229,9 +222,7 @@ class DatasetBuilder:
         # Then sample
         # and set their split to train
         self.df["split"] = "train"
-        statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
-        )
+        statements_type = config_parser.get_statement_types_and_proportions(self.config)
 
         # Placing this here seems weird as we already got such a call earlier
         # However, without it, the sampled template changes from one
@@ -247,9 +238,7 @@ class DatasetBuilder:
             n_ids_test = int((1 - train_size) * len(templates_ids))
             ids_test = random.sample(templates_ids.tolist(), k=n_ids_test)
             print(ids_test)
-            self.df.loc[
-                self.df["query_template_id"].isin(ids_test), "split"
-            ] = "test"
+            self.df.loc[self.df["query_template_id"].isin(ids_test), "split"] = "test"
 
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
