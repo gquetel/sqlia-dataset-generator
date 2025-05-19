@@ -16,7 +16,7 @@ import src.config_parser as config_parser
 
 
 def _extract_params(template):
-    param_names = re.findall(r"\{([a-zA-Z_]+)\}", template)
+    param_names = re.findall(r"\{([-a-zA-Z_]+)\}", template)
     param_counts = {}
     res = []
 
