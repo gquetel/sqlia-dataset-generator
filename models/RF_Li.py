@@ -233,6 +233,7 @@ class CustomRF_Li:
                 "attack_technique",
                 "split",
                 "attack_desc",
+                "success"
             ],
             axis=1,
             inplace=True,
