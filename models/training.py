@@ -222,7 +222,7 @@ if __name__ == "__main__":
             "attack_technique": str,
             "attack_desc": str,
             "split": str,
-            "success" : str,
+            "sqlmap_status" : str,
         },
     )
     df_train = df[df["split"] == "train"]

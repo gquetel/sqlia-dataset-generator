@@ -233,7 +233,7 @@ class CustomRF_Li:
                 "attack_technique",
                 "split",
                 "attack_desc",
-                "success"
+                "sqlmap_status"
             ],
             axis=1,
             inplace=True,
