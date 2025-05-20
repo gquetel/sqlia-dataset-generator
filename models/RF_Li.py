@@ -4,13 +4,11 @@ from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 import numpy as np
 
-
 logger = logging.getLogger(__name__)
 
-
 def extract_li_features(query: str) -> dict:
-    """
-    Extract SQL keywords and patterns from a query.
+    """ Extract SQL keywords and patterns from a query.
+    
     Returns a dictionary of boolean flags indicating presence of various SQL features.
     """
     query_lower = query.lower()
@@ -39,9 +37,7 @@ def extract_li_features(query: str) -> dict:
         "has_exec": int(re.search(r"\bexec\b", query_lower) is not None),
         "has_string_functions": 0,
         "c_comparison": 0,
-        "has_exist_keyword": int(
-            re.search(r"\bexists\b", query_lower) is not None
-        ),
+        "has_exist_keyword": int(re.search(r"\bexists\b", query_lower) is not None),
         "has_floor": int(re.search(r"\bfloor\b", query_lower) is not None),
         "has_rand": int(re.search(r"\brand\b", query_lower) is not None),
         "has_group": int(re.search(r"\bgroup\b", query_lower) is not None),
@@ -95,13 +91,15 @@ def extract_li_features(query: str) -> dict:
 
 
 def get_escape_char_number(query: str) -> dict:
-    """Return the number of hexadecimal escape char and unicode escape char in a query.
+    """  Count the number of hexadecimal and Unicode escape sequences in a string.
 
     Args:
-        query (str): _description_
+        query (str): The input string to analyze for escape sequences
 
     Returns:
-        dict: _description_
+        dict: A dictionary with two keys:
+        - 'c_hex': Number of hexadecimal escape sequences (\xNN)
+        - 'c_unicode': Number of Unicode escape sequences (\uNNNN)
     """
     p_hex = re.compile(r"\\x[0-9a-fA-F]{2}")
     p_unicode = re.compile(r"\\u[0-9a-fA-F]{4}")
@@ -111,7 +109,7 @@ def get_escape_char_number(query: str) -> dict:
     return {"c_hex": c_hex, "c_unicode": c_unicode}
 
 
-def has_tautology(query):
+def has_tautology(query):    
     pattern = r"(\w+)=\1"
     if re.search(pattern=pattern, string=query) == None:
         return False
@@ -217,9 +215,7 @@ class CustomRF_Li:
         preds = self.clf.predict(df_pped.to_numpy())
         return labels, preds
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_RF_li(df_pped)
@@ -233,7 +229,7 @@ class CustomRF_Li:
                 "attack_technique",
                 "split",
                 "attack_desc",
-                "sqlmap_status"
+                "sqlmap_status",
             ],
             axis=1,
             inplace=True,
