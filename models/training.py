@@ -10,6 +10,7 @@ import random
 import pandas as pd
 import sys
 import logging
+import sklearn
 
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -228,8 +229,9 @@ if __name__ == "__main__":
             "attack_stage" : str
         },
     )
-    df_train = df[df["split"] == "train"]
-    df_test = df[df["split"] == "test"]
 
-    # print(df_test["query_template_id"].unique().tolist())
+    # df_train = df[df["split"] == "train"]
+    # df_test = df[df["split"] == "test"]
+    from sklearn.model_selection import train_test_split
+    df_train, df_test = train_test_split(df,test_size=0.2)
     train_models(df_train, df_test)

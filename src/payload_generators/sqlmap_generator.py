@@ -79,7 +79,56 @@ class sqlmapGenerator:
         # If any queries have been sent in the meantime, ignore those and retrieve last one.
         return queries[-1]
 
-    def perform_recognition(self, url: str, settings_tech: str) -> pd.DataFrame:
+    def _construct_eval_option(self, db_name: str, parameters: list[str]) -> str:
+        """_summary_
+
+        Args:
+            db_name (str): _description_
+            parameters (list[str]): _description_
+
+        Returns:
+            str: _description_
+        """
+
+        """ 
+        From: https://github.com/sqlmapproject/sqlmap/wiki/Usage
+
+        In case that user wants to change (or add new) parameter values, most probably 
+        because of some known dependency, he can provide to sqlmap a custom python code 
+        with option --eval that will be evaluated just before each request.
+
+        For example:
+
+        $ python sqlmap.py -u "http://www.target.com/vuln.php?id=1&hash=c4ca4238a0b9238\
+        20dcc509a6f75849b" --eval="import hashlib;hash=hashlib.md5(id).hexdigest()"
+
+        So we randomly select 100 values for the endpoint's parameters (given by the 
+        parameters arguments) and before the creation of each query, sqlmap will 
+        randomly sample one of them.
+
+        Because this will be given as an option to the sqlmap command, we need to make 
+        sure that the whole string is properly escaped: escape double quotes. 
+        """
+
+        e_str = ' --eval="'
+
+        # First, we want to somehow control the random in here.
+        # e_str = f' --eval="import random; random.seed({self.seed + self.seed_offset})"'
+        e_str += f"import random;"
+
+        for param in parameters:
+            param_no_sx = param.rstrip("123456789")
+            ran_values = random.choices(self.pdl[(db_name, param_no_sx)], k=10)
+
+            values_str = str(ran_values).replace('"', '\\"')
+            e_str += f"{param}=random.choice({values_str});"
+
+        e_str += '" '
+        return e_str
+
+    def perform_recognition(
+        self, url: str, settings_tech: str, params: list[str], db_name: str
+    ) -> pd.DataFrame:
         """Executes the reconnaissance phase of an SQL injection attack using SQLMap.
 
         This function identifies potential SQL injection vulnerabilities in the target
@@ -102,19 +151,31 @@ class sqlmapGenerator:
         # for the recon phase:
         settings_tech = settings_tech.split()[0]
 
-        recon_settings = (
-            f"-v 3 -D dataset -flush-session --level=5 --risk=3 --batch "
-            f"--skip='user-agent,referer,host' --eval="
-            f'"import random; random.seed({self.seed + self.seed_offset})" '
-            f'{settings_tech} -u "{url}"'
-        )
+        for i, param in enumerate(params):
+            # Iterate over existing params.
+            _t_params = params.copy()
+            _t_params.remove(param)
+            settings_eval = self._construct_eval_option(
+                db_name=db_name, parameters=_t_params
+            )
 
-        recon_command = "sqlmap " + recon_settings
-        logger.info(f">> Using recon command: {recon_command}")
-        # We ignore retcode, we do not expect to find the string here.
-        _ = self.call_sqlmap_subprocess(command=recon_command)
+            recon_settings = (
+                f"-v 0 -D dataset --level=5 --risk=3 --batch "
+                f"--skip='user-agent,referer,host' {settings_eval} "
+                f" -p '{param}' "
+                f'{settings_tech} -u "{url}" '
+            )
+
+            # For first parameter, make sure that no previous session file exists.
+            if i == 0:
+                recon_settings += "--flush-session "
+
+            recon_command = "sqlmap " + recon_settings
+            logger.info(f">> Using recon command: {recon_command}")
+            # We ignore retcode, we do not expect to find the string here.
+            _ = self.call_sqlmap_subprocess(command=recon_command)
+
         recon_queries = self.sqlc.get_and_empty_sent_queries()
-
         default_query = self.get_default_query_for_path(url=url)
         full_queries = list(filter(lambda a: a != default_query, recon_queries))
 
@@ -136,7 +197,35 @@ class sqlmapGenerator:
         )
         return _df
 
-    def perform_exploit(self, url: str, settings_tech: str) -> pd.DataFrame:
+    def clean_db_tables(self):
+        """Truncate all databases tables.
+        
+        This function is used to make sure that tables are empty for the next
+        invocation of sqlmap. 
+        """
+        tables = [
+            "regions",
+            "countries",
+            "navaids",
+            "runways",
+            "airport_frequencies",
+            "airport",
+        ]
+
+        for table in tables:
+            self.sqlc.execute_query(
+                f"SET FOREIGN_KEY_CHECKS = 0;"
+                f"TRUNCATE TABLE  {table} ;"
+            )
+
+        # Clean queries cache
+        _ = self.sqlc.get_and_empty_sent_queries()
+
+    def perform_exploit(
+        self,
+        url: str,
+        settings_tech: str,
+    ) -> pd.DataFrame:
         """Executes the exploitation phase of an SQL injection attack using SQLMap.
 
         This function attempts to actually exploit vulnerabilities discovered during the
@@ -153,17 +242,28 @@ class sqlmapGenerator:
                 exploitation.
         """
 
-        # No --flush-session => Resume attack after recon
+        # We do not provide --eval here: parameters for which a value is set in --eval
+        # override the payloads injected by sqlmap. Since we cannot know for certain
+        # which parameter worked during recon, we might override the successfull
+        # parameter, making the attack fail.
+        #
+        # I also don't want to spend any more time on adding variation on parameters
+        # this is not the priority.
+
         exploit_settings = (
             f"-v 0 -D dataset --level=5 --risk=3 --batch "
-            f"--skip='user-agent,referer,host' --eval="
-            f'"import random; random.seed({self.seed + self.seed_offset})" '
-            f' {settings_tech} -u "{url}"'
+            f"--skip='user-agent,referer,host'"
+            f'{settings_tech} -u "{url}"'
         )
         command = "sqlmap " + settings_tech + exploit_settings
         logger.info(f">> Using exploit command: {command}")
         retcode = self.call_sqlmap_subprocess(command=command)
         exploit_queries = self.sqlc.get_and_empty_sent_queries()
+
+        # Reset table states, insert queries can
+        # actually insert data, resulting in potentially high
+        # number of sqlmap queries when dumping the database info
+        self.clean_db_tables()
 
         default_query = self.get_default_query_for_path(url=url)
         full_queries = list(filter(lambda a: a != default_query, exploit_queries))
@@ -201,7 +301,6 @@ class sqlmapGenerator:
             None: Updates the internal generated_attacks DataFrame with the attack
                 results.
         """
-
         # Load all information to build the sqlmap command.
         name_tech, settings_tech = technique
         db_name = template_info["ID"].split("-")[0]
@@ -215,10 +314,18 @@ class sqlmapGenerator:
         url = f"http://localhost:{self.port}/{template_info['ID']}?{encoded_params}"
 
         # Url is built. Invoke sqlmap for recognition
-        _df_recon = self.perform_recognition(url=url, settings_tech=settings_tech)
+        _df_recon = self.perform_recognition(
+            url=url,
+            settings_tech=settings_tech,
+            params=template_info["placeholders"],
+            db_name=db_name,
+        )
 
         # Now invoke sqlmap for exploitation
-        _df_exploit = self.perform_exploit(url=url, settings_tech=settings_tech)
+        _df_exploit = self.perform_exploit(
+            url=url,
+            settings_tech=settings_tech,
+        )
 
         atk_id = f"{name_tech}-{self._scenario_id}"
         template_id = template_info["ID"]
@@ -260,10 +367,9 @@ class sqlmapGenerator:
         }
 
         # Testing settings, allows for quick iteration over templates.
-        # techniques = {"error": "--technique=E --all "}
+        techniques = {"error": "--technique=E --all "}
 
         Path("./cache/").mkdir(parents=True, exist_ok=True)
-        Path("./sessions/").mkdir(parents=True, exist_ok=True)
 
         for template in self.templates:
             for i in techniques.items():
