@@ -98,8 +98,8 @@ def get_escape_char_number(query: str) -> dict:
 
     Returns:
         dict: A dictionary with two keys:
-        - 'c_hex': Number of hexadecimal escape sequences (\xNN)
-        - 'c_unicode': Number of Unicode escape sequences (\uNNNN)
+        - 'c_hex': Number of hexadecimal escape sequences 
+        - 'c_unicode': Number of Unicode escape sequences 
     """
     p_hex = re.compile(r"\\x[0-9a-fA-F]{2}")
     p_unicode = re.compile(r"\\u[0-9a-fA-F]{4}")
@@ -230,6 +230,7 @@ class CustomRF_Li:
                 "split",
                 "attack_desc",
                 "sqlmap_status",
+                "attack_stage"
             ],
             axis=1,
             inplace=True,

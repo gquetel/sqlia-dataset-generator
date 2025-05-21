@@ -55,7 +55,7 @@ class ProjectPaths:
 
     @property
     def logs_path(self) -> str:
-        path = f"{self.base_path}/logs/"
+        path = f"{self.base_path}../logs/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 
@@ -137,6 +137,8 @@ def test_model_separating_techniques(
     # We iterate over them to compute confusion matrices
 
     fig, axes = plt.subplots(nrows=1, ncols=len(techniques), figsize=(5*len(techniques), 10))
+    if len(techniques) == 1:
+        axes = [axes] # allows subscription
     for i, technique in enumerate(techniques):
         subset_df_test = pd.concat(
             [
@@ -223,6 +225,7 @@ if __name__ == "__main__":
             "attack_desc": str,
             "split": str,
             "sqlmap_status" : str,
+            "attack_stage" : str
         },
     )
     df_train = df[df["split"] == "train"]
