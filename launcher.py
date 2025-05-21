@@ -8,15 +8,13 @@ from src.dataset_builder import DatasetBuilder
 
 logger = logging.getLogger(__name__)
 
+
 def init_logging():
     Path("./logs/").mkdir(exist_ok=True, parents=True)
 
     # We usually do not need the logs of previous generation
     # -> mode = 'w'
-    lf = logging.FileHandler(
-        "./logs/generation.log",
-        'w'
-    )
+    lf = logging.FileHandler("./logs/generation.log", "w")
     lf.setLevel(logging.INFO)
     lstdo = logging.StreamHandler(sys.stdout)
     lstdo.setLevel(logging.INFO)
@@ -37,17 +35,22 @@ def init_args() -> argparse.Namespace:
         required=True,
         help="Filepath to the .ini configuration file.",
     )
+
+    parser.add_argument(
+        "--testing",
+        action="store_true",
+        help="Enable testing mode, for fast generation of a smaller dataset.",
+    )
     return parser.parse_args()
 
 
 def init_config(args: argparse.Namespace) -> configparser.ConfigParser:
     # Interpolation required to use values from other sections in the same file:
     # https://docs.python.org/3/library/configparser.html
-    config = configparser.ConfigParser(
-        interpolation=configparser.BasicInterpolation()
-    )
+    config = configparser.ConfigParser(interpolation=configparser.BasicInterpolation())
     config.read(args.ini)
     return config
+
 
 def main():
     args = init_args()
@@ -55,7 +58,7 @@ def main():
     config = init_config(args)
 
     db = DatasetBuilder(config)
-    db.build()
+    db.build(args.testing)
     db.save()
 
 

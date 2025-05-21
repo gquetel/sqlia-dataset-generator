@@ -31,13 +31,15 @@ class sqlmapGenerator:
         # List of dictionnaries of values
         self.pdl = placeholders_dictionnaries_list
 
+        # List of tamper scripts that can be used during the attack, 1 is choosen at
+        # random for each sqlmap invocation amongst this attribute.
+        self._tamper_scripts = [""]
         self.seed = get_seed(self.config)
 
         # We want some kind of reproducibility in the resulting dataset,
         # however, using the same seed  for all sqlmap invocation would lead to
         # the same payloads for each of endpoints.  So we add an offset at each
         # invocation.
-
         self.seed_offset = 0
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
@@ -160,7 +162,7 @@ class sqlmapGenerator:
             )
 
             recon_settings = (
-                f"-v 0 -D dataset --level=5 --risk=3 --batch "
+                f"-v 0 --skip-waf -D dataset --level=5 --risk=3 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
                 f" -p '{param}' "
                 f'{settings_tech} -u "{url}" '
@@ -199,9 +201,9 @@ class sqlmapGenerator:
 
     def clean_db_tables(self):
         """Truncate all databases tables.
-        
+
         This function is used to make sure that tables are empty for the next
-        invocation of sqlmap. 
+        invocation of sqlmap.
         """
         tables = [
             "regions",
@@ -214,8 +216,7 @@ class sqlmapGenerator:
 
         for table in tables:
             self.sqlc.execute_query(
-                f"SET FOREIGN_KEY_CHECKS = 0;"
-                f"TRUNCATE TABLE  {table} ;"
+                f"SET FOREIGN_KEY_CHECKS = 0;" f"TRUNCATE TABLE  {table} ;"
             )
 
         # Clean queries cache
@@ -251,7 +252,7 @@ class sqlmapGenerator:
         # this is not the priority.
 
         exploit_settings = (
-            f"-v 0 -D dataset --level=5 --risk=3 --batch "
+            f"-v 0 --skip-waf -D dataset --level=5 --risk=3 --batch "
             f"--skip='user-agent,referer,host'"
             f'{settings_tech} -u "{url}"'
         )
@@ -347,7 +348,7 @@ class sqlmapGenerator:
         self._scenario_id += 1
         self.seed_offset += 1
 
-    def generate_attacks(self):
+    def generate_attacks(self, testing_mode: bool):
         """Generates SQL injection attacks for all templates using multiple techniques.
 
         This function iterates through all combinations of templates and SQLI
@@ -367,7 +368,12 @@ class sqlmapGenerator:
         }
 
         # Testing settings, allows for quick iteration over templates.
-        techniques = {"error": "--technique=E --all "}
+        if testing_mode:
+            techniques = {"error": "--technique=E --users "}
+            self.templates = random.sample(list(self.templates), 6)
+            logger.warning(
+                f"Testing mode enabled, using 6 templates and error technique"
+            )
 
         Path("./cache/").mkdir(parents=True, exist_ok=True)
 

@@ -2,9 +2,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 import pandas as pd
 import threading
+import logging
 
 from .sql_connector import SQLConnector
 
+logger = logging.getLogger(__name__)
 
 class ServerManager:
     def __init__(
@@ -29,7 +31,7 @@ class ServerManager:
         server_thread.start()
 
         self.httpd = httpd
-        print(f"Endpoints available at http://localhost:{self.port}/")
+        logger.info(f"Endpoints available at http://localhost:{self.port}/")
 
     def stop_server(self):
         self.httpd.shutdown()
@@ -88,9 +90,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-type", "text/plain")
                 self.end_headers()
-                response = (
-                    f"Missing required parameters: {', '.join(missing_params)}"
-                )
+                response = f"Missing required parameters: {', '.join(missing_params)}"
                 self.wfile.write(bytes(response, "UTF-8"))
                 print(
                     f"Some request with missing parameters {missing_params} has been generated, this is abnormal."
