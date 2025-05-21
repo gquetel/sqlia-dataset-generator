@@ -29,6 +29,9 @@ let
         ps.scikit-learn
         ps.tqdm
         ps.matplotlib
+
+        ps.ipykernel
+        ps.jupyter
       ]
       ++ [ mysql-connector ]
     )).override
