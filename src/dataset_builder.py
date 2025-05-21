@@ -1,12 +1,11 @@
-from pathlib import Path
-import shutil
 import numpy as np
 import os
 import pandas as pd
-from tqdm import tqdm
 import random
 import re
+import shutil
 
+from tqdm import tqdm
 from .payload_generators.sqlmap_generator import sqlmapGenerator
 
 from .endpoints_controller import ServerManager

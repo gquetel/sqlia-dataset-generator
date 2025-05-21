@@ -1,4 +1,5 @@
 import configparser
+import logging
 from pathlib import Path
 from subprocess import STDOUT, Popen, PIPE
 import pandas as pd
@@ -8,6 +9,8 @@ import random
 
 from ..sql_connector import SQLConnector
 from ..config_parser import get_seed
+
+logger = logging.getLogger(__name__)
 
 
 class sqlmapGenerator:
@@ -61,7 +64,7 @@ class sqlmapGenerator:
 
         output = ""
         for line in proc.stdout:
-            print(line.rstrip())  # Print to console immediately
+            logger.info(line.rstrip())  # Print to console immediately
             output += line  # Also capture it
 
         proc.wait()
@@ -100,14 +103,14 @@ class sqlmapGenerator:
         settings_tech = settings_tech.split()[0]
 
         recon_settings = (
-            f"-v 0 -D dataset -flush-session --level=5 --risk=3 --batch "
+            f"-v 3 -D dataset -flush-session --level=5 --risk=3 --batch "
             f"--skip='user-agent,referer,host' --eval="
             f'"import random; random.seed({self.seed + self.seed_offset})" '
             f'{settings_tech} -u "{url}"'
         )
 
         recon_command = "sqlmap " + recon_settings
-        print(f">> Using recon command: {recon_command}")
+        logger.info(f">> Using recon command: {recon_command}")
         # We ignore retcode, we do not expect to find the string here.
         _ = self.call_sqlmap_subprocess(command=recon_command)
         recon_queries = self.sqlc.get_and_empty_sent_queries()
@@ -158,7 +161,7 @@ class sqlmapGenerator:
             f' {settings_tech} -u "{url}"'
         )
         command = "sqlmap " + settings_tech + exploit_settings
-        print(f">> Using exploit command: {command}")
+        logger.info(f">> Using exploit command: {command}")
         retcode = self.call_sqlmap_subprocess(command=command)
         exploit_queries = self.sqlc.get_and_empty_sent_queries()
 
@@ -266,11 +269,19 @@ class sqlmapGenerator:
             for i in techniques.items():
                 # example of cache file: ./cache/airport-I1-union
                 cache_filepath = f"./cache/{template['ID']}-{i[0]}"
-
                 if Path(cache_filepath).is_file():
-                    print(f">> Found cached file for scenario {template['ID']}-{i[0]}")
                     self.generated_attacks = pd.read_csv(cache_filepath)
+                    last_atkid = self.generated_attacks.iloc[-1]["attack_id"]
+                    # Increment, as the retrieved value is the latest number of attacks.
+                    # We want the next one to be different.
+                    self._scenario_id = int(last_atkid.split("-")[1]) + 1
+                    logger.info(
+                        f">> Found cached file for scenario {template['ID']}-{i[0]}"
+                        f" with {self._scenario_id} launched attacks."
+                    )
+                    self._scenario_id += 1
                     continue
+
                 self.perform_attack(i, template)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
