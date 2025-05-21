@@ -33,7 +33,19 @@ class sqlmapGenerator:
 
         # List of tamper scripts that can be used during the attack, 1 is choosen at
         # random for each sqlmap invocation amongst this attribute.
-        self._tamper_scripts = [""]
+        self._tamper_scripts = [
+            # "commentbeforeparentheses", # Prepends (inline) comment before parentheses
+            # TODO: Verifier que les prochains tamper scripts fonctionnent
+            "equaltolike", # Replaces all occurrences of operator = by 'LIKE'
+            # "lowercase", # Replaces each keyword character with lower case value
+            # "multiplespaces", # Adds multiple spaces around SQL keywords
+            # "randomcase", # (e.g. SELECT -> SEleCt)
+            # "sleep2getlock", # Replace 'SLEEP(5)' with stuff like "GET_LOCK('ETgP',5)"
+            # "space2comment" # Replaces space character (' ') with comments '/**/'
+            # "space2dash", # Replaces space character (' ') with a dash comment ('--') followed by a random string and a new line ('\n')
+            # "space2mysqlblank",
+        ]
+
         self.seed = get_seed(self.config)
 
         # We want some kind of reproducibility in the resulting dataset,
@@ -160,11 +172,12 @@ class sqlmapGenerator:
             settings_eval = self._construct_eval_option(
                 db_name=db_name, parameters=_t_params
             )
-
+            tamper_script = random.choice(self._tamper_scripts)
             recon_settings = (
                 f"-v 0 --skip-waf -D dataset --level=5 --risk=3 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
                 f" -p '{param}' "
+                f' -tamper="{tamper_script}" '
                 f'{settings_tech} -u "{url}" '
             )
 
@@ -250,13 +263,16 @@ class sqlmapGenerator:
         #
         # I also don't want to spend any more time on adding variation on parameters
         # this is not the priority.
+        tamper_script = random.choice(self._tamper_scripts)
 
         exploit_settings = (
             f"-v 0 --skip-waf -D dataset --level=5 --risk=3 --batch "
             f"--skip='user-agent,referer,host'"
+            f' -tamper="{tamper_script}" '
             f'{settings_tech} -u "{url}"'
         )
         command = "sqlmap " + settings_tech + exploit_settings
+        
         logger.info(f">> Using exploit command: {command}")
         retcode = self.call_sqlmap_subprocess(command=command)
         exploit_queries = self.sqlc.get_and_empty_sent_queries()
