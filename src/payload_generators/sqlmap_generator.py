@@ -12,7 +12,6 @@ from ..config_parser import get_seed
 
 logger = logging.getLogger(__name__)
 
-
 class sqlmapGenerator:
     def __init__(
         self,
@@ -34,17 +33,19 @@ class sqlmapGenerator:
         # List of tamper scripts that can be used during the attack, 1 is choosen at
         # random for each sqlmap invocation amongst this attribute.
         self._tamper_scripts = [
-            # "commentbeforeparentheses", # Prepends (inline) comment before parentheses
-            # TODO: Verifier que les prochains tamper scripts fonctionnent
+            "commentbeforeparentheses", # Prepends (inline) comment before parentheses
             "equaltolike", # Replaces all occurrences of operator = by 'LIKE'
-            # "lowercase", # Replaces each keyword character with lower case value
-            # "multiplespaces", # Adds multiple spaces around SQL keywords
-            # "randomcase", # (e.g. SELECT -> SEleCt)
-            # "sleep2getlock", # Replace 'SLEEP(5)' with stuff like "GET_LOCK('ETgP',5)"
-            # "space2comment" # Replaces space character (' ') with comments '/**/'
-            # "space2dash", # Replaces space character (' ') with a dash comment ('--') followed by a random string and a new line ('\n')
-            # "space2mysqlblank",
+            "lowercase", # Replaces each keyword character with lower case value
+            "multiplespaces", # Adds multiple spaces around SQL keywords
+            "randomcase", # (e.g. SELECT -> SEleCt)
+            "sleep2getlock", # Replace 'SLEEP(5)' with stuff like "GET_LOCK('ETgP',5)"
+            "space2comment" # Replaces space character (' ') with comments '/**/'
+            "space2mysqlblank",
         ]
+
+        # "space2dash", # Replaces(' ') with  ('--'), a random string and ('\n') 
+        #  space2dash tamper script lead to sqlmap being unable to identify injections
+        # let's not use it for generation. 
 
         self.seed = get_seed(self.config)
 
@@ -57,7 +58,7 @@ class sqlmapGenerator:
         self._scenario_id = 0
 
     def call_sqlmap_subprocess(self, command) -> int:
-        """Call the provided sqlmap command and return its success code
+        """ Call the provided sqlmap command and return its success code
 
         Args:
             command (_type_): sqlmap command to run
@@ -165,6 +166,9 @@ class sqlmapGenerator:
         # for the recon phase:
         settings_tech = settings_tech.split()[0]
 
+        df = pd.DataFrame()
+        default_query = self.get_default_query_for_path(url=url)
+
         for i, param in enumerate(params):
             # Iterate over existing params.
             _t_params = params.copy()
@@ -189,9 +193,9 @@ class sqlmapGenerator:
             logger.info(f">> Using recon command: {recon_command}")
             # We ignore retcode, we do not expect to find the string here.
             _ = self.call_sqlmap_subprocess(command=recon_command)
-
-        recon_queries = self.sqlc.get_and_empty_sent_queries()
-        default_query = self.get_default_query_for_path(url=url)
+            
+            # Fetch all queries for current parameter
+            recon_queries = self.sqlc.get_and_empty_sent_queries()
         full_queries = list(filter(lambda a: a != default_query, recon_queries))
 
         desc = ""  # TODO
@@ -386,7 +390,7 @@ class sqlmapGenerator:
         # Testing settings, allows for quick iteration over templates.
         if testing_mode:
             techniques = {"error": "--technique=E --users "}
-            self.templates = random.sample(list(self.templates), 6)
+            self.templates = random.sample(list(self.templates), 2)
             logger.warning(
                 f"Testing mode enabled, using 6 templates and error technique"
             )
