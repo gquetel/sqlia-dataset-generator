@@ -1,4 +1,4 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import pandas as pd
 import threading
@@ -25,8 +25,9 @@ class ServerManager:
         server_address = ("", self.port)
 
         SQLQueryHandler.set_context(self.templates, self.sqlconnector)
-        httpd = HTTPServer(server_address, SQLQueryHandler)
+        httpd = ThreadingHTTPServer(server_address, SQLQueryHandler)
 
+        # Using threading.Thread allows for non-blocking execution.
         server_thread = threading.Thread(target=httpd.serve_forever)
         server_thread.daemon = True
         server_thread.start()

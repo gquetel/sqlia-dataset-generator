@@ -5,6 +5,8 @@ from subprocess import STDOUT, Popen, PIPE
 import pandas as pd
 import urllib.parse
 import urllib.request
+import urllib.error
+
 import random
 
 from ..sql_connector import SQLConnector
@@ -90,7 +92,14 @@ class sqlmapGenerator:
         return 0
 
     def get_default_query_for_path(self, url) -> str:
-        _ = urllib.request.urlopen(url).read()
+
+        try:
+            _ = urllib.request.urlopen(url).read()
+        except urllib.error.URLError:
+            logger.critical(
+                f"get_default_query_for_path: failed to GET url: {url}, this is abnormal."
+            )
+            
         queries = self.sqlc.get_and_empty_sent_queries()
         # If any queries have been sent in the meantime, ignore those and retrieve last one.
         return queries[-1]
