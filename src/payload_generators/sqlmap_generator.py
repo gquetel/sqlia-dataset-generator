@@ -33,19 +33,19 @@ class sqlmapGenerator:
         # List of tamper scripts that can be used during the attack, 1 is choosen at
         # random for each sqlmap invocation amongst this attribute.
         self._tamper_scripts = [
-            "commentbeforeparentheses", # Prepends (inline) comment before parentheses
-            "equaltolike", # Replaces all occurrences of operator = by 'LIKE'
-            "lowercase", # Replaces each keyword character with lower case value
-            "multiplespaces", # Adds multiple spaces around SQL keywords
-            "randomcase", # (e.g. SELECT -> SEleCt)
-            "sleep2getlock", # Replace 'SLEEP(5)' with stuff like "GET_LOCK('ETgP',5)"
-            "space2comment" # Replaces space character (' ') with comments '/**/'
+            "commentbeforeparentheses",  # Prepends (inline) comment before parentheses
+            "equaltolike",  # Replaces all occurrences of operator = by 'LIKE'
+            "lowercase",  # Replaces each keyword character with lower case value
+            "multiplespaces",  # Adds multiple spaces around SQL keywords
+            "randomcase",  # (e.g. SELECT -> SEleCt)
+            "sleep2getlock",  # Replace 'SLEEP(5)' with stuff like "GET_LOCK('ETgP',5)"
+            "space2comment",  # Replaces space character (' ') with comments '/**/'
             "space2mysqlblank",
         ]
 
-        # "space2dash", # Replaces(' ') with  ('--'), a random string and ('\n') 
+        # "space2dash", # Replaces(' ') with  ('--'), a random string and ('\n')
         #  space2dash tamper script lead to sqlmap being unable to identify injections
-        # let's not use it for generation. 
+        # let's not use it for generation.
 
         self.seed = get_seed(self.config)
 
