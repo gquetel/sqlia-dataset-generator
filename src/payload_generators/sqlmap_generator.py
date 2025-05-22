@@ -12,6 +12,7 @@ from ..config_parser import get_seed
 
 logger = logging.getLogger(__name__)
 
+
 class sqlmapGenerator:
     def __init__(
         self,
@@ -58,7 +59,7 @@ class sqlmapGenerator:
         self._scenario_id = 0
 
     def call_sqlmap_subprocess(self, command) -> int:
-        """ Call the provided sqlmap command and return its success code
+        """Call the provided sqlmap command and return its success code
 
         Args:
             command (_type_): sqlmap command to run
@@ -142,7 +143,12 @@ class sqlmapGenerator:
         return e_str
 
     def perform_recognition(
-        self, url: str, settings_tech: str, params: list[str], db_name: str
+        self,
+        url: str,
+        settings_tech: str,
+        params: list[str],
+        db_name: str,
+        debug_mode: bool,
     ) -> pd.DataFrame:
         """Executes the reconnaissance phase of an SQL injection attack using SQLMap.
 
@@ -166,8 +172,13 @@ class sqlmapGenerator:
         # for the recon phase:
         settings_tech = settings_tech.split()[0]
 
-        df = pd.DataFrame()
+        _df = pd.DataFrame()
         default_query = self.get_default_query_for_path(url=url)
+
+        # Columns that are the same for all sqlmap calls for this template.
+        desc = ""  # TODO
+        malicious_input = ""  # TODO
+        label = 1
 
         for i, param in enumerate(params):
             # Iterate over existing params.
@@ -177,10 +188,12 @@ class sqlmapGenerator:
                 db_name=db_name, parameters=_t_params
             )
             tamper_script = random.choice(self._tamper_scripts)
+            settings_verbose = "-v 3 " if debug_mode else "-v 0 "
+
             recon_settings = (
-                f"-v 0 --skip-waf -D dataset --level=5 --risk=3 --batch "
+                f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=3 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
-                f" -p '{param}' "
+                f" -p '{param}' --threads=8 "
                 f' -tamper="{tamper_script}" '
                 f'{settings_tech} -u "{url}" '
             )
@@ -193,27 +206,27 @@ class sqlmapGenerator:
             logger.info(f">> Using recon command: {recon_command}")
             # We ignore retcode, we do not expect to find the string here.
             _ = self.call_sqlmap_subprocess(command=recon_command)
-            
+
             # Fetch all queries for current parameter
             recon_queries = self.sqlc.get_and_empty_sent_queries()
-        full_queries = list(filter(lambda a: a != default_query, recon_queries))
+            full_queries = list(filter(lambda a: a != default_query, recon_queries))
 
-        desc = ""  # TODO
-        malicious_input = ""  # TODO
-        label = 1
-
-        _df = pd.DataFrame(
-            {
-                "full_query": full_queries,
-                "label": label,
-                "attack_payload": malicious_input,
-                # "attack_id": atk_id,
-                # "attack_technique": name_technique,
-                "attack_desc": desc,
-                "attack_stage": "recon",
-                # "sqlmap_status" : sqlmap_status
-            }
-        )
+            _df = pd.concat(
+                [
+                    _df,
+                    pd.DataFrame(
+                        {
+                            "full_query": full_queries,
+                            "label": label,
+                            "attack_payload": malicious_input,
+                            "attack_desc": desc,
+                            "attack_stage": "recon",
+                            "tamper_method": tamper_script,
+                            # "attacked_parameter": param, # TODO ?
+                        }
+                    ),
+                ]
+            )
         return _df
 
     def clean_db_tables(self):
@@ -240,9 +253,7 @@ class sqlmapGenerator:
         _ = self.sqlc.get_and_empty_sent_queries()
 
     def perform_exploit(
-        self,
-        url: str,
-        settings_tech: str,
+        self, url: str, settings_tech: str, debug_mode: bool
     ) -> pd.DataFrame:
         """Executes the exploitation phase of an SQL injection attack using SQLMap.
 
@@ -268,15 +279,16 @@ class sqlmapGenerator:
         # I also don't want to spend any more time on adding variation on parameters
         # this is not the priority.
         tamper_script = random.choice(self._tamper_scripts)
+        settings_verbose = "-v 3 " if debug_mode else "-v 0 "
 
         exploit_settings = (
-            f"-v 0 --skip-waf -D dataset --level=5 --risk=3 --batch "
+            f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=3 --batch "
             f"--skip='user-agent,referer,host'"
-            f' -tamper="{tamper_script}" '
+            f' -tamper="{tamper_script}" --threads=8 '
             f'{settings_tech} -u "{url}"'
         )
         command = "sqlmap " + settings_tech + exploit_settings
-        
+
         logger.info(f">> Using exploit command: {command}")
         retcode = self.call_sqlmap_subprocess(command=command)
         exploit_queries = self.sqlc.get_and_empty_sent_queries()
@@ -300,11 +312,12 @@ class sqlmapGenerator:
                 "attack_payload": malicious_input,
                 "attack_stage": "exploit",
                 "sqlmap_status": sqlmap_status,
+                "tamper_method": "None",
             }
         )
         return _df
 
-    def perform_attack(self, technique: tuple, template_info: dict):
+    def perform_attack(self, technique: tuple, template_info: dict, debug_mode: bool):
         """Orchestrates a full SQLI attack for a given technique and query template.
 
         This function runs both reconnaissance and exploitation phases of an SQL
@@ -340,12 +353,12 @@ class sqlmapGenerator:
             settings_tech=settings_tech,
             params=template_info["placeholders"],
             db_name=db_name,
+            debug_mode=debug_mode,
         )
 
         # Now invoke sqlmap for exploitation
         _df_exploit = self.perform_exploit(
-            url=url,
-            settings_tech=settings_tech,
+            url=url, settings_tech=settings_tech, debug_mode=debug_mode
         )
 
         atk_id = f"{name_tech}-{self._scenario_id}"
@@ -368,7 +381,7 @@ class sqlmapGenerator:
         self._scenario_id += 1
         self.seed_offset += 1
 
-    def generate_attacks(self, testing_mode: bool):
+    def generate_attacks(self, testing_mode: bool, debug_mode: bool):
         """Generates SQL injection attacks for all templates using multiple techniques.
 
         This function iterates through all combinations of templates and SQLI
@@ -414,7 +427,7 @@ class sqlmapGenerator:
                     self._scenario_id += 1
                     continue
 
-                self.perform_attack(i, template)
+                self.perform_attack(i, template, debug_mode)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
         return self.generated_attacks

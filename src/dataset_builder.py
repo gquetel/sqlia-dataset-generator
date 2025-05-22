@@ -186,7 +186,9 @@ class DatasetBuilder:
         res = self.sqlc.is_query_syntvalid(query=query)
         return res
 
-    def generate_attack_queries_sqlmapapi(self, testing_mode : bool) -> dict:
+    def generate_attack_queries_sqlmapapi(
+        self, testing_mode: bool, debug_mode: bool
+    ) -> dict:
         server_port = 8080
         generated_attack_queries = []
 
@@ -210,7 +212,7 @@ class DatasetBuilder:
             placeholders_dictionnaries_list=self.dictionnaries,
             port=server_port,
         )
-        generated_attack_queries = sqlg.generate_attacks(testing_mode)
+        generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
         # input()
         server.stop_server()
 
@@ -242,12 +244,11 @@ class DatasetBuilder:
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
 
-    def build(
-        self,
-        testing_mode : bool
-    ) -> pd.DataFrame:
+    def build(self, testing_mode: bool, debug_mode: bool) -> pd.DataFrame:
         train_size = 0.7
-        self.generate_attack_queries_sqlmapapi(testing_mode=testing_mode)
+        self.generate_attack_queries_sqlmapapi(
+            testing_mode=testing_mode, debug_mode=debug_mode
+        )
         self.generate_normal_queries()
         self._add_split_column_using_statement_type(train_size=train_size)
 

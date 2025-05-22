@@ -8,6 +8,7 @@ from .sql_connector import SQLConnector
 
 logger = logging.getLogger(__name__)
 
+
 class ServerManager:
     def __init__(
         self,
@@ -41,10 +42,10 @@ class ServerManager:
 class SQLQueryHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
+
     def _set_response(self):
         self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
+        self.send_header("Content-type", "text/plain")
         self.end_headers()
 
     @classmethod
@@ -53,12 +54,9 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
         cls.sqlconnector = sqlconnector
 
     def log_message(self, format, *args):
-        # import sys
-        # sys.stderr.write("%s - - [%s] %s\n" %
-        #                  (self.client_address[0],
-        #                   self.log_date_time_string(),
-        #                   format%args))
-        pass
+        logger.debug(
+            f"{self.client_address[0]} - - [{self.log_date_time_string()}] {format % args}"
+        )
 
     def do_GET(self):
         parsed_url = urlparse(self.path)

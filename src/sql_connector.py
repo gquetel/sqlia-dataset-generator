@@ -34,7 +34,7 @@ class SQLConnector:
         # https://dev.mysql.com/doc/connector-python/en/connector-python-multi.html
         if self.cnx is None or not self.cnx.is_connected():
             self.init_new_cnx()
-        
+
         results = []
         self.sent_queries.append(query)
         with self.cnx.cursor(buffered=True) as cur:
@@ -44,7 +44,7 @@ class SQLConnector:
             for _, result_set in cur.fetchsets():
                 results.append(result_set)
         return results
-    
+
     def is_query_syntvalid(self, query: str) -> bool:
         if self.cnx is None or not self.cnx.is_connected():
             self.init_new_cnx()
