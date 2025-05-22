@@ -9,8 +9,8 @@ import urllib.error
 
 import random
 
-from ..sql_connector import SQLConnector
-from ..config_parser import get_seed
+from .db_cnt_manager import SQLConnector
+from .config_parser import get_seed
 
 logger = logging.getLogger(__name__)
 

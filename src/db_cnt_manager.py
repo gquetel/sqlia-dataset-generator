@@ -4,7 +4,6 @@ import mysql
 
 from .config_parser import get_mysql_info, get_used_databases
 
-
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
         user, pwd, socket_path = get_mysql_info(config=config)

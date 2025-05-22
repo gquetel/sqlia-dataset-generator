@@ -1,15 +1,14 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import pandas as pd
 import threading
 import logging
 
-from .sql_connector import SQLConnector
+from .db_cnt_manager import SQLConnector
 
 logger = logging.getLogger(__name__)
 
-
-class ServerManager:
+class TemplatedSQLServer:
     def __init__(
         self,
         templates: pd.DataFrame,
@@ -24,14 +23,13 @@ class ServerManager:
     def start_server(self):
         server_address = ("", self.port)
 
-        SQLQueryHandler.set_context(self.templates, self.sqlconnector)
-        httpd = ThreadingHTTPServer(server_address, SQLQueryHandler)
+        TemplatedSQLRequestHandler.set_context(self.templates, self.sqlconnector)
+        httpd = ThreadingHTTPServer(server_address, TemplatedSQLRequestHandler)
 
         # Using threading.Thread allows for non-blocking execution.
         server_thread = threading.Thread(target=httpd.serve_forever)
         server_thread.daemon = True
         server_thread.start()
-
         self.httpd = httpd
         logger.info(f"Endpoints available at http://localhost:{self.port}/")
 
@@ -40,7 +38,7 @@ class ServerManager:
         self.httpd.server_close()
 
 
-class SQLQueryHandler(BaseHTTPRequestHandler):
+class TemplatedSQLRequestHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -109,7 +107,7 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
             try:
                 self.wfile.write(bytes(str(results), "UTF-8"))
             except BrokenPipeError as e:
-                print(f"Broken Pipe error for query {query}")
+                logger.critical(f"Broken Pipe error for query {query}")
 
         except Exception as e:
             # Mimic information leak. Required for several sqlmap techniques.
@@ -117,4 +115,4 @@ class SQLQueryHandler(BaseHTTPRequestHandler):
             try:
                 self.wfile.write(bytes(str(e), "UTF-8"))
             except BrokenPipeError as e:
-                print(f"Broken Pipe error for query {query}")
+                logger.critical(f"Broken Pipe error for query {query}")

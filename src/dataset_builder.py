@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import os
 import pandas as pd
@@ -6,12 +7,13 @@ import re
 import shutil
 
 from tqdm import tqdm
-from .payload_generators.sqlmap_generator import sqlmapGenerator
+from .sqlmap_generator import sqlmapGenerator
 
-from .endpoints_controller import ServerManager
-from .sql_connector import SQLConnector
+from .sql_query_server import TemplatedSQLServer
+from .db_cnt_manager import SQLConnector
+from . import config_parser
 
-import src.config_parser as config_parser
+logger = logging.getLogger(__name__)
 
 
 def _extract_params(template):
@@ -115,13 +117,12 @@ class DatasetBuilder:
         # And encapsulate based on type
 
         # Generate the same number of normal queries that the number of attacks.
-        self.populate_normal_templates(self._n_attacks)
+
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
             all_types = template_row.payload_type.split()
 
-            # print(all_placeholders,all_types)
             assert len(all_types) == len(all_placeholders)
             db_name = template_row.ID.split("-")[0]
 
@@ -199,7 +200,7 @@ class DatasetBuilder:
         # Prune all sent_queries for attacks
         _ = self.sqlc.get_and_empty_sent_queries()
 
-        server = ServerManager(
+        server = TemplatedSQLServer(
             templates=templates, sqlconnector=self.sqlc, port=server_port
         )
         server.start_server()
@@ -238,8 +239,8 @@ class DatasetBuilder:
             templates_ids = _df_type["query_template_id"].unique()
             n_ids_test = int((1 - train_size) * len(templates_ids))
             ids_test = random.sample(templates_ids.tolist(), k=n_ids_test)
-            print(ids_test)
             self.df.loc[self.df["query_template_id"].isin(ids_test), "split"] = "test"
+            logger.info(f"Using templates {ids_test} as testing templates for statement of type {type}.")
 
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
@@ -249,6 +250,14 @@ class DatasetBuilder:
         self.generate_attack_queries_sqlmapapi(
             testing_mode=testing_mode, debug_mode=debug_mode
         )
+        # The generation of normal queries starts with a random sampling of templates
+        # The number of normal queries depends on the attacks_ratio configuration setting
+        # and the number of attack queries.
+        atk_ratio = config_parser.get_attacks_ratio(self.config)
+        n_normal = self._n_attacks / atk_ratio
+        logger.info(f"Generating {n_normal} normal queries.")
+        self.populate_normal_templates(n_normal)
+
         self.generate_normal_queries()
         self._add_split_column_using_statement_type(train_size=train_size)
 
