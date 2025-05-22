@@ -200,6 +200,7 @@ class sqlmapGenerator:
             settings_verbose = "-v 3 " if debug_mode else "-v 0 "
 
             recon_settings = (
+                f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=1 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
                 f" -p '{param}' "
                 f' -tamper="{tamper_script}" '
@@ -290,6 +291,7 @@ class sqlmapGenerator:
         settings_verbose = "-v 3 " if debug_mode else "-v 0 "
 
         exploit_settings = (
+            f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=1 --batch "
             f"--skip='user-agent,referer,host'"
             f' -tamper="{tamper_script}" '
             f'{settings_tech} -u "{url}"'
