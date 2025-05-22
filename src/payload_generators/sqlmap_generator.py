@@ -99,7 +99,7 @@ class sqlmapGenerator:
             logger.critical(
                 f"get_default_query_for_path: failed to GET url: {url}, this is abnormal."
             )
-            
+
         queries = self.sqlc.get_and_empty_sent_queries()
         # If any queries have been sent in the meantime, ignore those and retrieve last one.
         return queries[-1]
@@ -202,7 +202,7 @@ class sqlmapGenerator:
             recon_settings = (
                 f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=3 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
-                f" -p '{param}' --threads=8 "
+                f" -p '{param}' "
                 f' -tamper="{tamper_script}" '
                 f'{settings_tech} -u "{url}" '
             )
@@ -293,7 +293,7 @@ class sqlmapGenerator:
         exploit_settings = (
             f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=3 --batch "
             f"--skip='user-agent,referer,host'"
-            f' -tamper="{tamper_script}" --threads=8 '
+            f' -tamper="{tamper_script}" '
             f'{settings_tech} -u "{url}"'
         )
         command = "sqlmap " + settings_tech + exploit_settings
