@@ -70,8 +70,22 @@ class sqlmapGenerator:
             int: 0 if the attack succeeded, 1 if not correct payload was
                 found to be injected.
         """
-        # I am not sure whether sqlmap outputs to stderr, but in case
-        # Let's pipe it to stdout.
+
+        # TODO:  Some attacks generate heavy queries, blocking the execution of
+        # further ones. Changing MAX_EXECUTION_TIME does not seem to affect
+        # this, nor lowering --risk value.
+
+        # lowering --risk value still lead to the execution of heavy queries
+        # This seem to be a bug from sqlmap.
+
+        # Hence, we init a new connection for each attack. This should
+        # Reduce side effects, but this is another hack.
+
+        # We also need to kill queries with a time > 30 and username tata
+        # they are not normal. 
+        # we can look at this: https://dba.stackexchange.com/questions/2634/kill-all-queries-mysql/2637#2637
+        self.sqlc.init_new_cnx()
+
         proc = Popen(
             command,
             shell=True,
@@ -92,7 +106,6 @@ class sqlmapGenerator:
         return 0
 
     def get_default_query_for_path(self, url) -> str:
-
         try:
             _ = urllib.request.urlopen(url).read()
         except urllib.error.URLError:
@@ -436,14 +449,6 @@ class sqlmapGenerator:
                     )
                     self._scenario_id += 1
                     continue
-
-                # Some attacks generate heavy queries, blocking the execution of
-                # further ones. Changing MAX_EXECUTION_TIME does not seem to affect
-                # this, nor lowering --risk value.
-
-                # Hence, we init a new connection for each attack. This should
-                # Reduce side effects, but this is another hack.
-                self.sqlc.init_new_cnx()
                 self.perform_attack(i, template, debug_mode)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
