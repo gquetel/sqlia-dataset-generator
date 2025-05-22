@@ -411,10 +411,11 @@ class sqlmapGenerator:
 
         # Testing settings, allows for quick iteration over templates.
         if testing_mode:
+            n_templates = 6
             techniques = {"error": "--technique=E --users "}
-            self.templates = random.sample(list(self.templates), 2)
+            self.templates = random.sample(list(self.templates), n_templates)
             logger.warning(
-                f"Testing mode enabled, using 6 templates and error technique"
+                f"Testing mode enabled, using {n_templates} templates and error technique"
             )
 
         Path("./cache/").mkdir(parents=True, exist_ok=True)
@@ -436,6 +437,13 @@ class sqlmapGenerator:
                     self._scenario_id += 1
                     continue
 
+                # Some attacks generate heavy queries, blocking the execution of
+                # further ones. Changing MAX_EXECUTION_TIME does not seem to affect
+                # this, nor lowering --risk value.
+
+                # Hence, we init a new connection for each attack. This should
+                # Reduce side effects, but this is another hack.
+                self.sqlc.init_new_cnx()
                 self.perform_attack(i, template, debug_mode)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
