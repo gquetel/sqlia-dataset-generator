@@ -45,6 +45,11 @@ class DatasetBuilder:
         # Array of attack queries not correctly constructed
         self._failed_attacks = []
 
+        # List of templates ids only present in test set
+        self._test_templates_ids = []
+
+        # Array
+        self._df_templates_n = None
         # Connection wrapper to SQL server.
         self.sqlc = None
 
@@ -87,12 +92,20 @@ class DatasetBuilder:
         )
         return _all_templates
 
-    def populate_normal_templates(self, n_n: int):
+    def populate_normal_templates(self, n_n: int, templates_list: list = []):
+        """Randomly sample n_n templates with replacement from the template folder.
+
+        If templates_list is not empty, then only
+
+        Args:
+            n_n (int): _description_
+            templates_list (list | None, optional): _description_. Defaults to None.
+        """
         used_databases = config_parser.get_used_databases(self.config)
         statements_type = config_parser.get_statement_types_and_proportions(self.config)
-
         n_n_per_db = int(n_n / len(used_databases))
         self._df_templates_n = pd.DataFrame()
+
         for db in used_databases:
             dir_path = "".join(["./data/databases/", db, "/queries/"])
             for stmt_type in statements_type:
@@ -100,16 +113,29 @@ class DatasetBuilder:
                 # Load relevant csv file, and sample templates.
                 type = stmt_type["type"]
                 proportion = stmt_type["proportion"]
-
                 df_templates = pd.read_csv(dir_path + type + ".csv")
 
-                # Sample normal queries
-                _dft = df_templates.sample(
-                    n=int(proportion * n_n_per_db),
-                    replace=True,
-                )
+                # If no templates_list is provided, we use all templates
+                # else, we only samples those within the list
+                if len(templates_list) == 0:
+                    _dft = df_templates.sample(
+                        n=int(proportion * n_n_per_db),
+                        replace=True,
+                    )
+                else:
+                    # When templates_list are provided -> augment attack, we
+                    # multiply samples according to attacks_ratio.
+                    _dft = df_templates[df_templates["ID"].isin(templates_list)].copy()
+                    if len(_dft) == 0:
+                        continue
+                    _dft = _dft.sample(
+                        n=int(proportion * n_n_per_db),
+                        replace=True,
+                    )
+
                 _dft["statement_type"] = type
                 self._df_templates_n = pd.concat([self._df_templates_n, _dft])
+
 
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
@@ -117,7 +143,6 @@ class DatasetBuilder:
         # And encapsulate based on type
 
         # Generate the same number of normal queries that the number of attacks.
-
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
@@ -228,7 +253,7 @@ class DatasetBuilder:
 
         # Placing this here seems weird as we already got such a call earlier
         # However, without it, the sampled template changes from one
-        # invocation to the other...
+        # invocation to the other.
         random.seed(self.seed)
 
         # Iterate over statement types and sample
@@ -236,11 +261,34 @@ class DatasetBuilder:
         for stmt_type in statements_type:
             type = stmt_type["type"]
             _df_type = self.df[self.df["statement_type"] == type]
-            templates_ids = _df_type["query_template_id"].unique()
-            n_ids_test = int((1 - train_size) * len(templates_ids))
+            # We only focus templates with attacks here.
+            templates_ids = _df_type[_df_type["label"] == 1][
+                "query_template_id"
+            ].unique()
+            n_ids_test = round((1 - train_size) * len(templates_ids))
             ids_test = random.sample(templates_ids.tolist(), k=n_ids_test)
             self.df.loc[self.df["query_template_id"].isin(ids_test), "split"] = "test"
-            logger.info(f"Using templates {ids_test} as testing templates for statement of type {type}.")
+            logger.info(
+                f"Using templates {ids_test} as testing templates for statement of type {type}."
+            )
+            self._test_templates_ids += ids_test
+
+    def _augment_test_set_normal_queries(self):
+        atk_ratio = config_parser.get_attacks_ratio(self.config)
+        _df = self.df[
+            (self.df["query_template_id"].isin(self._test_templates_ids))
+            & (self.df["label"] == 1)
+        ]
+        # So we want to add ~target_n_normal_test of attacks of templates
+        # in self._test_templates_ids
+        target_n_normal_test = len(_df) / atk_ratio
+
+        self.populate_normal_templates(
+            n_n=target_n_normal_test, templates_list=self._test_templates_ids
+        )
+        self.generate_normal_queries()
+        # Now all queries without a split value should go to test set
+        self.df.loc[self.df["split"].isna(),"split"] = "test"
 
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
@@ -250,17 +298,13 @@ class DatasetBuilder:
         self.generate_attack_queries_sqlmapapi(
             testing_mode=testing_mode, debug_mode=debug_mode
         )
-        # The generation of normal queries starts with a random sampling of templates
-        # The number of normal queries depends on the attacks_ratio configuration setting
-        # and the number of attack queries.
-        atk_ratio = config_parser.get_attacks_ratio(self.config)
-        n_normal = self._n_attacks / atk_ratio
-        logger.info(f"Generating {n_normal} normal queries.")
-        self.populate_normal_templates(n_normal)
 
+        self.populate_normal_templates(self._n_attacks)
         self.generate_normal_queries()
+
         self._add_split_column_using_statement_type(train_size=train_size)
+        self._augment_test_set_normal_queries()
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
-        self._clean_cache_folder()
+        # self._clean_cache_folder()

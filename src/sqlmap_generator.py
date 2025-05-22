@@ -411,7 +411,7 @@ class sqlmapGenerator:
 
         # Testing settings, allows for quick iteration over templates.
         if testing_mode:
-            n_templates = 6
+            n_templates = 10
             techniques = {"error": "--technique=E --users "}
             self.templates = random.sample(list(self.templates), n_templates)
             logger.warning(

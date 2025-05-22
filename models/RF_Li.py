@@ -230,7 +230,8 @@ class CustomRF_Li:
                 "split",
                 "attack_desc",
                 "sqlmap_status",
-                "attack_stage"
+                "attack_stage", 
+                "tamper_method", 
             ],
             axis=1,
             inplace=True,

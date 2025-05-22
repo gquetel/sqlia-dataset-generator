@@ -226,12 +226,13 @@ if __name__ == "__main__":
             "attack_desc": str,
             "split": str,
             "sqlmap_status" : str,
-            "attack_stage" : str
+            "attack_stage" : str,
+            "tamper_method" :str,
         },
     )
 
-    # df_train = df[df["split"] == "train"]
-    # df_test = df[df["split"] == "test"]
-    from sklearn.model_selection import train_test_split
-    df_train, df_test = train_test_split(df,test_size=0.2)
+    df_train = df[df["split"] == "train"]
+    df_test = df[df["split"] == "test"]
+    # from sklearn.model_selection import train_test_split
+    # df_train, df_test = train_test_split(df,test_size=0.2)
     train_models(df_train, df_test)
