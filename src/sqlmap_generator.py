@@ -75,38 +75,48 @@ class sqlmapGenerator:
         # get a lock on some table which mess with the nexts sqlmap invocations.
         # This procedure does just that.
 
-        time = 5
-        query = f"""
-        DROP PROCEDURE IF EXISTS killqueries; 
+        # time = 5
+        # query = f"""
+        # DROP PROCEDURE IF EXISTS killqueries; 
 
-        CREATE PROCEDURE killqueries()
-        BEGIN
-        DECLARE done INT DEFAULT FALSE;
-        DECLARE kill_id INT;
-        DECLARE cur CURSOR FOR
-            SELECT id FROM information_schema.processlist WHERE user = '{self.sqlc.user}' and time > {time};
-        DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+        # CREATE PROCEDURE killqueries()
+        # BEGIN
+        # DECLARE done INT DEFAULT FALSE;
+        # DECLARE kill_id INT;
+        # DECLARE cur CURSOR FOR
+        #     SELECT id FROM information_schema.processlist WHERE user = '{self.sqlc.user}' and time > {time};
+        # DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
-        OPEN cur;
+        # OPEN cur;
 
-        read_loop: LOOP
-            FETCH cur INTO kill_id;
-            IF done THEN
-            LEAVE read_loop;
-            END IF;
-            SET @s = CONCAT('KILL QUERY ', kill_id);
-            PREPARE stmt FROM @s;
-            EXECUTE stmt;
-            DEALLOCATE PREPARE stmt;
-        END LOOP;
+        # read_loop: LOOP
+        #     FETCH cur INTO kill_id;
+        #     IF done THEN
+        #     LEAVE read_loop;
+        #     END IF;
+        #     SET @s = CONCAT('KILL QUERY ', kill_id);
+        #     PREPARE stmt FROM @s;
+        #     EXECUTE stmt;
+        #     DEALLOCATE PREPARE stmt;
+        # END LOOP;
 
-        CLOSE cur;
-        END;
+        # CLOSE cur;
+        # END;
         
-        call killqueries();
-        """
-        self.sqlc.execute_query(query)
+        # call killqueries();
+        # """
+        # self.sqlc.execute_query(query)
         
+        # The procedure way didn't really work, we would find queries with 
+        #  let's try with pt-kill: 
+        ptkill_command = f"pt-kill --kill-query --user={self.sqlc.user} --password="
+        f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database " 
+        f"{self.sqlc.db_name} --busy-time 5s --run-time 2s"
+        
+        ptkill_command_sleeps= f"pt-kill --kill-query --user={self.sqlc.user} --password="
+        f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database " 
+        f"{self.sqlc.db_name} --busy-time 5s --run-time 2s --match-command Sleep "
+
         # Then we clean the content of tables. Sometimes sqlmap inserts some data,
         # letting it there incrementally increase the number of commands required to
         # dump data from the DBMS as we invoke more and more sqlmap.

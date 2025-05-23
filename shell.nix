@@ -44,6 +44,7 @@ pkgs.mkShell rec {
   packages = [
     pythonEnv
     pkgs.sqlmap
+    pkgs.percona-toolkit
   ];
 
   catchConflicts = false;
