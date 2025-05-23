@@ -1,5 +1,6 @@
 dataset.csv
 models/output
+logs/
 sessions
 cache
 cache-old

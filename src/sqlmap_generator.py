@@ -60,6 +60,73 @@ class sqlmapGenerator:
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
 
+    def _clean_db(self):
+        """Clean-up function to call after each sqlmap invocation to reduce side-effects"""
+
+        # TODO:  Some attacks generate heavy queries, blocking the execution of
+        # further ones. Changing MAX_EXECUTION_TIME does not seem to affect
+        # this, nor lowering --risk value (lowering --risk value still lead to the
+        # execution of heavy queries, this seem to be a bug from sqlmap.)
+
+        # Hence, we first init a new connection.
+        self.sqlc.init_new_cnx()
+
+        # Then, we kill queries with a time > 5 and username tata. These queries
+        # get a lock on some table which mess with the nexts sqlmap invocations.
+        # This procedure does just that.
+
+        time = 5
+        query = f"""
+        DROP PROCEDURE IF EXISTS killqueries; 
+
+        CREATE PROCEDURE killqueries()
+        BEGIN
+        DECLARE done INT DEFAULT FALSE;
+        DECLARE kill_id INT;
+        DECLARE cur CURSOR FOR
+            SELECT id FROM information_schema.processlist WHERE user = '{self.sqlc.user}' and time > {time};
+        DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+        OPEN cur;
+
+        read_loop: LOOP
+            FETCH cur INTO kill_id;
+            IF done THEN
+            LEAVE read_loop;
+            END IF;
+            SET @s = CONCAT('KILL QUERY ', kill_id);
+            PREPARE stmt FROM @s;
+            EXECUTE stmt;
+            DEALLOCATE PREPARE stmt;
+        END LOOP;
+
+        CLOSE cur;
+        END;
+        
+        call killqueries();
+        """
+        self.sqlc.execute_query(query)
+        
+        # Then we clean the content of tables. Sometimes sqlmap inserts some data,
+        # letting it there incrementally increase the number of commands required to
+        # dump data from the DBMS as we invoke more and more sqlmap.
+        
+        tables = [
+            "regions",
+            "countries",
+            "navaids",
+            "runways",
+            "airport_frequencies",
+            "airport",
+        ]
+
+        for table in tables:
+            self.sqlc.execute_query(
+                f"SET FOREIGN_KEY_CHECKS = 0;" f"TRUNCATE TABLE  {table} ;"
+            )
+        # Clear query cache
+        _ = self.sqlc.get_and_empty_sent_queries()
+
     def call_sqlmap_subprocess(self, command) -> int:
         """Call the provided sqlmap command and return its success code
 
@@ -70,22 +137,7 @@ class sqlmapGenerator:
             int: 0 if the attack succeeded, 1 if not correct payload was
                 found to be injected.
         """
-
-        # TODO:  Some attacks generate heavy queries, blocking the execution of
-        # further ones. Changing MAX_EXECUTION_TIME does not seem to affect
-        # this, nor lowering --risk value.
-
-        # lowering --risk value still lead to the execution of heavy queries
-        # This seem to be a bug from sqlmap.
-
-        # Hence, we init a new connection for each attack. This should
-        # Reduce side effects, but this is another hack.
-
-        # We also need to kill queries with a time > 30 and username tata
-        # they are not normal. 
-        # we can look at this: https://dba.stackexchange.com/questions/2634/kill-all-queries-mysql/2637#2637
-        self.sqlc.init_new_cnx()
-
+        self._clean_db()
         proc = Popen(
             command,
             shell=True,
@@ -96,8 +148,8 @@ class sqlmapGenerator:
 
         output = ""
         for line in proc.stdout:
-            logger.info(line.rstrip())  # Print to console immediately
-            output += line  # Also capture it
+            logger.info(line.rstrip()) 
+            output += line 
 
         proc.wait()
 
@@ -251,29 +303,6 @@ class sqlmapGenerator:
             )
         return _df
 
-    def clean_db_tables(self):
-        """Truncate all databases tables.
-
-        This function is used to make sure that tables are empty for the next
-        invocation of sqlmap.
-        """
-        tables = [
-            "regions",
-            "countries",
-            "navaids",
-            "runways",
-            "airport_frequencies",
-            "airport",
-        ]
-
-        for table in tables:
-            self.sqlc.execute_query(
-                f"SET FOREIGN_KEY_CHECKS = 0;" f"TRUNCATE TABLE  {table} ;"
-            )
-
-        # Clean queries cache
-        _ = self.sqlc.get_and_empty_sent_queries()
-
     def perform_exploit(
         self, url: str, settings_tech: str, debug_mode: bool
     ) -> pd.DataFrame:
@@ -314,11 +343,6 @@ class sqlmapGenerator:
         logger.info(f">> Using exploit command: {command}")
         retcode = self.call_sqlmap_subprocess(command=command)
         exploit_queries = self.sqlc.get_and_empty_sent_queries()
-
-        # Reset table states, insert queries can
-        # actually insert data, resulting in potentially high
-        # number of sqlmap queries when dumping the database info
-        self.clean_db_tables()
 
         default_query = self.get_default_query_for_path(url=url)
         full_queries = list(filter(lambda a: a != default_query, exploit_queries))
@@ -423,7 +447,7 @@ class sqlmapGenerator:
         }
 
         Path("./cache/").mkdir(parents=True, exist_ok=True)
-        
+
         # Template's number is reduced, we also only consider the error technique.
         if testing_mode:
             techniques = {"error": "--technique=E --users "}
