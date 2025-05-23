@@ -6,6 +6,7 @@ import random
 import re
 import shutil
 
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from .sqlmap_generator import sqlmapGenerator
 
@@ -42,13 +43,9 @@ class DatasetBuilder:
         # Keys are tuple of the form (db_name, dictionnary_name)
         self.dictionnaries = {}
 
-        # Array of attack queries not correctly constructed
-        self._failed_attacks = []
-
         # List of templates ids only present in test set
         self._test_templates_ids = []
 
-        # Array
         self._df_templates_n = None
         # Connection wrapper to SQL server.
         self.sqlc = None
@@ -61,8 +58,12 @@ class DatasetBuilder:
         self.populate_dictionnaries()
 
     def populate_dictionnaries(self):
-        # Iterate over all datasets, check under data/databases/$dataset/dicts
-        # And load all existing file into self.dictionnaries[(family,dict)]
+        """Load dictionnaries of legitimate values for placeholders.
+
+        The function iterates over all datasets, checks under
+        data/databases/$dataset/dicts and load all existing file into
+        self.dictionnaries[(dataset_name, placeholder_id)]
+        """
         used_databases = config_parser.get_used_databases(self.config)
 
         for db in used_databases:
@@ -71,8 +72,8 @@ class DatasetBuilder:
                 with open(dicts_dir + filename, "r") as f:
                     self.dictionnaries[(db, filename)] = f.read().splitlines()
 
-    def get_all_templates(self):
-        """Return all statements templates."""
+    def get_all_templates(self) -> pd.DataFrame:
+        """Return all statements templates from generation settings."""
         used_databases = config_parser.get_used_databases(self.config)
         statements_type = config_parser.get_statement_types_and_proportions(self.config)
         _all_templates = pd.DataFrame()
@@ -91,6 +92,89 @@ class DatasetBuilder:
             _extract_params
         )
         return _all_templates
+
+    def select_templates(self, testing_mode: bool):
+        """Modify self.templates according to the generation settings.
+
+        - This function randomly samples templates that will only be present for testing.
+        - This function randomly samples templates that will only be used to generate
+        normal samples
+        - If testing mode is enabled, this reduce the number of templates for generation.
+
+        Args:
+            testing_mode (bool): _description_
+        """
+
+        self.templates = self.get_all_templates()
+
+        # Testing settings, allows for quick iteration over templates.
+        if testing_mode:
+            n_templates = 10
+            self.templates = self.templates.sample(n=n_templates)
+            logger.warning(
+                f"Testing mode enabled, using {n_templates} templates and error technique"
+            )
+
+        # Samples templates for normal only generation:
+        ratio_tno = 0.1  # TODO: add this in config
+        n_tno = round(self.templates.shape[0] * ratio_tno)
+        self.templates_normal_only = self.templates.sample(n=n_tno)
+        self.templates = self.templates.drop(self.templates_normal_only.index)
+
+        # Sample templates for df_test
+        # 20% of the templates will be kept for test split.
+        ratio_tt = 0.2
+        n_tt = round(self.templates.shape[0] * ratio_tt)
+        self.templates_test = self.templates.sample(n=n_tt)
+
+    def _add_split_column_exclude(self):
+        """Add a split column with test set templates being disjoinct from train set.
+
+        The split is made according to the already made list of test templates
+        self.templates_test.
+        """
+        ids_ttest = self.templates_test["ID"].to_list()
+        self.df.loc[self.df["query_template_id"].isin(ids_ttest), "split"] = "test"
+        self.df.loc[~self.df["query_template_id"].isin(ids_ttest), "split"] = "train"
+
+    def _add_split_column_include(self, train_size=0.7):
+        """Add a split column with test set including templates of train set.
+
+        The templates that should be considered for test are already sampled. Hence we
+        only need to randomly sample 1 - train_size * len(df) to be considered as test
+        set. Then we remove from the remainder all samples belonging to the train split.
+
+        Doing so allows to keep a distribution of queries where test_set only queries
+        are not more represented than the others (which would happen if we selected
+        all template_test queries for test set and then add some queries from other
+        templates to reach 1 - train_size * len(df))
+
+        Args:
+            train_size (float, optional): _description_. Defaults to 0.7.
+        """
+        ids_ttest = self.templates_test["ID"].to_list()
+        _df_train, _df_test = train_test_split(self.df, train_size=train_size)
+        _df_test["split"] = "test"
+        _df_train = _df_train[~_df_train["query_template_id"].isin(ids_ttest)]
+        _df_train["split"] = "train"
+
+        self.df = pd.concat([_df_test, _df_train])
+
+    def _augment_test_set_normal_queries(self):
+        """We augment the number of normal queries in test set."""
+        atk_ratio = config_parser.get_attacks_ratio(self.config)
+
+        n_attack_test_set = self.df[
+            (self.df["split"] == "test") & (self.df["label"] == 1)
+        ].shape[0]
+        target_n_normal_test = n_attack_test_set / atk_ratio
+
+        self.populate_normal_templates(
+            n_n=target_n_normal_test, templates_list=self._test_templates_ids
+        )
+        self.generate_normal_queries()
+        # Now all queries without a split value should go to test set
+        self.df.loc[self.df["split"].isna(), "split"] = "test"
 
     def populate_normal_templates(self, n_n: int, templates_list: list = []):
         """Randomly sample n_n templates with replacement from the template folder.
@@ -136,13 +220,11 @@ class DatasetBuilder:
                 _dft["statement_type"] = type
                 self._df_templates_n = pd.concat([self._df_templates_n, _dft])
 
-
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
         # Randomly choose a value in dict for that placeholder
         # And encapsulate based on type
 
-        # Generate the same number of normal queries that the number of attacks.
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
@@ -219,82 +301,40 @@ class DatasetBuilder:
         generated_attack_queries = []
 
         # First, initialize all HTTP endpoints for each template.
-        templates = self.get_all_templates()
+        # templates are already selected / sampled in self.templates
+
         if self.sqlc == None:
             self.sqlc = SQLConnector(self.config)
         # Prune all sent_queries for attacks
         _ = self.sqlc.get_and_empty_sent_queries()
 
         server = TemplatedSQLServer(
-            templates=templates, sqlconnector=self.sqlc, port=server_port
+            templates=self.templates, sqlconnector=self.sqlc, port=server_port
         )
         server.start_server()
 
         # Now iterate over templates and techniques to generate payloads.
         sqlg = sqlmapGenerator(
             config=self.config,
-            templates=templates,
+            templates=self.templates,
             sqlconnector=self.sqlc,
             placeholders_dictionnaries_list=self.dictionnaries,
             port=server_port,
         )
         generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
-        # input()
         server.stop_server()
 
         self._n_attacks = len(generated_attack_queries)
         self.df = generated_attack_queries
-
-    def _add_split_column_using_statement_type(self, train_size=0.7):
-        # Then sample
-        # and set their split to train
-        self.df["split"] = "train"
-        statements_type = config_parser.get_statement_types_and_proportions(self.config)
-
-        # Placing this here seems weird as we already got such a call earlier
-        # However, without it, the sampled template changes from one
-        # invocation to the other.
-        random.seed(self.seed)
-
-        # Iterate over statement types and sample
-        # train_size * len(template_statement_type) templates
-        for stmt_type in statements_type:
-            type = stmt_type["type"]
-            _df_type = self.df[self.df["statement_type"] == type]
-            # We only focus templates with attacks here.
-            templates_ids = _df_type[_df_type["label"] == 1][
-                "query_template_id"
-            ].unique()
-            n_ids_test = round((1 - train_size) * len(templates_ids))
-            ids_test = random.sample(templates_ids.tolist(), k=n_ids_test)
-            self.df.loc[self.df["query_template_id"].isin(ids_test), "split"] = "test"
-            logger.info(
-                f"Using templates {ids_test} as testing templates for statement of type {type}."
-            )
-            self._test_templates_ids += ids_test
-
-    def _augment_test_set_normal_queries(self):
-        atk_ratio = config_parser.get_attacks_ratio(self.config)
-        _df = self.df[
-            (self.df["query_template_id"].isin(self._test_templates_ids))
-            & (self.df["label"] == 1)
-        ]
-        # So we want to add ~target_n_normal_test of attacks of templates
-        # in self._test_templates_ids
-        target_n_normal_test = len(_df) / atk_ratio
-
-        self.populate_normal_templates(
-            n_n=target_n_normal_test, templates_list=self._test_templates_ids
-        )
-        self.generate_normal_queries()
-        # Now all queries without a split value should go to test set
-        self.df.loc[self.df["split"].isna(),"split"] = "test"
 
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
 
     def build(self, testing_mode: bool, debug_mode: bool) -> pd.DataFrame:
         train_size = 0.7
+
+        # First, sample queries templat es according to scenario.
+        self.select_templates(testing_mode=testing_mode)
         self.generate_attack_queries_sqlmapapi(
             testing_mode=testing_mode, debug_mode=debug_mode
         )
@@ -302,7 +342,7 @@ class DatasetBuilder:
         self.populate_normal_templates(self._n_attacks)
         self.generate_normal_queries()
 
-        self._add_split_column_using_statement_type(train_size=train_size)
+        self._add_split_column_include(train_size=train_size)
         self._augment_test_set_normal_queries()
 
     def save(self):

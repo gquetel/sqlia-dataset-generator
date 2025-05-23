@@ -422,16 +422,11 @@ class sqlmapGenerator:
             "inline": "--technique=Q --all ",
         }
 
-        # Testing settings, allows for quick iteration over templates.
-        if testing_mode:
-            n_templates = 10
-            techniques = {"error": "--technique=E --users "}
-            self.templates = random.sample(list(self.templates), n_templates)
-            logger.warning(
-                f"Testing mode enabled, using {n_templates} templates and error technique"
-            )
-
         Path("./cache/").mkdir(parents=True, exist_ok=True)
+        
+        # Template's number is reduced, we also only consider the error technique.
+        if testing_mode:
+            techniques = {"error": "--technique=E --users "}
 
         for template in self.templates:
             for i in techniques.items():
