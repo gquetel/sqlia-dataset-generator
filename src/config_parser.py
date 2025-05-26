@@ -30,7 +30,7 @@ def get_statement_types_and_proportions(config: configparser.ConfigParser):
     stmts = []
 
     for section in config.sections():
-        if section == "SQL_STATEMENTS":
+        if section == "NORMAL_TRAFFIC_TARGETS":
             for key, value in config.items(section):
                 stmts.append({"type": key, "proportion": float(Fraction(value))})
 

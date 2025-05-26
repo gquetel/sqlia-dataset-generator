@@ -23,6 +23,7 @@ class SQLConnector:
             password=self.pwd,
             unix_socket=self.socket_path,
             database=self.database,
+            read_timeout=10,
         )
 
     def get_and_empty_sent_queries(self) -> list:

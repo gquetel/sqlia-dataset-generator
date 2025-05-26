@@ -6,6 +6,7 @@ import pandas as pd
 import urllib.parse
 import urllib.request
 import urllib.error
+import mysql.connector
 
 import random
 
@@ -75,6 +76,9 @@ class sqlmapGenerator:
         # get a lock on some table which mess with the nexts sqlmap invocations.
         # This procedure does just that.
 
+        # 1. Some sqmlap queries hang forever, plus they get a lock on tables
+        # I want to kill them, let's try with a procedure:
+
         # time = 5
         # query = f"""
         # DROP PROCEDURE IF EXISTS killqueries;
@@ -107,8 +111,9 @@ class sqlmapGenerator:
         # """
         # self.sqlc.execute_query(query)
 
-        # The procedure way didn't work, some queries would still be stuck.
+        # 2. The procedure way didn't work, some queries would still be stuck.
         #  let's try with pt-kill:
+
         ptkill_command = (
             f"pt-kill --kill-query --user={self.sqlc.user} --password="
             f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database "
@@ -124,7 +129,7 @@ class sqlmapGenerator:
         )
 
         for line in proc.stdout:
-            logger.warning(f"pt-kill matched the following query: {line.rstrip()}")
+            logger.warning(f"pt-kill matched the following query: {line.rstrip()}") 
         proc.wait()
 
         # Then we clean the content of tables. Sometimes sqlmap inserts some data,
@@ -139,11 +144,20 @@ class sqlmapGenerator:
             "airport_frequencies",
             "airport",
         ]
-
         for table in tables:
-            self.sqlc.execute_query(
-                f"SET FOREIGN_KEY_CHECKS = 0;" f"TRUNCATE TABLE  {table} ;"
-            )
+            try:
+                self.sqlc.execute_query(
+                    f"SET FOREIGN_KEY_CHECKS = 0;" f"TRUNCATE TABLE  {table} ;"
+                )
+            # 3. Still, for some reason the TRUNCATE call used after the pt-kill would 
+            # sometimes hang, so we also added  'connection_timeout': 10,  to the 
+            # connection settings. We need to catch that exception.
+            except mysql.connector.errors.ReadTimeoutError:
+                logger.warning(
+                    f"TRUNCATE call hanged for more than 10 seconds, the database might"
+                    f" not be clean."
+                )
+
         # Clear query cache
         _ = self.sqlc.get_and_empty_sent_queries()
 

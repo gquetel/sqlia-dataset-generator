@@ -3,6 +3,8 @@ import numpy as np
 import os
 import pandas as pd
 import random
+import secrets
+import string
 import re
 import shutil
 
@@ -58,7 +60,9 @@ class DatasetBuilder:
         # in the train set).
         self.df_templates_test = None
         # Dataframe holding the templates selected for being normal-only templates.
-        self.df_tno = None  
+        self.df_tno = None
+        # Dataframe holding the templates of administration queries
+        self.df_tadmin = None
 
         # Initialisation code.
         random.seed(self.seed)
@@ -115,6 +119,10 @@ class DatasetBuilder:
         """
 
         self.templates = self.get_all_templates()
+
+        # First, remove administrator statements to not mess with ratios computations
+        self.df_tadmin = self.templates[self.templates["ID"].str.contains("admin")]
+        self.templates = self.templates[~self.templates["ID"].str.contains("admin")]
 
         # Testing settings, allows for quick iteration over templates.
         if testing_mode:
@@ -207,30 +215,33 @@ class DatasetBuilder:
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
-            all_types = template_row.payload_type.split()
 
+            # template_row.payload_type is na when no input needs filling.
+            if(not pd.isna(template_row.payload_type)):
+                all_types = template_row.payload_type.split()
+            else:
+                all_types = []
+            
+            # print(all_types,all_placeholders)
             assert len(all_types) == len(all_placeholders)
             schema_name = template_row.ID.split("-")[0]
 
             # Replace 1 by 1 all placeholders by a randomly choosen dict value
             query = template_row.template
-
             for placeholder, type in zip(all_placeholders, all_types):
                 # Remove placeholder's artificial int suffix:
                 placeholder = placeholder.rstrip("123456789")
-                if placeholder[0] == "!":
-                    # Choose value
-                    filler = random.choice(
-                        self.dictionnaries[(schema_name, placeholder[1:])]
-                    )
+
+                if placeholder == "rand_pos_number":
+                    filler = random.randint(0, 64000)
+                elif placeholder == "rand_string":
+                    alphabet = string.ascii_letters + string.digits
+                    filler = "".join(secrets.choice(alphabet) for i in range(20))
                 else:
-                    # Some edge cases:
-                    if placeholder == "pos_number":
-                        filler = random.randint(0, 64000)
-                    else:
-                        filler = random.choice(
-                            self.dictionnaries[(schema_name, placeholder)]
-                        )
+                    filler = random.choice(
+                        self.dictionnaries[(schema_name, placeholder)]
+                    )
+
                 match type:
                     case "int" | "float":
                         query = query.replace(f"{{{placeholder}}}", str(filler), 1)
@@ -239,13 +250,13 @@ class DatasetBuilder:
                         # not be escaped. It is done in the template.
 
                         # However, we also use double quotes, we need to escape those in filler
-                        filler = filler.replace('"', '""')
+                        filler = str(filler).replace('"', '""')
 
                         query = query.replace(f"{{{placeholder}}}", f"{filler}", 1)
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
+            
             # Append query, template ID and label to dataset.
-
             if not self._verify_syntactic_validity_query(query=query):
                 raise ValueError("Failed normal query: ", query)
 
@@ -312,17 +323,22 @@ class DatasetBuilder:
     def build(self, testing_mode: bool, debug_mode: bool) -> pd.DataFrame:
         train_size = 0.7
 
-        # First, sample queries templat es according to scenario.
+        # First, sample queries templates according to scenario.
         self.select_templates(testing_mode=testing_mode)
         self.generate_attack_queries_sqlmapapi(
             testing_mode=testing_mode, debug_mode=debug_mode
         )
 
-        # List of templates to create normal queries from. Corresponds to all templates
-        # used to generate attacks (self.templates) plus those sampled by
-        # self.select_templates to be considered as normal only templates.
-        l_normal_templates = list(self.templates["ID"].unique()) + list(
-            self.df_tno["ID"].unique()
+        # List of templates to create normal queries from. Corresponds to :
+        # - all templates used to generate attacks (self.templates)
+        # - Plus those sampled by  self.select_templates to be considered as normal
+        #   only templates.
+        # - Plus the administrative queries
+
+        l_normal_templates = (
+            list(self.templates["ID"].unique())
+            + list(self.df_tno["ID"].unique())
+            + list(self.df_tadmin["ID"].unique())
         )
         self.populate_normal_templates(self._n_attacks, l_normal_templates)
         self.generate_normal_queries()
