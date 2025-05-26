@@ -37,24 +37,32 @@ def _extract_params(template):
 
 class DatasetBuilder:
     def __init__(self, config) -> None:
+        # Object attributes initialisation
+
         self.config = config
         self.seed = config_parser.get_seed(self.config)
-        #  Dict holding all possible filler values
-        # Keys are tuple of the form (db_name, dictionnary_name)
+
+        #  Dict holding all possible filler values, Keys are tuple of the form:
+        #  (schema_name, dictionnary_name)
         self.dictionnaries = {}
-
-        # List of templates ids only present in test set
-        self._test_templates_ids = []
-
-        self._df_templates_n = None
-        # Connection wrapper to SQL server.
-        self.sqlc = None
-
-        random.seed(self.seed)
-        np.random.seed(self.seed)
 
         # Dataset output path
         self.outpath = config_parser.get_output_path(config)
+
+        # Connection wrapper to SQL server.
+        self.sqlc = None
+
+        # Dataframe holding the sampled templates of normal queries to fill.
+        self._df_templates_n = None
+        # Dataframe holding sampled templates introduced in the test set (not present
+        # in the train set).
+        self.df_templates_test = None
+        # Dataframe holding the templates selected for being normal-only templates.
+        self.df_tno = None  
+
+        # Initialisation code.
+        random.seed(self.seed)
+        np.random.seed(self.seed)
         self.populate_dictionnaries()
 
     def populate_dictionnaries(self):
@@ -81,11 +89,12 @@ class DatasetBuilder:
         for db in used_databases:
             dir_path = "".join(["./data/databases/", db, "/queries/"])
             for stmt_type in statements_type:
-                # Iterate  statements_type,
-                # Load relevant csv file, and sample templates.
-                type = stmt_type["type"]
-                _t = pd.read_csv(dir_path + type + ".csv")
-                _t["statement_type"] = type
+                # Iterate over statements_type, load relevant csv file
+                # And then add necessary fields.
+                _t = pd.read_csv(dir_path + stmt_type["type"] + ".csv")
+
+                _t["proportion"] = stmt_type["proportion"]
+                _t["statement_type"] = stmt_type["type"]
                 _all_templates = pd.concat([_t, _all_templates])
 
         _all_templates["placeholders"] = _all_templates["template"].apply(
@@ -118,22 +127,22 @@ class DatasetBuilder:
         # Samples templates for normal only generation:
         ratio_tno = 0.1  # TODO: add this in config
         n_tno = round(self.templates.shape[0] * ratio_tno)
-        self.templates_normal_only = self.templates.sample(n=n_tno)
-        self.templates = self.templates.drop(self.templates_normal_only.index)
+        self.df_tno = self.templates.sample(n=n_tno)
+        self.templates = self.templates.drop(self.df_tno.index)
 
         # Sample templates for df_test
         # 20% of the templates will be kept for test split.
         ratio_tt = 0.2
         n_tt = round(self.templates.shape[0] * ratio_tt)
-        self.templates_test = self.templates.sample(n=n_tt)
+        self.df_templates_test = self.templates.sample(n=n_tt)
 
     def _add_split_column_exclude(self):
         """Add a split column with test set templates being disjoinct from train set.
 
         The split is made according to the already made list of test templates
-        self.templates_test.
+        self.df_templates_test.
         """
-        ids_ttest = self.templates_test["ID"].to_list()
+        ids_ttest = self.df_templates_test["ID"].to_list()
         self.df.loc[self.df["query_template_id"].isin(ids_ttest), "split"] = "test"
         self.df.loc[~self.df["query_template_id"].isin(ids_ttest), "split"] = "train"
 
@@ -152,7 +161,7 @@ class DatasetBuilder:
         Args:
             train_size (float, optional): _description_. Defaults to 0.7.
         """
-        ids_ttest = self.templates_test["ID"].to_list()
+        ids_ttest = self.df_templates_test["ID"].to_list()
         _df_train, _df_test = train_test_split(self.df, train_size=train_size)
         _df_test["split"] = "test"
         _df_train = _df_train[~_df_train["query_template_id"].isin(ids_ttest)]
@@ -167,58 +176,28 @@ class DatasetBuilder:
         n_attack_test_set = self.df[
             (self.df["split"] == "test") & (self.df["label"] == 1)
         ].shape[0]
-        target_n_normal_test = n_attack_test_set / atk_ratio
+        target_n_normal_test = int(n_attack_test_set / atk_ratio)
 
+        ids_ttest = self.df_templates_test["ID"].to_list()
         self.populate_normal_templates(
-            n_n=target_n_normal_test, templates_list=self._test_templates_ids
+            n_n=target_n_normal_test, templates_list=ids_ttest
         )
         self.generate_normal_queries()
         # Now all queries without a split value should go to test set
         self.df.loc[self.df["split"].isna(), "split"] = "test"
 
-    def populate_normal_templates(self, n_n: int, templates_list: list = []):
-        """Randomly sample n_n templates with replacement from the template folder.
-
-        If templates_list is not empty, then only
+    def populate_normal_templates(self, n_n: int, templates_list: list):
+        """Randomly sample n_n templates with given the templates_list array
 
         Args:
             n_n (int): _description_
-            templates_list (list | None, optional): _description_. Defaults to None.
+            templates_list (list): _description_.
         """
-        used_databases = config_parser.get_used_databases(self.config)
-        statements_type = config_parser.get_statement_types_and_proportions(self.config)
-        n_n_per_db = int(n_n / len(used_databases))
-        self._df_templates_n = pd.DataFrame()
 
-        for db in used_databases:
-            dir_path = "".join(["./data/databases/", db, "/queries/"])
-            for stmt_type in statements_type:
-                # Iterate  statements_type,
-                # Load relevant csv file, and sample templates.
-                type = stmt_type["type"]
-                proportion = stmt_type["proportion"]
-                df_templates = pd.read_csv(dir_path + type + ".csv")
-
-                # If no templates_list is provided, we use all templates
-                # else, we only samples those within the list
-                if len(templates_list) == 0:
-                    _dft = df_templates.sample(
-                        n=int(proportion * n_n_per_db),
-                        replace=True,
-                    )
-                else:
-                    # When templates_list are provided -> augment attack, we
-                    # multiply samples according to attacks_ratio.
-                    _dft = df_templates[df_templates["ID"].isin(templates_list)].copy()
-                    if len(_dft) == 0:
-                        continue
-                    _dft = _dft.sample(
-                        n=int(proportion * n_n_per_db),
-                        replace=True,
-                    )
-
-                _dft["statement_type"] = type
-                self._df_templates_n = pd.concat([self._df_templates_n, _dft])
+        _df_all_templates = self.get_all_templates()
+        # Only keep those which match templates_list:
+        _dft = _df_all_templates[_df_all_templates["ID"].isin(templates_list)].copy()
+        self._df_templates_n = _dft.sample(n=n_n, replace=True, weights="proportion")
 
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
@@ -231,7 +210,7 @@ class DatasetBuilder:
             all_types = template_row.payload_type.split()
 
             assert len(all_types) == len(all_placeholders)
-            db_name = template_row.ID.split("-")[0]
+            schema_name = template_row.ID.split("-")[0]
 
             # Replace 1 by 1 all placeholders by a randomly choosen dict value
             query = template_row.template
@@ -242,7 +221,7 @@ class DatasetBuilder:
                 if placeholder[0] == "!":
                     # Choose value
                     filler = random.choice(
-                        self.dictionnaries[(db_name, placeholder[1:])]
+                        self.dictionnaries[(schema_name, placeholder[1:])]
                     )
                 else:
                     # Some edge cases:
@@ -250,7 +229,7 @@ class DatasetBuilder:
                         filler = random.randint(0, 64000)
                     else:
                         filler = random.choice(
-                            self.dictionnaries[(db_name, placeholder)]
+                            self.dictionnaries[(schema_name, placeholder)]
                         )
                 match type:
                     case "int" | "float":
@@ -339,7 +318,13 @@ class DatasetBuilder:
             testing_mode=testing_mode, debug_mode=debug_mode
         )
 
-        self.populate_normal_templates(self._n_attacks)
+        # List of templates to create normal queries from. Corresponds to all templates
+        # used to generate attacks (self.templates) plus those sampled by
+        # self.select_templates to be considered as normal only templates.
+        l_normal_templates = list(self.templates["ID"].unique()) + list(
+            self.df_tno["ID"].unique()
+        )
+        self.populate_normal_templates(self._n_attacks, l_normal_templates)
         self.generate_normal_queries()
 
         self._add_split_column_include(train_size=train_size)

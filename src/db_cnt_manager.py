@@ -7,10 +7,11 @@ from .config_parser import get_mysql_info, get_used_databases
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
         user, pwd, socket_path = get_mysql_info(config=config)
-        self.db_name = get_used_databases(config=config)
+        # self.db_name = get_used_databases(config=config)
         self.user = user
         self.pwd = pwd
         self.socket_path = socket_path
+        self.database = "dataset"
         self.init_new_cnx()
 
         # Array of sent queries by self.execute_query
@@ -21,7 +22,7 @@ class SQLConnector:
             user=self.user,
             password=self.pwd,
             unix_socket=self.socket_path,
-            database="dataset",
+            database=self.database,
         )
 
     def get_and_empty_sent_queries(self) -> list:

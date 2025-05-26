@@ -77,7 +77,7 @@ class sqlmapGenerator:
 
         # time = 5
         # query = f"""
-        # DROP PROCEDURE IF EXISTS killqueries; 
+        # DROP PROCEDURE IF EXISTS killqueries;
 
         # CREATE PROCEDURE killqueries()
         # BEGIN
@@ -102,25 +102,36 @@ class sqlmapGenerator:
 
         # CLOSE cur;
         # END;
-        
+
         # call killqueries();
         # """
         # self.sqlc.execute_query(query)
-        
-        # The procedure way didn't really work, we would find queries with 
-        #  let's try with pt-kill: 
-        ptkill_command = f"pt-kill --kill-query --user={self.sqlc.user} --password="
-        f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database " 
-        f"{self.sqlc.db_name} --busy-time 5s --run-time 2s"
-        
-        ptkill_command_sleeps= f"pt-kill --kill-query --user={self.sqlc.user} --password="
-        f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database " 
-        f"{self.sqlc.db_name} --busy-time 5s --run-time 2s --match-command Sleep "
+
+        # The procedure way didn't work, some queries would still be stuck.
+        #  let's try with pt-kill:
+        ptkill_command = (
+            f"pt-kill --kill-query --user={self.sqlc.user} --password="
+            f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database "
+            f"{self.sqlc.database} --busy-time 5s --run-time 2s --match-all --print"
+        )
+
+        logger.debug(f"{ptkill_command}")
+        proc = Popen(
+            ptkill_command,
+            shell=True,
+            stdout=PIPE,
+            stderr=STDOUT,
+            universal_newlines=True,
+        )
+
+        for line in proc.stdout:
+            logger.warning(f"pt-kill matched the following query: {line.rstrip()}")
+        proc.wait()
 
         # Then we clean the content of tables. Sometimes sqlmap inserts some data,
         # letting it there incrementally increase the number of commands required to
         # dump data from the DBMS as we invoke more and more sqlmap.
-        
+
         tables = [
             "regions",
             "countries",
@@ -158,8 +169,8 @@ class sqlmapGenerator:
 
         output = ""
         for line in proc.stdout:
-            logger.info(line.rstrip()) 
-            output += line 
+            logger.info(line.rstrip())
+            output += line
 
         proc.wait()
 
@@ -179,11 +190,11 @@ class sqlmapGenerator:
         # If any queries have been sent in the meantime, ignore those and retrieve last one.
         return queries[-1]
 
-    def _construct_eval_option(self, db_name: str, parameters: list[str]) -> str:
+    def _construct_eval_option(self, schema_name: str, parameters: list[str]) -> str:
         """_summary_
 
         Args:
-            db_name (str): _description_
+            schema_name (str): _description_
             parameters (list[str]): _description_
 
         Returns:
@@ -218,7 +229,7 @@ class sqlmapGenerator:
 
         for param in parameters:
             param_no_sx = param.rstrip("123456789")
-            ran_values = random.choices(self.pdl[(db_name, param_no_sx)], k=10)
+            ran_values = random.choices(self.pdl[(schema_name, param_no_sx)], k=10)
 
             values_str = str(ran_values).replace('"', '\\"')
             e_str += f"{param}=random.choice({values_str});"
@@ -231,7 +242,7 @@ class sqlmapGenerator:
         url: str,
         settings_tech: str,
         params: list[str],
-        db_name: str,
+        schema_name: str,
         debug_mode: bool,
     ) -> pd.DataFrame:
         """Executes the reconnaissance phase of an SQL injection attack using SQLMap.
@@ -269,7 +280,7 @@ class sqlmapGenerator:
             _t_params = params.copy()
             _t_params.remove(param)
             settings_eval = self._construct_eval_option(
-                db_name=db_name, parameters=_t_params
+                schema_name=schema_name, parameters=_t_params
             )
             tamper_script = random.choice(self._tamper_scripts)
             settings_verbose = "-v 3 " if debug_mode else "-v 0 "
@@ -393,11 +404,11 @@ class sqlmapGenerator:
         """
         # Load all information to build the sqlmap command.
         name_tech, settings_tech = technique
-        db_name = template_info["ID"].split("-")[0]
+        schema_name = template_info["ID"].split("-")[0]
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
             param_no_sx = param.rstrip("123456789")
-            random_param_value = random.choice(self.pdl[(db_name, param_no_sx)])
+            random_param_value = random.choice(self.pdl[(schema_name, param_no_sx)])
             params[param] = random_param_value
 
         encoded_params = urllib.parse.urlencode(params)
@@ -408,7 +419,7 @@ class sqlmapGenerator:
             url=url,
             settings_tech=settings_tech,
             params=template_info["placeholders"],
-            db_name=db_name,
+            schema_name=schema_name,
             debug_mode=debug_mode,
         )
 
