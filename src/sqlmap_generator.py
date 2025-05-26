@@ -121,7 +121,6 @@ class sqlmapGenerator:
             shell=True,
             stdout=PIPE,
             stderr=STDOUT,
-            universal_newlines=True,
         )
 
         for line in proc.stdout:
