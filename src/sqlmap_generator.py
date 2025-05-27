@@ -240,7 +240,6 @@ class sqlmapGenerator:
         default_query = self.get_default_query_for_path(url=url)
 
         # Columns that are the same for all sqlmap calls for this template.
-        desc = ""  # TODO
         malicious_input = ""  # TODO
         label = 1
 
@@ -268,12 +267,13 @@ class sqlmapGenerator:
 
             recon_command = "sqlmap " + recon_settings
             logger.info(f">> Using recon command: {recon_command}")
-            # We ignore retcode, we do not expect to find the string here.
-            _ = self.call_sqlmap_subprocess(command=recon_command)
+
+            retcode = self.call_sqlmap_subprocess(command=recon_command)
 
             # Fetch all queries for current parameter
             recon_queries = self.sqlc.get_and_empty_sent_queries()
             full_queries = list(filter(lambda a: a != default_query, recon_queries))
+            attack_status = "success" if retcode == 0 else "failure"
 
             _df = pd.concat(
                 [
@@ -283,14 +283,15 @@ class sqlmapGenerator:
                             "full_query": full_queries,
                             "label": label,
                             "attack_payload": malicious_input,
-                            # "attack_desc": desc,
                             "attack_stage": "recon",
                             "tamper_method": tamper_script,
+                            "attack_status" : attack_status
                             # "attacked_parameter": param, # TODO ?
                         }
                     ),
                 ]
             )
+
         return _df
 
     def perform_exploit(
@@ -316,9 +317,10 @@ class sqlmapGenerator:
         # override the payloads injected by sqlmap. Since we cannot know for certain
         # which parameter worked during recon, we might override the successfull
         # parameter, making the attack fail.
-        #
+        
         # I also don't want to spend any more time on adding variation on parameters
         # this is not the priority.
+
         tamper_script = random.choice(self._tamper_scripts)
         settings_verbose = "-v 3 " if debug_mode else "-v 0 "
 
@@ -339,7 +341,7 @@ class sqlmapGenerator:
 
         malicious_input = ""  # TODO
         label = 1
-        sqlmap_status = "success" if retcode == 0 else "failure"
+        attack_status = "success" if retcode == 0 else "failure"
 
         _df = pd.DataFrame(
             {
@@ -347,7 +349,7 @@ class sqlmapGenerator:
                 "label": label,
                 "attack_payload": malicious_input,
                 "attack_stage": "exploit",
-                "sqlmap_status": sqlmap_status,
+                "attack_status": attack_status,
                 "tamper_method": tamper_script,
             }
         )
