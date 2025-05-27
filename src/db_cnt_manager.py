@@ -39,7 +39,7 @@ class SQLConnector:
         results = []
         self.sent_queries.append(query)
         with self.cnx.cursor(buffered=True) as cur:
-            # Set maximum execution time of 10 sec.
+            # Set maximum execution time of 10 sec (only applies to SELECT statements).
             cur.execute("SET SESSION MAX_EXECUTION_TIME=10000")
             cur.execute(query)
             for _, result_set in cur.fetchsets():

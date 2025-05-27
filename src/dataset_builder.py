@@ -46,7 +46,7 @@ class DatasetBuilder:
 
         #  Dict holding all possible filler values, Keys are tuple of the form:
         #  (schema_name, dictionnary_name)
-        self.dictionnaries = {}
+        self.dictionaries = {}
 
         # Dataset output path
         self.outpath = config_parser.get_output_path(config)
@@ -67,14 +67,14 @@ class DatasetBuilder:
         # Initialisation code.
         random.seed(self.seed)
         np.random.seed(self.seed)
-        self.populate_dictionnaries()
+        self.populate_dictionaries()
 
-    def populate_dictionnaries(self):
-        """Load dictionnaries of legitimate values for placeholders.
+    def populate_dictionaries(self):
+        """Load dictionaries of legitimate values for placeholders.
 
         The function iterates over all datasets, checks under
         data/databases/$dataset/dicts and load all existing file into
-        self.dictionnaries[(dataset_name, placeholder_id)]
+        self.dictionaries[(dataset_name, placeholder_id)]
         """
         used_databases = config_parser.get_used_databases(self.config)
 
@@ -82,7 +82,7 @@ class DatasetBuilder:
             dicts_dir = "".join(["./data/databases/", db, "/dicts/"])
             for filename in os.listdir(dicts_dir):
                 with open(dicts_dir + filename, "r") as f:
-                    self.dictionnaries[(db, filename)] = f.read().splitlines()
+                    self.dictionaries[(db, filename)] = f.read().splitlines()
 
     def get_all_templates(self) -> pd.DataFrame:
         """Return all statements templates from generation settings."""
@@ -239,7 +239,7 @@ class DatasetBuilder:
                     filler = "".join(secrets.choice(alphabet) for i in range(20))
                 else:
                     filler = random.choice(
-                        self.dictionnaries[(schema_name, placeholder)]
+                        self.dictionaries[(schema_name, placeholder)]
                     )
 
                 match type:
@@ -308,7 +308,7 @@ class DatasetBuilder:
             config=self.config,
             templates=self.templates,
             sqlconnector=self.sqlc,
-            placeholders_dictionnaries_list=self.dictionnaries,
+            placeholders_dictionaries_list=self.dictionaries,
             port=server_port,
         )
         generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
@@ -320,7 +320,7 @@ class DatasetBuilder:
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
 
-    def build(self, testing_mode: bool, debug_mode: bool) -> pd.DataFrame:
+    def build(self, testing_mode: bool, debug_mode: bool):
         train_size = 0.7
 
         # First, sample queries templates according to scenario.
