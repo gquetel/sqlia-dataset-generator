@@ -55,8 +55,8 @@ class sqlmapGenerator:
 
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
-    
-    def _run_pt_kill(self): 
+
+    def _run_pt_kill(self):
         ptkill_command = (
             f"pt-kill --kill-query --user={self.sqlc.user} --password="
             f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database "
@@ -73,8 +73,7 @@ class sqlmapGenerator:
         for line in proc.stdout:
             logger.warning(f"pt-kill matched the following query: {line.rstrip()}")
         proc.wait()
-    
-    
+
     def _clean_db(self):
         """Clean-up function to call after each sqlmap invocation to reduce side-effects"""
 
@@ -155,9 +154,9 @@ class sqlmapGenerator:
             logger.critical(
                 f"get_default_query_for_path: failed to GET url: {url}, this is abnormal."
             )
-        
+
         queries = self.sqlc.get_and_empty_sent_queries()
-        if len(queries) > 0: 
+        if len(queries) > 0:
             return queries[-1]
         return []
 
@@ -393,28 +392,36 @@ class sqlmapGenerator:
             debug_mode=debug_mode,
         )
 
-        # Now invoke sqlmap for exploitation
-        _df_exploit = self.perform_exploit(
-            url=url, settings_tech=settings_tech, debug_mode=debug_mode
-        )
-
+        # Variables independant of attack_status:
         atk_id = f"{name_tech}-{self._scenario_id}"
         template_id = template_info["ID"]
-        desc = ""  # TODO
+        _df_recon["attack_desc"] = f"Recognition payload using technique {name_tech}"
 
-        # Fetch retcode of exploit phase to set it to recon one.
-        sqlmap_status = (
-            _df_exploit.iloc[0]["sqlmap_status"] if len(_df_exploit) > 0 else "failure"
-        )
-        _df_recon["sqlmap_status"] = sqlmap_status
+        # If any recognition sqlmap attack succeeded, we can find at least a row where 
+        # `attack_status` is set to success in _df_recon.
+        if(_df_recon["attack_status"] == "success").any():
+            # At least a vulnerable endpoint has been found.
+            # Start exploit
+            _df_exploit = self.perform_exploit(
+                url=url, settings_tech=settings_tech, debug_mode=debug_mode
+            )
+            
+            # This is anormal: 
+            if _df_exploit.iloc[0]["attack_status"] == "failure":
+                logger.critical(f"perform_attack: An vulnerable endpoint was found" \
+                                f" but exploit failed.")
+            
+            _df_exploit["attack_desc"] = f"Exploitation payload using technique {name_tech}"
+            _df = pd.concat([_df_recon, _df_exploit])
 
-        # Merge df of both steps and set all remaining columns.
-        _df = pd.concat([_df_recon, _df_exploit])
+        else: 
+            # No vulnerable endpoint has been found, do not launch exploit.
+            _df = _df_recon
+        
         _df["statement_type"] = template_info["statement_type"]
         _df["query_template_id"] = template_id
         _df["attack_id"] = atk_id
         _df["attack_technique"] = name_tech
-        _df["attack_desc"] = desc
 
         self.generated_attacks = pd.concat([self.generated_attacks, _df])
         self._scenario_id += 1
@@ -442,7 +449,7 @@ class sqlmapGenerator:
 
         # Template's number is reduced, we also only consider the error technique.
         if testing_mode:
-            techniques = {"error": "--technique=E --users "}
+            techniques = {"error": "--technique=Q --users "}
 
         for template in self.templates:
             for i in techniques.items():

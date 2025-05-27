@@ -270,7 +270,7 @@ class DatasetBuilder:
                     "attack_id": None,
                     "attack_technique": None,
                     "attack_desc": None,
-                    "sqlmap_status": None,
+                    "attack_status": None,
                 }
             )
         self.df = pd.concat(

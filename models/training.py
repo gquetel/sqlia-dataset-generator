@@ -298,7 +298,7 @@ if __name__ == "__main__":
             "attack_technique": str,
             "attack_desc": str,
             "split": str,
-            "sqlmap_status": str,
+            "attack_status": str,
             "attack_stage": str,
             "tamper_method": str,
         },
