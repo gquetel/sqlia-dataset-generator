@@ -22,7 +22,7 @@ class sqlmapGenerator:
         config: configparser.ConfigParser,
         templates: pd.DataFrame,
         sqlconnector: SQLConnector,
-        placeholders_dictionnaries_list: list,
+        placeholders_dictionaries_list: list,
         port: int,
     ):
         """Initialize data structures for payload generation."""
@@ -31,8 +31,8 @@ class sqlmapGenerator:
         self.config = config
         self.port = port
         self.sqlc = sqlconnector
-        # List of dictionnaries of values
-        self.pdl = placeholders_dictionnaries_list
+        # List of dictionaries of values
+        self.pdl = placeholders_dictionaries_list
 
         # List of tamper scripts that can be used during the attack, 1 is choosen at
         # random for each sqlmap invocation amongst this attribute.
