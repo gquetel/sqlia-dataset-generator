@@ -112,7 +112,7 @@ class TemplatedSQLRequestHandler(BaseHTTPRequestHandler):
                 logger.critical(f"Broken Pipe error for query {query}")
         
     
-        except mysql.connector.errors.ReadTimeoutError:
+        except mysql.connector.errors.ReadTimeoutError as e:
             # Mimic information leak. Required for several sqlmap techniques.
             # We want tracability on this. If all queries fails, there is something wrong
             # With the DBMS.
