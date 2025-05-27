@@ -3,6 +3,7 @@ import re
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 import numpy as np
+from sklearn.tree import DecisionTreeClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,6 @@ def pre_process_for_RF_li(df: pd.DataFrame) -> pd.DataFrame:
     df_lexrf = df_lexrf.apply(_get_RF_li_features_from_query, axis=1)
     return df_lexrf
 
-
 class CustomRF_Li:
     def __init__(self, GENERIC, max_depth: int | None = None):
         self.max_depth = max_depth
@@ -214,7 +214,12 @@ class CustomRF_Li:
         df_pped, labels = self.preprocess_for_preds(df)
         preds = self.clf.predict(df_pped.to_numpy())
         return labels, preds
-
+    
+    def predict_proba(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        f_matrix, labels = self.preprocess_for_preds(df)
+        ppreds = self.clf.predict_proba(f_matrix.to_numpy())
+        return labels, ppreds
+    
     def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
@@ -252,3 +257,58 @@ class CustomRF_Li:
         )
         rf.fit(df_pped.to_numpy(), train_labels)
         self.clf = rf
+
+class CustomDT_Li: 
+    def __init__(self, GENERIC, max_depth: int | None = None):
+        self.max_depth = max_depth
+        self.GENERIC = GENERIC
+        self.feature_names = None
+
+    def predict(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        df_pped, labels = self.preprocess_for_preds(df)
+        preds = self.clf.predict(df_pped.to_numpy())
+        return labels, preds
+    
+    def predict_proba(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        f_matrix, labels = self.preprocess_for_preds(df)
+        ppreds = self.clf.predict_proba(f_matrix.to_numpy())
+        return labels, ppreds
+
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+        df_pped = df.copy()
+        labels = np.array(df_pped["label"])
+        df_pped = pre_process_for_RF_li(df_pped)
+        df_pped.drop(
+            ["label", "full_query"]
+            + [
+                "statement_type",
+                "query_template_id",
+                "attack_payload",
+                "attack_id",
+                "attack_technique",
+                "split",
+                "attack_desc",
+                "sqlmap_status",
+                "attack_stage", 
+                "tamper_method", 
+            ],
+            axis=1,
+            inplace=True,
+            errors="ignore",
+        )
+        return df_pped, labels
+
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        model_name: str = None,
+    ):
+        self.model_name = model_name
+        df_pped, train_labels = self.preprocess_for_preds(df)
+        self.feature_names = df_pped.columns
+
+        dt = DecisionTreeClassifier(
+            random_state=self.GENERIC.RANDOM_SEED, max_depth=self.max_depth
+        )
+        dt.fit(df_pped.to_numpy(), train_labels)
+        self.clf = dt

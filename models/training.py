@@ -5,12 +5,13 @@ import os
 from pathlib import Path
 from typing import Literal
 from matplotlib import pyplot as plt
+from sklearn.metrics import RocCurveDisplay, roc_curve, auc
 import numpy as np
 import random
 import pandas as pd
 import sys
 import logging
-import sklearn
+import plotly.express as px
 
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -20,8 +21,9 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+from sklearn.tree import plot_tree
 
-from RF_Li import CustomRF_Li
+from RF_Li import CustomRF_Li, CustomDT_Li
 from RF_CountVect import CustomRF_CountVectorizer
 
 
@@ -106,7 +108,9 @@ def print_and_ret_metrics(
     """
     accuracy = f"{accuracy_score(all_targets, all_predictions)* 100:.2f}%"
     f1 = f"{f1_score(all_targets, all_predictions, average=average)* 100:.2f}%"
-    precision = f"{precision_score(all_targets, all_predictions, average=average)* 100:.2f}%"
+    precision = (
+        f"{precision_score(all_targets, all_predictions, average=average)* 100:.2f}%"
+    )
     recall = f"{recall_score(all_targets, all_predictions, average=average)* 100:.2f}%"
 
     C = confusion_matrix(all_targets, all_predictions)
@@ -126,20 +130,18 @@ def print_and_ret_metrics(
     return accuracy, f1, precision, recall, fpr
 
 
-def test_model_separating_techniques(
-    model, df_test: pd.DataFrame, model_name: str
-):
+def test_model_separating_techniques(model, df_test: pd.DataFrame, model_name: str):
     techniques = (
-        df_test.loc[df_test["label"] == 1, "attack_technique"]
-        .unique()
-        .tolist()
+        df_test.loc[df_test["label"] == 1, "attack_technique"].unique().tolist()
     )
     # techniques holds all attack techniques in test set.
     # We iterate over them to compute confusion matrices
 
-    fig, axes = plt.subplots(nrows=1, ncols=len(techniques), figsize=(5*len(techniques), 10))
+    fig, axes = plt.subplots(
+        nrows=1, ncols=len(techniques), figsize=(5 * len(techniques), 10)
+    )
     if len(techniques) == 1:
-        axes = [axes] # allows subscription
+        axes = [axes]  # allows subscription
     for i, technique in enumerate(techniques):
         subset_df_test = pd.concat(
             [
@@ -158,6 +160,50 @@ def test_model_separating_techniques(
     fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}.png"
     plt.savefig(fp_fig)
 
+def my_plot_tree(tree_model):
+    n_leaves = tree_model.clf.get_n_leaves()
+    w = np.sqrt(n_leaves * 10)
+    h = np.sqrt(n_leaves * 10)
+    plt.figure(figsize=(w, h))
+
+    plt.title(f"Decision tree for {tree_model}")
+    _full_path = "".join(
+        [project_paths.output_path, "DP", tree_model.model_name, ".png"]
+    )
+    plot_tree(
+        tree_model.clf,
+        proportion=False,
+        feature_names=tree_model.feature_names,
+        fontsize=5,
+    )
+    plt.savefig(_full_path, dpi=200)
+    logger.info(f"Saved decision tree plot at {_full_path}. ")
+    plt.clf()
+
+
+def plot_roc_curve_plotly(model, df_test: pd.DataFrame, model_name: str):
+    labels, ppreds = model.predict_proba(df_test)
+    ppreds = ppreds[:, 1]
+    fpr, tpr, thresholds = roc_curve(labels, ppreds)
+
+    fig = px.area(
+        x=fpr,
+        y=tpr,
+        title=f"ROC Curve for model {model_name} (AUC={auc(fpr, tpr):.4f})",
+        labels=dict(x="False Positive Rate", y="True Positive Rate"),
+        width=1600,
+        height=1920,
+    )
+
+    # Random line
+    fig.add_shape(type="line", line=dict(dash="dash"), x0=0, x1=1, y0=0, y1=1)
+
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_xaxes(constrain="domain")
+    fp_fig = f"{project_paths.output_path}roc_score_{model_name}.png"
+
+    fig.write_image(fp_fig)
+
 
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_RF"
@@ -171,27 +217,53 @@ def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
+
     test_model_separating_techniques(
         model=model, df_test=df_test, model_name=model_name
     )
 
+    plot_roc_curve_plotly(model=model, df_test=df_test, model_name=model_name)
 
-def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "CountVectorizer_RF"
-    model = CustomRF_CountVectorizer(
-        GENERIC=GENERIC, max_depth=None, max_features=None
-    )
+
+def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Li-LSyn_DT"
+    model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
     model.train_model(df=df_train, model_name=model_name)
     labels, preds = model.predict(df_test)
+
     accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
         labels.tolist(),
         preds.tolist(),
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
+    my_plot_tree(model)
+
     test_model_separating_techniques(
         model=model, df_test=df_test, model_name=model_name
     )
+
+    plot_roc_curve_plotly(model=model, df_test=df_test, model_name=model_name)
+
+
+def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "CountVectorizer_RF"
+    model = CustomRF_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
+    model.train_model(df=df_train, model_name=model_name)
+    labels, preds = model.predict(df_test)
+
+    accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
+        labels.tolist(),
+        preds.tolist(),
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    test_model_separating_techniques(
+        model=model, df_test=df_test, model_name=model_name
+    )
+
+    plot_roc_curve_plotly(model=model, df_test=df_test, model_name=model_name)
 
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -205,6 +277,7 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     )
     train_rf_li(df_train, df_test)
     train_rf_cv(df_train=df_train, df_test=df_test)
+    train_dt_li(df_train=df_train, df_test=df_test)
 
 
 if __name__ == "__main__":
@@ -225,12 +298,11 @@ if __name__ == "__main__":
             "attack_technique": str,
             "attack_desc": str,
             "split": str,
-            "sqlmap_status" : str,
-            "attack_stage" : str,
-            "tamper_method" :str,
+            "sqlmap_status": str,
+            "attack_stage": str,
+            "tamper_method": str,
         },
     )
-
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
     # from sklearn.model_selection import train_test_split

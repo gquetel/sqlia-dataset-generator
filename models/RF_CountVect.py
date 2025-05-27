@@ -25,9 +25,12 @@ class CustomRF_CountVectorizer:
         preds = self.clf.predict(f_matrix)
         return labels, preds
 
-    def preprocess_for_train(
-        self, df: pd.DataFrame
-    ) -> tuple[csr_matrix, np.ndarray]:
+    def predict_proba(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        f_matrix, labels = self.preprocess_for_preds(df)
+        ppreds = self.clf.predict_proba(f_matrix)
+        return labels, ppreds
+
+    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
 
@@ -35,14 +38,12 @@ class CustomRF_CountVectorizer:
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
         return pp_queries, labels
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[csr_matrix, np.ndarray]:
-        
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
+
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         pp_queries = self.vectorizer.transform(df_pped["full_query"])
-        
+
         return pp_queries, labels
 
     def train_model(
@@ -58,4 +59,3 @@ class CustomRF_CountVectorizer:
         )
         rf.fit(f_matrix, train_labels)
         self.clf = rf
-    

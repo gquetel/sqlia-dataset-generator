@@ -29,6 +29,7 @@ let
         ps.scikit-learn
         ps.tqdm
         ps.matplotlib
+        ps.plotly
 
         ps.ipykernel
         ps.jupyter
