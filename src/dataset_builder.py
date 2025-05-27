@@ -186,9 +186,20 @@ class DatasetBuilder:
         ].shape[0]
         target_n_normal_test = int(n_attack_test_set / atk_ratio)
 
-        ids_ttest = self.df_templates_test["ID"].to_list()
+        # Here, we upsample from: 
+        # - all templates used to generate attacks (self.templates)
+        # - Plus those sampled by  self.select_templates to be considered as normal
+        #   only templates.
+        # - Plus the administrative queries
+        
+        l_normal_templates = (
+            list(self.templates["ID"].unique())
+            + list(self.df_tno["ID"].unique())
+            + list(self.df_tadmin["ID"].unique())
+        )
+
         self.populate_normal_templates(
-            n_n=target_n_normal_test, templates_list=ids_ttest
+            n_n=target_n_normal_test, templates_list=l_normal_templates
         )
         self.generate_normal_queries()
         # Now all queries without a split value should go to test set
@@ -334,7 +345,6 @@ class DatasetBuilder:
         # - Plus those sampled by  self.select_templates to be considered as normal
         #   only templates.
         # - Plus the administrative queries
-
         l_normal_templates = (
             list(self.templates["ID"].unique())
             + list(self.df_tno["ID"].unique())
