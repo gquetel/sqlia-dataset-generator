@@ -53,11 +53,6 @@ class sqlmapGenerator:
 
         self.seed = get_seed(self.config)
 
-        # We want some kind of reproducibility in the resulting dataset,
-        # however, using the same seed  for all sqlmap invocation would lead to
-        # the same payloads for each of endpoints.  So we add an offset at each
-        # invocation.
-        self.seed_offset = 0
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
 
@@ -119,7 +114,6 @@ class sqlmapGenerator:
             f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database "
             f"{self.sqlc.database} --busy-time 5s --run-time 2s --match-all --print"
         )
-
         logger.debug(f"{ptkill_command}")
         proc = Popen(
             ptkill_command,
@@ -129,7 +123,7 @@ class sqlmapGenerator:
         )
 
         for line in proc.stdout:
-            logger.warning(f"pt-kill matched the following query: {line.rstrip()}") 
+            logger.warning(f"pt-kill matched the following query: {line.rstrip()}")
         proc.wait()
 
         # Then we clean the content of tables. Sometimes sqlmap inserts some data,
@@ -149,8 +143,8 @@ class sqlmapGenerator:
                 self.sqlc.execute_query(
                     f"SET FOREIGN_KEY_CHECKS = 0;" f"TRUNCATE TABLE  {table} ;"
                 )
-            # 3. Still, for some reason the TRUNCATE call used after the pt-kill would 
-            # sometimes hang, so we also added  'connection_timeout': 10,  to the 
+            # 3. Still, for some reason the TRUNCATE call used after the pt-kill would
+            # sometimes hang, so we also added  'connection_timeout': 10,  to the
             # connection settings. We need to catch that exception.
             except mysql.connector.errors.ReadTimeoutError:
                 logger.warning(
@@ -198,10 +192,11 @@ class sqlmapGenerator:
             logger.critical(
                 f"get_default_query_for_path: failed to GET url: {url}, this is abnormal."
             )
-
+        
         queries = self.sqlc.get_and_empty_sent_queries()
-        # If any queries have been sent in the meantime, ignore those and retrieve last one.
-        return queries[-1]
+        if len(queries) > 0: 
+            return queries[-1]
+        return []
 
     def _construct_eval_option(self, schema_name: str, parameters: list[str]) -> str:
         """_summary_
@@ -237,7 +232,6 @@ class sqlmapGenerator:
         e_str = ' --eval="'
 
         # First, we want to somehow control the random in here.
-        # e_str = f' --eval="import random; random.seed({self.seed + self.seed_offset})"'
         e_str += f"import random;"
 
         for param in parameters:
@@ -327,7 +321,7 @@ class sqlmapGenerator:
                             "full_query": full_queries,
                             "label": label,
                             "attack_payload": malicious_input,
-                            "attack_desc": desc,
+                            # "attack_desc": desc,
                             "attack_stage": "recon",
                             "tamper_method": tamper_script,
                             # "attacked_parameter": param, # TODO ?
@@ -392,7 +386,7 @@ class sqlmapGenerator:
                 "attack_payload": malicious_input,
                 "attack_stage": "exploit",
                 "sqlmap_status": sqlmap_status,
-                "tamper_method": "None",
+                "tamper_method": tamper_script,
             }
         )
         return _df
@@ -446,7 +440,9 @@ class sqlmapGenerator:
         desc = ""  # TODO
 
         # Fetch retcode of exploit phase to set it to recon one.
-        sqlmap_status = _df_exploit.iloc[0]["sqlmap_status"]
+        sqlmap_status = (
+            _df_exploit.iloc[0]["sqlmap_status"] if len(_df_exploit) > 0 else "failure"
+        )
         _df_recon["sqlmap_status"] = sqlmap_status
 
         # Merge df of both steps and set all remaining columns.
@@ -459,7 +455,6 @@ class sqlmapGenerator:
 
         self.generated_attacks = pd.concat([self.generated_attacks, _df])
         self._scenario_id += 1
-        self.seed_offset += 1
 
     def generate_attacks(self, testing_mode: bool, debug_mode: bool):
         """Generates SQL injection attacks for all templates using multiple techniques.

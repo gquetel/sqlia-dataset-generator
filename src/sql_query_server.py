@@ -34,6 +34,7 @@ class TemplatedSQLServer:
         self.httpd = httpd
         logger.info(f"Endpoints available at http://localhost:{self.port}/")
 
+
     def stop_server(self):
         self.httpd.shutdown()
         self.httpd.server_close()
