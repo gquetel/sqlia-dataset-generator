@@ -447,7 +447,7 @@ class sqlmapGenerator:
 
         # Fetch retcode of exploit phase to set it to recon one.
         sqlmap_status = _df_exploit.iloc[0]["sqlmap_status"]
-        _df_exploit["sqlmap_status"] = sqlmap_status
+        _df_recon["sqlmap_status"] = sqlmap_status
 
         # Merge df of both steps and set all remaining columns.
         _df = pd.concat([_df_recon, _df_exploit])
