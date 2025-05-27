@@ -237,11 +237,13 @@ class CustomRF_Li:
                 "attack_status",
                 "attack_stage", 
                 "tamper_method", 
+                "sqlmap_status", # TODO REMOVE
             ],
             axis=1,
             inplace=True,
             errors="ignore",
         )
+
         return df_pped, labels
 
     def train_model(
