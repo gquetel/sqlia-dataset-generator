@@ -216,7 +216,16 @@ class DatasetBuilder:
         _df_all_templates = self.get_all_templates()
         # Only keep those which match templates_list:
         _dft = _df_all_templates[_df_all_templates["ID"].isin(templates_list)].copy()
-        self._df_templates_n = _dft.sample(n=n_n, replace=True, weights="proportion")
+
+        # We should not sample given "proportion" directly, we should normalize based on 
+        # the number of templates for that statement type (given by column statement_type)
+
+        type_counts = _dft.groupby('statement_type').size()
+        _dft['normalized_weight'] = _dft.apply(
+            lambda row: row['proportion'] / type_counts[row['statement_type']], 
+            axis=1
+        )
+        self._df_templates_n = _dft.sample(n=n_n, replace=True, weights="normalized_weight")
 
     def generate_normal_queries(self):
         # Iterate over placeholders, and payload clause for type
