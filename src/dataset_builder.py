@@ -177,7 +177,7 @@ class DatasetBuilder:
 
         self.df = pd.concat([_df_test, _df_train])
 
-    def _augment_test_set_normal_queries(self, do_syn_check : bool):
+    def _augment_test_set_normal_queries(self, do_syn_check: bool):
         """We augment the number of normal queries in test set."""
         atk_ratio = config_parser.get_attacks_ratio(self.config)
 
@@ -186,12 +186,12 @@ class DatasetBuilder:
         ].shape[0]
         target_n_normal_test = int(n_attack_test_set / atk_ratio)
 
-        # Here, we upsample from: 
+        # Here, we upsample from:
         # - all templates used to generate attacks (self.templates)
         # - Plus those sampled by  self.select_templates to be considered as normal
         #   only templates.
         # - Plus the administrative queries
-        
+
         l_normal_templates = (
             list(self.templates["ID"].unique())
             + list(self.df_tno["ID"].unique())
@@ -217,17 +217,18 @@ class DatasetBuilder:
         # Only keep those which match templates_list:
         _dft = _df_all_templates[_df_all_templates["ID"].isin(templates_list)].copy()
 
-        # We should not sample given "proportion" directly, we should normalize based on 
+        # We should not sample given "proportion" directly, we should normalize based on
         # the number of templates for that statement type (given by column statement_type)
 
-        type_counts = _dft.groupby('statement_type').size()
-        _dft['normalized_weight'] = _dft.apply(
-            lambda row: row['proportion'] / type_counts[row['statement_type']], 
-            axis=1
+        type_counts = _dft.groupby("statement_type").size()
+        _dft["normalized_weight"] = _dft.apply(
+            lambda row: row["proportion"] / type_counts[row["statement_type"]], axis=1
         )
-        self._df_templates_n = _dft.sample(n=n_n, replace=True, weights="normalized_weight")
+        self._df_templates_n = _dft.sample(
+            n=n_n, replace=True, weights="normalized_weight"
+        )
 
-    def generate_normal_queries(self, do_syn_check : bool):
+    def generate_normal_queries(self, do_syn_check: bool):
         # Iterate over placeholders, and payload clause for type
         # Randomly choose a value in dict for that placeholder
         # And encapsulate based on type
@@ -237,11 +238,11 @@ class DatasetBuilder:
             all_placeholders = _extract_params(template=template_row.template)
 
             # template_row.payload_type is na when no input needs filling.
-            if(not pd.isna(template_row.payload_type)):
+            if not pd.isna(template_row.payload_type):
                 all_types = template_row.payload_type.split()
             else:
                 all_types = []
-            
+
             # print(all_types,all_placeholders)
             assert len(all_types) == len(all_placeholders)
             schema_name = template_row.ID.split("-")[0]
@@ -275,11 +276,11 @@ class DatasetBuilder:
                         query = query.replace(f"{{{placeholder}}}", f"{filler}", 1)
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
-            
+
             if do_syn_check:
                 if not self._verify_syntactic_validity_query(query=query):
                     raise ValueError("Failed normal query: ", query)
-                
+
             generated_normal_queries.append(
                 {
                     "full_query": query,
@@ -342,7 +343,7 @@ class DatasetBuilder:
 
     def build(self, args):
         testing_mode = args.testing
-        debug_mode = args.debug 
+        debug_mode = args.debug
         do_syn_check = not args.no_syn_check
 
         train_size = 0.7

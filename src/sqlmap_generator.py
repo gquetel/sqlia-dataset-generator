@@ -451,7 +451,7 @@ class sqlmapGenerator:
 
         # Template's number is reduced, we also only consider the error technique.
         if testing_mode:
-            techniques = {"error": "--technique=Q --users "}
+            techniques = {"error": "--technique=E --users "}
 
         for template in self.templates:
             for i in techniques.items():
