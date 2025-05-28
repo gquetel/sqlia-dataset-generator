@@ -48,6 +48,14 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="Enable debug mode, output will be VERY verbose.",
     )
+
+    parser.add_argument(
+        "--no-syn-check",
+        action="store_true",
+        help="The correct syntax of normal queries will not be verified, this speed up their generation.",
+    )
+
+
     return parser.parse_args()
 
 
@@ -65,7 +73,7 @@ def main():
     config = init_config(args)
 
     db = DatasetBuilder(config)
-    db.build(args.testing,args.debug)
+    db.build(args)
     db.save()
 
 

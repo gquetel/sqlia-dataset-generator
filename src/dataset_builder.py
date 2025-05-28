@@ -177,7 +177,7 @@ class DatasetBuilder:
 
         self.df = pd.concat([_df_test, _df_train])
 
-    def _augment_test_set_normal_queries(self):
+    def _augment_test_set_normal_queries(self, do_syn_check : bool):
         """We augment the number of normal queries in test set."""
         atk_ratio = config_parser.get_attacks_ratio(self.config)
 
@@ -201,7 +201,7 @@ class DatasetBuilder:
         self.populate_normal_templates(
             n_n=target_n_normal_test, templates_list=l_normal_templates
         )
-        self.generate_normal_queries()
+        self.generate_normal_queries(do_syn_check)
         # Now all queries without a split value should go to test set
         self.df.loc[self.df["split"].isna(), "split"] = "test"
 
@@ -227,7 +227,7 @@ class DatasetBuilder:
         )
         self._df_templates_n = _dft.sample(n=n_n, replace=True, weights="normalized_weight")
 
-    def generate_normal_queries(self):
+    def generate_normal_queries(self, do_syn_check : bool):
         # Iterate over placeholders, and payload clause for type
         # Randomly choose a value in dict for that placeholder
         # And encapsulate based on type
@@ -276,10 +276,10 @@ class DatasetBuilder:
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
             
-            # Append query, template ID and label to dataset.
-            if not self._verify_syntactic_validity_query(query=query):
-                raise ValueError("Failed normal query: ", query)
-
+            if do_syn_check:
+                if not self._verify_syntactic_validity_query(query=query):
+                    raise ValueError("Failed normal query: ", query)
+                
             generated_normal_queries.append(
                 {
                     "full_query": query,
@@ -340,7 +340,11 @@ class DatasetBuilder:
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
 
-    def build(self, testing_mode: bool, debug_mode: bool):
+    def build(self, args):
+        testing_mode = args.testing
+        debug_mode = args.debug 
+        do_syn_check = not args.no_syn_check
+
         train_size = 0.7
 
         # First, sample queries templates according to scenario.
@@ -360,10 +364,10 @@ class DatasetBuilder:
             + list(self.df_tadmin["ID"].unique())
         )
         self.populate_normal_templates(self._n_attacks, l_normal_templates)
-        self.generate_normal_queries()
+        self.generate_normal_queries(do_syn_check)
 
         self._add_split_column_include(train_size=train_size)
-        self._augment_test_set_normal_queries()
+        self._augment_test_set_normal_queries(do_syn_check)
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
