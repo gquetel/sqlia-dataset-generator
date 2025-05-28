@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Literal
 from matplotlib import pyplot as plt
+from sklearn.datasets import make_classification
 from sklearn.metrics import RocCurveDisplay, roc_curve, auc
 import numpy as np
 import random
@@ -160,6 +161,7 @@ def test_model_separating_techniques(model, df_test: pd.DataFrame, model_name: s
     fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}.png"
     plt.savefig(fp_fig)
 
+
 def my_plot_tree(tree_model):
     n_leaves = tree_model.clf.get_n_leaves()
     w = np.sqrt(n_leaves * 10)
@@ -179,6 +181,39 @@ def my_plot_tree(tree_model):
     plt.savefig(_full_path, dpi=200)
     logger.info(f"Saved decision tree plot at {_full_path}. ")
     plt.clf()
+
+
+def plot_curves_plt(labels, l_preds: list, l_model_names: list):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for preds, model_name in zip(l_preds, l_model_names):
+        preds = preds[:, 1]
+        fpr, tpr, thresholds = roc_curve(labels, preds)
+        roc_auc = auc(fpr, tpr)
+        
+        
+        display = RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=roc_auc, 
+                                estimator_name=f"{model_name}")
+        display.plot(ax=ax)  # Plot on the same axis
+    
+    # Add reference line
+    ax.plot([0, 1], [0, 1], 'k--', alpha=0.6, label='Random Classifier')
+    ax.legend()
+    ax.set_title('ROC Curves Comparison')
+    ax.grid(True, alpha=0.3)
+    
+    plt.savefig(project_paths.output_path + "roc_curves.png")
+    
+
+
+def plot_curve_plt(model, df_test: pd.DataFrame, model_name: str):
+    labels, ppreds = model.predict_proba(df_test)
+    ppreds = ppreds[:, 1]
+    fpr, tpr, thresholds = roc_curve(labels, ppreds)
+    roc_auc = auc(fpr, tpr)
+    display = RocCurveDisplay(
+        fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=f"{model_name}"
+    )
+    display.plot()
 
 
 def plot_roc_curve_plotly(model, df_test: pd.DataFrame, model_name: str):
@@ -210,19 +245,22 @@ def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
     model.train_model(df=df_train, model_name=model_name)
     labels, preds = model.predict(df_test)
-
+    
     accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
         labels.tolist(),
         preds.tolist(),
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
+    fpr, tpr, thresholds = roc_curve(labels, preds)
+    print(fpr,thresholds)
 
     test_model_separating_techniques(
         model=model, df_test=df_test, model_name=model_name
     )
 
-    plot_roc_curve_plotly(model=model, df_test=df_test, model_name=model_name)
+    # For AUC plot
+    return model.predict_proba(df=df_test)
 
 
 def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -243,7 +281,8 @@ def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
         model=model, df_test=df_test, model_name=model_name
     )
 
-    plot_roc_curve_plotly(model=model, df_test=df_test, model_name=model_name)
+    # For AUC plot
+    return model.predict_proba(df=df_test)
 
 
 def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -263,7 +302,8 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
         model=model, df_test=df_test, model_name=model_name
     )
 
-    plot_roc_curve_plotly(model=model, df_test=df_test, model_name=model_name)
+    # For AUC plot
+    return model.predict_proba(df=df_test)
 
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -275,9 +315,15 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         f"Testing - number of attacks {len(df_test[df_test['label'] == 1])}"
         f" and number of normals {len(df_test[df_test['label'] == 0])}"
     )
-    train_rf_li(df_train, df_test)
-    train_rf_cv(df_train=df_train, df_test=df_test)
-    train_dt_li(df_train=df_train, df_test=df_test)
+
+    _, ppreds_li = train_rf_li(df_train, df_test)
+    labels, ppreds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
+    
+    plot_curves_plt(
+        labels=labels,
+        l_preds=[ppreds_li, ppreds_cv],
+        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+    )
 
 
 if __name__ == "__main__":
@@ -303,7 +349,6 @@ if __name__ == "__main__":
             "tamper_method": str,
         },
     )
-    
 
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
