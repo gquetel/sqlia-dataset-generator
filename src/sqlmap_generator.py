@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 import mysql.connector
+import re
 
 import random
 
@@ -206,6 +207,33 @@ class sqlmapGenerator:
         e_str += '" '
         return e_str
 
+    def get_attack_payloads(self, queries: list, template_info: dict) -> list:
+        """Extract sqlmap generated payloads from queries given the orignal template.
+
+        Args:
+            queries (list): List of queries to extract payloads from
+            template_info (dict): template
+
+        Returns:
+            list: sqlmap-generated payloads
+        """
+        template = template_info["template"]
+
+        # We construct a list of the fixed parts to remove from queries
+        param_names = re.findall(r"(\{[-a-zA-Z_]+\})", template)
+        regex_pattern = "|".join(map(re.escape, param_names))
+        fixed_parts = re.split(regex_pattern, template)
+        fixed_parts = [f for f in fixed_parts if f != ""]
+        res = []
+
+        for q in queries:
+            _p = q
+            for f in fixed_parts:
+                _p = _p.replace(f, " ")
+            res.append(_p)
+
+        return res
+
     def perform_recognition(
         self,
         url: str,
@@ -213,6 +241,7 @@ class sqlmapGenerator:
         params: list[str],
         schema_name: str,
         debug_mode: bool,
+        template_info: dict,
     ) -> pd.DataFrame:
         """Executes the reconnaissance phase of an SQL injection attack using SQLMap.
 
@@ -240,7 +269,6 @@ class sqlmapGenerator:
         default_query = self.get_default_query_for_path(url=url)
 
         # Columns that are the same for all sqlmap calls for this template.
-        malicious_input = ""  # TODO
         label = 1
 
         for i, param in enumerate(params):
@@ -274,7 +302,7 @@ class sqlmapGenerator:
             recon_queries = self.sqlc.get_and_empty_sent_queries()
             full_queries = list(filter(lambda a: a != default_query, recon_queries))
             attack_status = "success" if retcode == 0 else "failure"
-
+            attack_payloads = self.get_attack_payloads(full_queries, template_info)
             _df = pd.concat(
                 [
                     _df,
@@ -282,10 +310,10 @@ class sqlmapGenerator:
                         {
                             "full_query": full_queries,
                             "label": label,
-                            "attack_payload": malicious_input,
+                            "user_inputs": attack_payloads,
                             "attack_stage": "recon",
                             "tamper_method": tamper_script,
-                            "attack_status" : attack_status
+                            "attack_status": attack_status,
                             # "attacked_parameter": param, # TODO ?
                         }
                     ),
@@ -295,7 +323,7 @@ class sqlmapGenerator:
         return _df
 
     def perform_exploit(
-        self, url: str, settings_tech: str, debug_mode: bool
+        self, url: str, settings_tech: str, debug_mode: bool, template_info: dict
     ) -> pd.DataFrame:
         """Executes the exploitation phase of an SQL injection attack using SQLMap.
 
@@ -317,7 +345,7 @@ class sqlmapGenerator:
         # override the payloads injected by sqlmap. Since we cannot know for certain
         # which parameter worked during recon, we might override the successfull
         # parameter, making the attack fail.
-        
+
         # I also don't want to spend any more time on adding variation on parameters
         # this is not the priority.
 
@@ -339,7 +367,8 @@ class sqlmapGenerator:
         default_query = self.get_default_query_for_path(url=url)
         full_queries = list(filter(lambda a: a != default_query, exploit_queries))
 
-        malicious_input = ""  # TODO
+        attack_payloads = self.get_attack_payloads(full_queries, template_info)
+
         label = 1
         attack_status = "success" if retcode == 0 else "failure"
 
@@ -347,7 +376,7 @@ class sqlmapGenerator:
             {
                 "full_query": full_queries,
                 "label": label,
-                "attack_payload": malicious_input,
+                "user_inputs": attack_payloads,
                 "attack_stage": "exploit",
                 "attack_status": attack_status,
                 "tamper_method": tamper_script,
@@ -392,6 +421,7 @@ class sqlmapGenerator:
             params=template_info["placeholders"],
             schema_name=schema_name,
             debug_mode=debug_mode,
+            template_info=template_info,
         )
 
         # Variables independant of attack_status:
@@ -399,27 +429,34 @@ class sqlmapGenerator:
         template_id = template_info["ID"]
         _df_recon["attack_desc"] = f"Recognition payload using technique {name_tech}"
 
-        # If any recognition sqlmap attack succeeded, we can find at least a row where 
+        # If any recognition sqlmap attack succeeded, we can find at least a row where
         # `attack_status` is set to success in _df_recon.
-        if(_df_recon["attack_status"] == "success").any():
+        if (_df_recon["attack_status"] == "success").any():
             # At least a vulnerable endpoint has been found.
             # Start exploit
             _df_exploit = self.perform_exploit(
-                url=url, settings_tech=settings_tech, debug_mode=debug_mode
+                url=url,
+                settings_tech=settings_tech,
+                debug_mode=debug_mode,
+                template_info=template_info,
             )
-            
-            # This is anormal: 
+
+            # This is anormal:
             if _df_exploit.iloc[0]["attack_status"] == "failure":
-                logger.critical(f"perform_attack: An vulnerable endpoint was found" \
-                                f" but exploit failed.")
-            
-            _df_exploit["attack_desc"] = f"Exploitation payload using technique {name_tech}"
+                logger.critical(
+                    f"perform_attack: An vulnerable endpoint was found"
+                    f" but exploit failed."
+                )
+
+            _df_exploit["attack_desc"] = (
+                f"Exploitation payload using technique {name_tech}"
+            )
             _df = pd.concat([_df_recon, _df_exploit])
 
-        else: 
+        else:
             # No vulnerable endpoint has been found, do not launch exploit.
             _df = _df_recon
-        
+
         _df["statement_type"] = template_info["statement_type"]
         _df["query_template_id"] = template_id
         _df["attack_id"] = atk_id

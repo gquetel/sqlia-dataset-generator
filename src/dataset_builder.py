@@ -249,6 +249,7 @@ class DatasetBuilder:
 
             # Replace 1 by 1 all placeholders by a randomly choosen dict value
             query = template_row.template
+            user_inputs = []
             for placeholder, type in zip(all_placeholders, all_types):
                 # Remove placeholder's artificial int suffix:
                 placeholder = placeholder.rstrip("123456789")
@@ -276,18 +277,19 @@ class DatasetBuilder:
                         query = query.replace(f"{{{placeholder}}}", f"{filler}", 1)
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
+                user_inputs.append(filler)
 
             if do_syn_check:
                 if not self._verify_syntactic_validity_query(query=query):
                     raise ValueError("Failed normal query: ", query)
-
+            # TODO: user_inputs
             generated_normal_queries.append(
                 {
                     "full_query": query,
                     "label": 0,
                     "statement_type": template_row.statement_type,
                     "query_template_id": template_row.ID,
-                    "attack_payload": None,
+                    "user_inputs": " ".join(user_inputs),
                     "attack_id": None,
                     "attack_technique": None,
                     "attack_desc": None,

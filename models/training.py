@@ -339,7 +339,7 @@ if __name__ == "__main__":
             "label": int,
             "statement_type": str,
             "query_template_id": str,
-            "attack_payload": str,
+            "user_inputs": str,
             "attack_id": str,
             "attack_technique": str,
             "attack_desc": str,

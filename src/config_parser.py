@@ -3,7 +3,6 @@ from fractions import Fraction
 
 
 def get_mysql_info(config: configparser.ConfigParser):
-
     user = config.get("MYSQL", "user")
     pwd = config.get("MYSQL", "password")
     socket_path = config.get("MYSQL", "socket_path")

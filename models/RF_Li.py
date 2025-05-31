@@ -229,7 +229,7 @@ class CustomRF_Li:
             + [
                 "statement_type",
                 "query_template_id",
-                "attack_payload",
+                "user_inputs",
                 "attack_id",
                 "attack_technique",
                 "split",
@@ -285,7 +285,7 @@ class CustomDT_Li:
             + [
                 "statement_type",
                 "query_template_id",
-                "attack_payload",
+                "user_inputs",
                 "attack_id",
                 "attack_technique",
                 "split",
