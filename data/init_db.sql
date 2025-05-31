@@ -1,3 +1,8 @@
+-- Execute as root on database 
+DROP DATABASE IF EXISTS dataset;
+DROP USER IF EXISTS 'tata'@'localhost';
+FLUSH PRIVILEGES;
+
 create database dataset;
 use dataset; 
 
