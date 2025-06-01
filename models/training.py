@@ -75,7 +75,8 @@ GENERIC = DotDict(
 )
 
 # Bootstrap a custom object path.
-project_paths = ProjectPaths(GENERIC.BASE_PATH)
+# project_paths = ProjectPaths(GENERIC.BASE_PATH)
+project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
 logger = logging.getLogger(__name__)
 
 
@@ -130,27 +131,34 @@ def print_and_ret_metrics(
 
     return accuracy, f1, precision, recall, fpr
 
+def plot_confusion_matrices_by_technique(
+    df_test: pd.DataFrame, model_name: str, suffix: str = ""
+):
+    """Compute confusion matrices from dataframe with preds.
 
-def test_model_separating_techniques(model, df_test: pd.DataFrame, model_name: str):
+    Args:
+        model (_type_): _description_
+        df_test (pd.DataFrame): Dataframe with columns 'label', 'attack_technique'
+            and 'preds'
+        model_name (str): _description_
+    """
     techniques = (
         df_test.loc[df_test["label"] == 1, "attack_technique"].unique().tolist()
     )
     # techniques holds all attack techniques in test set.
     # We iterate over them to compute confusion matrices
-
     fig, axes = plt.subplots(
         nrows=1, ncols=len(techniques), figsize=(5 * len(techniques), 10)
     )
     if len(techniques) == 1:
         axes = [axes]  # allows subscription
     for i, technique in enumerate(techniques):
-        subset_df_test = pd.concat(
-            [
-                df_test[df_test["label"] == 0],
-                df_test[df_test["attack_technique"] == technique],
-            ]
-        )
-        labels, preds = model.predict(subset_df_test)
+        # Create boolean mask for the subset we want
+        mask = (df_test["label"] == 0) | (df_test["attack_technique"] == technique)
+        
+        labels = df_test.loc[mask, "label"]
+        preds = df_test.loc[mask, "preds"]
+        
         axes[i].set_title(f"{technique} technique")
         ConfusionMatrixDisplay.from_predictions(
             y_true=labels,
@@ -158,7 +166,7 @@ def test_model_separating_techniques(model, df_test: pd.DataFrame, model_name: s
             ax=axes[i],
             colorbar=(i == len(techniques) - 1),
         )
-    fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}.png"
+    fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}{suffix}.png"
     plt.savefig(fp_fig)
 
 
@@ -182,38 +190,32 @@ def my_plot_tree(tree_model):
     logger.info(f"Saved decision tree plot at {_full_path}. ")
     plt.clf()
 
-
 def plot_curves_plt(labels, l_preds: list, l_model_names: list):
     fig, ax = plt.subplots(figsize=(8, 6))
+
     for preds, model_name in zip(l_preds, l_model_names):
-        preds = preds[:, 1]
+
+        if isinstance(preds, list):
+            preds = np.array(preds)[:, 1]
+        elif(isinstance(preds,pd.Series)):
+            preds = preds.apply(lambda x: x[1])
+        else:
+            preds = preds[:, 1]
         fpr, tpr, thresholds = roc_curve(labels, preds)
         roc_auc = auc(fpr, tpr)
-        
-        
-        display = RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=roc_auc, 
-                                estimator_name=f"{model_name}")
+
+        display = RocCurveDisplay(
+            fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=f"{model_name}"
+        )
         display.plot(ax=ax)  # Plot on the same axis
-    
+
     # Add reference line
-    ax.plot([0, 1], [0, 1], 'k--', alpha=0.6, label='Random Classifier')
+    ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
     ax.legend()
-    ax.set_title('ROC Curves Comparison')
+    ax.set_title("ROC Curves Comparison")
     ax.grid(True, alpha=0.3)
-    
+
     plt.savefig(project_paths.output_path + "roc_curves.png")
-    
-
-
-def plot_curve_plt(model, df_test: pd.DataFrame, model_name: str):
-    labels, ppreds = model.predict_proba(df_test)
-    ppreds = ppreds[:, 1]
-    fpr, tpr, thresholds = roc_curve(labels, ppreds)
-    roc_auc = auc(fpr, tpr)
-    display = RocCurveDisplay(
-        fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=f"{model_name}"
-    )
-    display.plot()
 
 
 def plot_roc_curve_plotly(model, df_test: pd.DataFrame, model_name: str):
@@ -236,75 +238,75 @@ def plot_roc_curve_plotly(model, df_test: pd.DataFrame, model_name: str):
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     fig.update_xaxes(constrain="domain")
     fp_fig = f"{project_paths.output_path}roc_score_{model_name}.png"
-
     fig.write_image(fp_fig)
 
+def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
+    # 0 => pped + original columns
+    df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
+
+    # 1 => Probas (ppeds only)
+    # Warning: having this variable and df_pped is VERY memory consuming
+    # for CountVectorizer.
+    df_pped_wout_og_cols = df_pped.drop(df_test.columns.to_list(), axis=1)
+    probas = model.clf.predict_proba(df_pped_wout_og_cols.to_numpy())
+
+    # 2 => Preds
+    preds = np.argmax(probas, axis=1)
+    df_pped["probas"] = probas.tolist()
+    df_pped["preds"] = preds
+
+    # 3 => print_and_ret_metrics all
+    _, _, _, _, _ = print_and_ret_metrics(
+        df_pped["label"],
+        df_pped["preds"],
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    # 4 =>  print_and_ret_metrics challenging only
+    df_chall = df_pped[df_pped["template_split"] == "challenging"]
+    logger.info("Metrics for challenging set only:")
+    _, _, _, _, _ = print_and_ret_metrics(
+        df_chall["label"],
+        df_chall["preds"],
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    # 5 =>  print_and_ret_metrics original only
+    df_og = df_pped[df_pped["template_split"] == "original"]
+    logger.info("Metrics for original set only:")
+    _, _, _, _, _ = print_and_ret_metrics(
+        df_og["label"].to_list(),
+        df_og["preds"].to_list(),
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    # 6 => Confusion matrix all
+    # This function needs the dataframe with the preds and the original
+    # columns information (attack_technique).
+    plot_confusion_matrices_by_technique(df_test=df_pped, model_name=model_name)
+
+    # 7 => Confusion matrix challenging
+    plot_confusion_matrices_by_technique(
+        df_test=df_chall, model_name=model_name, suffix="_challenge"
+    )
+
+    # For AUC plot
+    return df_pped["label"], df_pped["probas"]
 
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_RF"
     model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
     model.train_model(df=df_train, model_name=model_name)
-    labels, preds = model.predict(df_test)
-    
-    accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
-        labels.tolist(),
-        preds.tolist(),
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
-    )
-    fpr, tpr, thresholds = roc_curve(labels, preds)
-    print(fpr,thresholds)
-
-    test_model_separating_techniques(
-        model=model, df_test=df_test, model_name=model_name
-    )
-
-    # For AUC plot
-    return model.predict_proba(df=df_test)
-
-
-def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Li-LSyn_DT"
-    model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
-    model.train_model(df=df_train, model_name=model_name)
-    labels, preds = model.predict(df_test)
-
-    accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
-        labels.tolist(),
-        preds.tolist(),
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
-    )
-    my_plot_tree(model)
-
-    test_model_separating_techniques(
-        model=model, df_test=df_test, model_name=model_name
-    )
-
-    # For AUC plot
-    return model.predict_proba(df=df_test)
-
+    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer_RF"
     model = CustomRF_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
     model.train_model(df=df_train, model_name=model_name)
-    labels, preds = model.predict(df_test)
-
-    accuracy, f1, precision, recall, fpr = print_and_ret_metrics(
-        labels.tolist(),
-        preds.tolist(),
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
-    )
-
-    test_model_separating_techniques(
-        model=model, df_test=df_test, model_name=model_name
-    )
-
-    # For AUC plot
-    return model.predict_proba(df=df_test)
-
+    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     logger.info(
@@ -318,7 +320,7 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
     _, ppreds_li = train_rf_li(df_train, df_test)
     labels, ppreds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
-    
+
     plot_curves_plt(
         labels=labels,
         l_preds=[ppreds_li, ppreds_cv],
@@ -333,6 +335,7 @@ if __name__ == "__main__":
 
     df = pd.read_csv(
         project_paths.dataset_path,
+        # "/home/gquetel/repos/sqlia-dataset/dataset.csv",
         # dtype is specified to prevent a DtypeWarning
         dtype={
             "full_query": str,
@@ -347,10 +350,11 @@ if __name__ == "__main__":
             "attack_status": str,
             "attack_stage": str,
             "tamper_method": str,
-            "template_split" : str,
+            "template_split": str,
         },
     )
 
+    # df = df.sample(000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
     # from sklearn.model_selection import train_test_split

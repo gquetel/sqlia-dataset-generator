@@ -38,13 +38,24 @@ class CustomRF_CountVectorizer:
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
         return pp_queries, labels
 
-    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
-
-        df_pped = df.copy()
-        labels = np.array(df_pped["label"])
-        pp_queries = self.vectorizer.transform(df_pped["full_query"])
-
-        return pp_queries, labels
+    def preprocess_for_preds(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        labels = np.array(df["label"])
+        pp_queries = self.vectorizer.transform(df["full_query"])
+        
+        if drop_og_columns:
+            return pp_queries, labels
+        
+        pp_queries_df = pd.DataFrame(pp_queries.toarray())
+        
+        df_copy = df.copy().reset_index(drop=True)
+        pp_queries_df = pp_queries_df.reset_index(drop=True)
+        
+        df_pped = pd.concat([df_copy, pp_queries_df], axis=1)
+        
+        return df_pped, labels
+    
 
     def train_model(
         self,

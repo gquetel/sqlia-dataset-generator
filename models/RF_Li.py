@@ -7,9 +7,10 @@ from sklearn.tree import DecisionTreeClassifier
 
 logger = logging.getLogger(__name__)
 
+
 def extract_li_features(query: str) -> dict:
-    """ Extract SQL keywords and patterns from a query.
-    
+    """Extract SQL keywords and patterns from a query.
+
     Returns a dictionary of boolean flags indicating presence of various SQL features.
     """
     query_lower = query.lower()
@@ -92,15 +93,15 @@ def extract_li_features(query: str) -> dict:
 
 
 def get_escape_char_number(query: str) -> dict:
-    """  Count the number of hexadecimal and Unicode escape sequences in a string.
+    """Count the number of hexadecimal and Unicode escape sequences in a string.
 
     Args:
         query (str): The input string to analyze for escape sequences
 
     Returns:
         dict: A dictionary with two keys:
-        - 'c_hex': Number of hexadecimal escape sequences 
-        - 'c_unicode': Number of Unicode escape sequences 
+        - 'c_hex': Number of hexadecimal escape sequences
+        - 'c_unicode': Number of Unicode escape sequences
     """
     p_hex = re.compile(r"\\x[0-9a-fA-F]{2}")
     p_unicode = re.compile(r"\\u[0-9a-fA-F]{4}")
@@ -110,7 +111,7 @@ def get_escape_char_number(query: str) -> dict:
     return {"c_hex": c_hex, "c_unicode": c_unicode}
 
 
-def has_tautology(query):    
+def has_tautology(query):
     pattern = r"(\w+)=\1"
     if re.search(pattern=pattern, string=query) == None:
         return False
@@ -205,6 +206,7 @@ def pre_process_for_RF_li(df: pd.DataFrame) -> pd.DataFrame:
     df_lexrf = df_lexrf.apply(_get_RF_li_features_from_query, axis=1)
     return df_lexrf
 
+
 class CustomRF_Li:
     def __init__(self, GENERIC, max_depth: int | None = None):
         self.max_depth = max_depth
@@ -214,35 +216,39 @@ class CustomRF_Li:
         df_pped, labels = self.preprocess_for_preds(df)
         preds = self.clf.predict(df_pped.to_numpy())
         return labels, preds
-    
+
     def predict_proba(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         f_matrix, labels = self.preprocess_for_preds(df)
         ppreds = self.clf.predict_proba(f_matrix.to_numpy())
         return labels, ppreds
     
-    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_RF_li(df_pped)
-        df_pped.drop(
-            ["label", "full_query"]
-            + [
-                "statement_type",
-                "query_template_id",
-                "user_inputs",
-                "attack_id",
-                "attack_technique",
-                "split",
-                "attack_desc",
-                "attack_status",
-                "attack_stage", 
-                "tamper_method", 
-                "sqlmap_status", # TODO REMOVE
-            ],
-            axis=1,
-            inplace=True,
-            errors="ignore",
-        )
+
+        if drop_og_columns:
+            df_pped.drop(
+                ["label", "full_query"]
+                + [
+                    "statement_type",
+                    "query_template_id",
+                    "user_inputs",
+                    "attack_id",
+                    "attack_technique",
+                    "split",
+                    "attack_desc",
+                    "attack_status",
+                    "attack_stage",
+                    "tamper_method",
+                    "template_split",  
+                ],
+                axis=1,
+                inplace=True,
+                errors="ignore",
+            )
 
         return df_pped, labels
 
@@ -260,7 +266,8 @@ class CustomRF_Li:
         rf.fit(df_pped.to_numpy(), train_labels)
         self.clf = rf
 
-class CustomDT_Li: 
+
+class CustomDT_Li:
     def __init__(self, GENERIC, max_depth: int | None = None):
         self.max_depth = max_depth
         self.GENERIC = GENERIC
@@ -270,7 +277,7 @@ class CustomDT_Li:
         df_pped, labels = self.preprocess_for_preds(df)
         preds = self.clf.predict(df_pped.to_numpy())
         return labels, preds
-    
+
     def predict_proba(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         f_matrix, labels = self.preprocess_for_preds(df)
         ppreds = self.clf.predict_proba(f_matrix.to_numpy())
@@ -291,8 +298,8 @@ class CustomDT_Li:
                 "split",
                 "attack_desc",
                 "attack_status",
-                "attack_stage", 
-                "tamper_method", 
+                "attack_stage",
+                "tamper_method",
                 "template_split",
             ],
             axis=1,
