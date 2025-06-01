@@ -59,9 +59,9 @@ class sqlmapGenerator:
 
     def _run_pt_kill(self):
         ptkill_command = (
-            f"pt-kill --kill-query --user=root --password=root --interval 2"
+            f"pt-kill --kill-query --user=root --password=root --interval 1"
             f" --socket={self.sqlc.socket_path} --database "
-            f"{self.sqlc.database} --busy-time 5s --run-time 5s --match-all --print"
+            f"{self.sqlc.database} --busy-time 5s --run-time 10s --print"
         )
         logger.debug(f"{ptkill_command}")
         proc = Popen(
