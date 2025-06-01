@@ -347,6 +347,7 @@ if __name__ == "__main__":
             "attack_status": str,
             "attack_stage": str,
             "tamper_method": str,
+            "template_split" : str,
         },
     )
 

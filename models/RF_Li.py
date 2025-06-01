@@ -293,6 +293,7 @@ class CustomDT_Li:
                 "attack_status",
                 "attack_stage", 
                 "tamper_method", 
+                "template_split",
             ],
             axis=1,
             inplace=True,

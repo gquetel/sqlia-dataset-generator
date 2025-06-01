@@ -343,6 +343,17 @@ class DatasetBuilder:
     def _clean_cache_folder(self):
         shutil.rmtree("./cache/", ignore_errors=True)
 
+    def _add_template_split_info(self):
+        """Add a column which specify wether the sample comes from the 'original'
+        or the 'challenging' set of templates (the latter being those not seen during
+        training).
+        """
+        ids_challenging = self.df_templates_test["ID"].to_list()
+        self.df["template_split"] = "original"
+        self.df.loc[
+            self.df["query_template_id"].isin(ids_challenging), "template_split"
+        ] = "challenging"
+
     def build(self, args):
         testing_mode = args.testing
         debug_mode = args.debug
@@ -371,6 +382,8 @@ class DatasetBuilder:
 
         self._add_split_column_include(train_size=train_size)
         self._augment_test_set_normal_queries(do_syn_check)
+
+        self._add_template_split_info()
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
