@@ -16,11 +16,13 @@ import plotly.express as px
 
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
+    PrecisionRecallDisplay,
     accuracy_score,
     confusion_matrix,
     f1_score,
     precision_score,
     recall_score,
+    precision_recall_curve,
 )
 from sklearn.tree import plot_tree
 
@@ -75,8 +77,8 @@ GENERIC = DotDict(
 )
 
 # Bootstrap a custom object path.
-# project_paths = ProjectPaths(GENERIC.BASE_PATH)
-project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
+project_paths = ProjectPaths(GENERIC.BASE_PATH)
+# project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
 logger = logging.getLogger(__name__)
 
 
@@ -131,6 +133,7 @@ def print_and_ret_metrics(
 
     return accuracy, f1, precision, recall, fpr
 
+
 def plot_confusion_matrices_by_technique(
     df_test: pd.DataFrame, model_name: str, suffix: str = ""
 ):
@@ -155,10 +158,10 @@ def plot_confusion_matrices_by_technique(
     for i, technique in enumerate(techniques):
         # Create boolean mask for the subset we want
         mask = (df_test["label"] == 0) | (df_test["attack_technique"] == technique)
-        
+
         labels = df_test.loc[mask, "label"]
         preds = df_test.loc[mask, "preds"]
-        
+
         axes[i].set_title(f"{technique} technique")
         ConfusionMatrixDisplay.from_predictions(
             y_true=labels,
@@ -170,34 +173,44 @@ def plot_confusion_matrices_by_technique(
     plt.savefig(fp_fig)
 
 
-def my_plot_tree(tree_model):
-    n_leaves = tree_model.clf.get_n_leaves()
-    w = np.sqrt(n_leaves * 10)
-    h = np.sqrt(n_leaves * 10)
-    plt.figure(figsize=(w, h))
+def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    plt.title(f"Decision tree for {tree_model}")
-    _full_path = "".join(
-        [project_paths.output_path, "DP", tree_model.model_name, ".png"]
-    )
-    plot_tree(
-        tree_model.clf,
-        proportion=False,
-        feature_names=tree_model.feature_names,
-        fontsize=5,
-    )
-    plt.savefig(_full_path, dpi=200)
-    logger.info(f"Saved decision tree plot at {_full_path}. ")
-    plt.clf()
+    for preds, model_name in zip(l_preds, l_model_names):
+        # Process predictions to get probabilities
+        if isinstance(preds, list):
+            preds = np.array(preds)[:, 1]
+        elif isinstance(preds, pd.Series):
+            preds = preds.apply(lambda x: x[1])
+        else:
+            preds = preds[:, 1]
+        
+        precision, recall, _ = precision_recall_curve(labels, preds)
+        auc_pr = auc(recall, precision)
 
-def plot_curves_plt(labels, l_preds: list, l_model_names: list):
+        # Plot the curve
+        ax.plot(recall, precision, label=f"{model_name} (AUC = {auc_pr:.3f})")
+
+    # Customize plot
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title("AUPRC Comparison")
+    ax.legend()
+
+    ax.grid(True, alpha=0.3)  
+    
+    # plt.tight_layout()
+    plt.savefig(project_paths.output_path + "auprc_curves.png")
+
+
+def plot_roc_curves_plt(labels, l_preds: list, l_model_names: list):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     for preds, model_name in zip(l_preds, l_model_names):
 
         if isinstance(preds, list):
             preds = np.array(preds)[:, 1]
-        elif(isinstance(preds,pd.Series)):
+        elif isinstance(preds, pd.Series):
             preds = preds.apply(lambda x: x[1])
         else:
             preds = preds[:, 1]
@@ -240,10 +253,10 @@ def plot_roc_curve_plotly(model, df_test: pd.DataFrame, model_name: str):
     fp_fig = f"{project_paths.output_path}roc_score_{model_name}.png"
     fig.write_image(fp_fig)
 
+
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
-
     # 1 => Probas (ppeds only)
     # Warning: having this variable and df_pped is VERY memory consuming
     # for CountVectorizer.
@@ -254,7 +267,6 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     preds = np.argmax(probas, axis=1)
     df_pped["probas"] = probas.tolist()
     df_pped["preds"] = preds
-
     # 3 => print_and_ret_metrics all
     _, _, _, _, _ = print_and_ret_metrics(
         df_pped["label"],
@@ -296,17 +308,83 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # For AUC plot
     return df_pped["label"], df_pped["probas"]
 
+
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_RF"
     model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
     model.train_model(df=df_train, model_name=model_name)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
+
 def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer_RF"
     model = CustomRF_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
     model.train_model(df=df_train, model_name=model_name)
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+    df_test = df_test.copy().reset_index(drop=True)
+    # 0 => pped
+    f_matrix, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=True)
+
+    # 1 => Probas (ppeds only)
+    probas = model.clf.predict_proba(f_matrix)
+
+    # 2 => Preds
+    preds = np.argmax(probas, axis=1)
+
+    # 3 => print_and_ret_metrics all
+    _, _, _, _, _ = print_and_ret_metrics(
+        labels,
+        preds,
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    # 4 =>  print_and_ret_metrics challenging only
+    # To get challenging only, we need to fetch their indices:
+    # And then retrieve rows from labels and preds to be given
+    # to print_and_ret_metrics
+    ids_chall = df_test[df_test["template_split"] == "challenging"].index.tolist()
+
+    logger.info("Metrics for challenging set only:")
+    _, _, _, _, _ = print_and_ret_metrics(
+        labels[ids_chall],
+        preds[ids_chall],
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    # 5 =>  print_and_ret_metrics original only
+    ids_og = df_test[df_test["template_split"] == "original"].index.tolist()
+    logger.info("Metrics for original set only:")
+    _, _, _, _, _ = print_and_ret_metrics(
+        labels[ids_og],
+        preds[ids_og],
+        average=GENERIC.METRICS_AVERAGE_METHOD,
+        model=model_name,
+    )
+
+    # 6 => Confusion matrix all
+    # This function needs the dataframe with the preds and the original
+    # columns information (attack_technique). I want to keep the same function
+    # For both models, let's hack by creating the dataframe the function requires:
+    _df = pd.DataFrame(
+        {
+            "attack_technique": df_test["attack_technique"],
+            "label": labels,
+            "preds": preds,
+            "probas" : list(probas)
+        }
+    )
+    plot_confusion_matrices_by_technique(df_test=_df, model_name=model_name)
+
+    _df_chall = _df[df_test["template_split"] == "challenging"]
+    # 7 => Confusion matrix challenging
+    plot_confusion_matrices_by_technique(
+        df_test=_df_chall, model_name=model_name, suffix="_challenge"
+    )
+
+    # For AUC plot
+    return labels, probas
+
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     logger.info(
@@ -321,7 +399,13 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     _, ppreds_li = train_rf_li(df_train, df_test)
     labels, ppreds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
 
-    plot_curves_plt(
+    plot_roc_curves_plt(
+        labels=labels,
+        l_preds=[ppreds_li, ppreds_cv],
+        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+    )
+
+    plot_pr_curves_plt(
         labels=labels,
         l_preds=[ppreds_li, ppreds_cv],
         l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
@@ -354,7 +438,6 @@ if __name__ == "__main__":
         },
     )
 
-    # df = df.sample(000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
     # from sklearn.model_selection import train_test_split
