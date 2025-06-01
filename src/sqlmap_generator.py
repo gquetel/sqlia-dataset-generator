@@ -59,9 +59,9 @@ class sqlmapGenerator:
 
     def _run_pt_kill(self):
         ptkill_command = (
-            f"pt-kill --kill-query --user={self.sqlc.user} --password="
-            f"{self.sqlc.pwd} --socket={self.sqlc.socket_path} --database "
-            f"{self.sqlc.database} --busy-time 5s --run-time 2s --match-all --print"
+            f"pt-kill --kill-query --user=root --password=root --interval 2"
+            f" --socket={self.sqlc.socket_path} --database "
+            f"{self.sqlc.database} --busy-time 5s --run-time 5s --match-all --print"
         )
         logger.debug(f"{ptkill_command}")
         proc = Popen(
@@ -114,6 +114,8 @@ class sqlmapGenerator:
                     f"TRUNCATE call hanged for more than 10 seconds, the database might"
                     f" not be clean."
                 )
+            except mysql.connector.errors.DatabaseError as e:
+                logger.warning(f"TRUNCATE call failed: {str(e.msg)}")
 
         # Clear query cache
         _ = self.sqlc.get_and_empty_sent_queries()
