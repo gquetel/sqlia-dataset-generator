@@ -81,6 +81,7 @@ GENERIC = DotDict(
 project_paths = ProjectPaths(GENERIC.BASE_PATH)
 # project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
 logger = logging.getLogger(__name__)
+training_results = []
 
 
 def init_logging():
@@ -97,10 +98,10 @@ def init_logging():
     logging.basicConfig(level=logging.INFO, handlers=[lf, lstdo])
 
 
-def print_and_ret_metrics(
+def print_and_save_metrics(
     all_targets: list,
     all_predictions: list,
-    all_probas : list,
+    all_probas: np.ndarray,
     average: Literal["binary", "macro", "micro"] = "binary",
     model: str = "",
     silent: bool = False,
@@ -122,25 +123,38 @@ def print_and_ret_metrics(
     C = confusion_matrix(all_targets, all_predictions)
     TN, FP, _, _ = C.ravel()
     FPR = FP / (FP + TN)
-    fpr = f"{FPR* 100:.2f}%"
+    sfpr = f"{FPR* 100:.2f}%"
 
-    
-    all_probas = np.array(all_probas.to_list())
-    precision, recall, _ = precision_recall_curve(all_targets, all_probas[:,1], pos_label=1)
+    precision, recall, _ = precision_recall_curve(all_targets, all_probas[:, 1])
     auc_pr = auc(recall, precision)
 
-    plot_pr_curves_plt(all_targets,[all_probas],[model])
+    fpr, tpr, _ = roc_curve(all_targets, all_probas[:, 1])
+    auc_roc = auc(fpr, tpr)
 
+    # plot_pr_curves_plt(all_targets, [all_probas], [model], suffix=f"_{model}")
+    # plot_roc_curves_plt(all_targets, [all_probas], [model], suffix=f"_{model}")
     if not silent:
         logger.info(f"Metrics for {model}, using {average} average.")
         logger.info(f"Accuracy: {accuracy}")
         logger.info(f"F1 Score: {f1}")
         logger.info(f"Precision: {sprecision}")
         logger.info(f"Recall: {srecall}")
-        logger.info(f"False Positive Rate: {fpr}")
-        logger.info(f"AUPR : {auc_pr}")
+        logger.info(f"False Positive Rate: {sfpr}")
+        logger.info(f"AUPRC : {auc_pr:.4f}")
+        logger.info(f"ROC-AUC: {auc_roc:.4f}")
 
-    return accuracy, f1, precision, recall, fpr
+    training_results.append(
+        {
+            "model": model,
+            "fone": f1,
+            "accuracy": accuracy,
+            "precision": sprecision,
+            "recall": srecall,
+            "fpr": sfpr,
+            "auprc": f"{auc_pr:.4f}",
+            "rocauc": f"{auc_roc:.4f}",
+        }
+    )
 
 
 def plot_confusion_matrices_by_technique(
@@ -195,7 +209,7 @@ def plot_confusion_matrices_by_technique(
     plt.savefig(fp_fig)
 
 
-def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
+def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str = ""):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     for preds, model_name in zip(l_preds, l_model_names):
@@ -230,17 +244,19 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
     plt.savefig(project_paths.output_path + f"auprc_curves{suffix}.png")
 
 
-def plot_roc_curves_plt(labels : list, l_preds : list, l_model_names : list, suffix : str = ""):
+def plot_roc_curves_plt(
+    labels: list, l_preds: list, l_model_names: list, suffix: str = ""
+):
     fig, ax = plt.subplots(figsize=(8, 6))
-    for preds, model_name in zip(l_preds,l_model_names):
-        preds =  preds[:,1]
+    for preds, model_name in zip(l_preds, l_model_names):
+        preds = preds[:, 1]
         fpr, tpr, thresholds = roc_curve(labels, preds)
         roc_auc = auc(fpr, tpr)
 
         display = RocCurveDisplay(
             fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=f"{model_name}"
         )
-        display.plot(ax=ax) 
+        display.plot(ax=ax)
 
     ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
     ax.legend()
@@ -248,7 +264,6 @@ def plot_roc_curves_plt(labels : list, l_preds : list, l_model_names : list, suf
     ax.grid(True, alpha=0.3)
 
     plt.savefig(project_paths.output_path + f"roc_curves{suffix}.png")
-
 
 
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
@@ -265,31 +280,34 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     preds = np.argmax(probas, axis=1)
     df_pped["probas"] = probas.tolist()
     df_pped["preds"] = preds
-    # 3 => print_and_ret_metrics all
-    _, _, _, _, _ = print_and_ret_metrics(
+
+    # 3 => print_and_save_metrics all
+    print_and_save_metrics(
         df_pped["label"],
         df_pped["preds"],
+        probas,
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
 
-    # 4 =>  print_and_ret_metrics challenging only
+    # 4 =>  print_and_save_metrics challenging only
     df_chall = df_pped[df_pped["template_split"] == "challenging"]
     logger.info("Metrics for challenging set only:")
-    _, _, _, _, _ = print_and_ret_metrics(
+    print_and_save_metrics(
         df_chall["label"],
         df_chall["preds"],
-        df_chall["probas"],
+        np.array(df_chall["probas"].to_list()),
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
 
-    # 5 =>  print_and_ret_metrics original only
+    # 5 =>  print_and_save_metrics original only
     df_og = df_pped[df_pped["template_split"] == "original"]
     logger.info("Metrics for original set only:")
-    _, _, _, _, _ = print_and_ret_metrics(
-        df_og["label"].to_list(),
-        df_og["preds"].to_list(),
+    print_and_save_metrics(
+        df_og["label"],
+        df_og["preds"],
+        np.array(df_og["probas"].to_list()),
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
@@ -332,34 +350,37 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # 2 => Preds
     preds = np.argmax(probas, axis=1)
 
-    # 3 => print_and_ret_metrics all
-    _, _, _, _, _ = print_and_ret_metrics(
+    # 3 => print_and_save_metrics all
+    print_and_save_metrics(
         labels,
         preds,
+        probas,
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
 
-    # 4 =>  print_and_ret_metrics challenging only
+    # 4 =>  print_and_save_metrics challenging only
     # To get challenging only, we need to fetch their indices:
     # And then retrieve rows from labels and preds to be given
-    # to print_and_ret_metrics
+    # to print_and_save_metrics
     ids_chall = df_test[df_test["template_split"] == "challenging"].index.tolist()
 
     logger.info("Metrics for challenging set only:")
-    _, _, _, _, _ = print_and_ret_metrics(
+    print_and_save_metrics(
         labels[ids_chall],
         preds[ids_chall],
+        probas[ids_chall],
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
 
-    # 5 =>  print_and_ret_metrics original only
+    # 5 =>  print_and_save_metrics original only
     ids_og = df_test[df_test["template_split"] == "original"].index.tolist()
     logger.info("Metrics for original set only:")
-    _, _, _, _, _ = print_and_ret_metrics(
+    print_and_save_metrics(
         labels[ids_og],
         preds[ids_og],
+        probas[ids_og],
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
@@ -385,7 +406,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     )
 
     # For AUC plot
-    return  _df["label"], _df["probas"], _df["preds"]
+    return _df["label"], _df["probas"], _df["preds"]
 
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -401,26 +422,25 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     labels_li, probas_li, preds_li = train_rf_li(df_train, df_test)
     labels_cv, probas_cv, preds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
-    
+
     # We put all probas variable to same type / structure
     probas_li = np.vstack(probas_li.values)
-    probas_cv = np.vstack(probas_cv.values) 
+    probas_cv = np.vstack(probas_cv.values)
     assert np.array_equal(labels_li, labels_cv)
 
+    plot_pr_curves_plt(
+        labels=labels_li,
+        l_preds=[probas_li, probas_cv],
+        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+    )
 
-    # Dummy classifier to see behavior of plots on default data.
-    X, y = make_classification(n_classes=2, n_samples=len(labels_li), random_state=42)
-    clf = DummyClassifier()
-    clf.fit(X, y)
-    preds_dummy = clf.predict_proba(X)
-
-
-
-    # plot_pr_curves_plt(
-        # labels=labels_li,
-        # l_preds=[probas_li, probas_cv],
-        # l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
-    # )
+    plot_roc_curves_plt(
+        labels=labels_li,
+        l_preds=[probas_li, probas_cv],
+        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+    )
+    dfres = pd.DataFrame(training_results)
+    dfres.to_csv("output/results.csv", index=False)
 
 
 if __name__ == "__main__":
