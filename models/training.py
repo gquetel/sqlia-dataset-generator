@@ -100,6 +100,7 @@ def init_logging():
 def print_and_ret_metrics(
     all_targets: list,
     all_predictions: list,
+    all_probas : list,
     average: Literal["binary", "macro", "micro"] = "binary",
     model: str = "",
     silent: bool = False,
@@ -113,24 +114,31 @@ def print_and_ret_metrics(
     """
     accuracy = f"{accuracy_score(all_targets, all_predictions)* 100:.2f}%"
     f1 = f"{f1_score(all_targets, all_predictions, average=average)* 100:.2f}%"
-    precision = (
+    sprecision = (
         f"{precision_score(all_targets, all_predictions, average=average)* 100:.2f}%"
     )
-    recall = f"{recall_score(all_targets, all_predictions, average=average)* 100:.2f}%"
+    srecall = f"{recall_score(all_targets, all_predictions, average=average)* 100:.2f}%"
 
     C = confusion_matrix(all_targets, all_predictions)
     TN, FP, _, _ = C.ravel()
     FPR = FP / (FP + TN)
-
     fpr = f"{FPR* 100:.2f}%"
+
+    
+    all_probas = np.array(all_probas.to_list())
+    precision, recall, _ = precision_recall_curve(all_targets, all_probas[:,1], pos_label=1)
+    auc_pr = auc(recall, precision)
+
+    plot_pr_curves_plt(all_targets,[all_probas],[model])
 
     if not silent:
         logger.info(f"Metrics for {model}, using {average} average.")
         logger.info(f"Accuracy: {accuracy}")
         logger.info(f"F1 Score: {f1}")
-        logger.info(f"Precision: {precision}")
-        logger.info(f"Recall: {recall}")
+        logger.info(f"Precision: {sprecision}")
+        logger.info(f"Recall: {srecall}")
         logger.info(f"False Positive Rate: {fpr}")
+        logger.info(f"AUPR : {auc_pr}")
 
     return accuracy, f1, precision, recall, fpr
 
@@ -199,11 +207,16 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
         else:
             preds = preds[:, 1]
 
-        precision, recall, _ = precision_recall_curve(labels, preds,pos_label=1)
+        precision, recall, _ = precision_recall_curve(labels, preds, pos_label=1)
         auc_pr = auc(recall, precision)
 
         # Plot the curve
         ax.plot(recall, precision, label=f"{model_name} (AUC = {auc_pr:.3f})")
+
+    # y = prevalence
+    x = [0, 1]
+    y = [sum(labels) / len(labels)] * len(x)
+    ax.plot(x, y, label=f"Prevalence = {y[0]}")
 
     # Customize plot
     ax.set_xlabel("Recall")
@@ -214,7 +227,7 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
     ax.grid(True, alpha=0.3)
 
     # plt.tight_layout()
-    plt.savefig(project_paths.output_path + "auprc_curves.png")
+    plt.savefig(project_paths.output_path + f"auprc_curves{suffix}.png")
 
 
 def plot_roc_curves_plt(labels : list, l_preds : list, l_model_names : list, suffix : str = ""):
@@ -266,6 +279,7 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     _, _, _, _, _ = print_and_ret_metrics(
         df_chall["label"],
         df_chall["preds"],
+        df_chall["probas"],
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
@@ -290,6 +304,9 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         df_test=df_chall, model_name=model_name, suffix="_challenge"
     )
 
+    # sdf = df_pped.sort_values(by="probas")[["probas", "label"]]
+    # sdf["probas"] = sdf["probas"].apply(lambda x: x[1])
+    # sdf.to_csv("output/random.csv")
     # For AUC plot
     return df_pped["label"], df_pped["probas"], df_pped["preds"]
 
@@ -397,17 +414,13 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     clf.fit(X, y)
     preds_dummy = clf.predict_proba(X)
 
-    plot_roc_curves_plt(
-        labels=labels_li,
-        l_preds=[probas_li, probas_cv, preds_dummy],
-        l_model_names=["Manual Features and RF", "CountVectorizer and RF", "Random"],
-    )
 
-    plot_pr_curves_plt(
-        labels=labels_li,
-        l_preds=[probas_li, probas_cv, preds_dummy],
-        l_model_names=["Manual Features and RF", "CountVectorizer and RF", "Random"],
-    )
+
+    # plot_pr_curves_plt(
+        # labels=labels_li,
+        # l_preds=[probas_li, probas_cv],
+        # l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+    # )
 
 
 if __name__ == "__main__":
@@ -436,6 +449,7 @@ if __name__ == "__main__":
         },
     )
 
+    # df = df.sample(1000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
     train_models(df_train, df_test)
