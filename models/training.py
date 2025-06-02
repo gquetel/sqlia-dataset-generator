@@ -222,10 +222,10 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str =
             preds = preds[:, 1]
 
         precision, recall, _ = precision_recall_curve(labels, preds, pos_label=1)
-        auc_pr = auc(recall, precision)
+        auprc = auc(recall, precision)
 
         # Plot the curve
-        ax.plot(recall, precision, label=f"{model_name} (AUC = {auc_pr:.3f})")
+        ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
 
     # y = prevalence
     x = [0, 1]
@@ -251,12 +251,10 @@ def plot_roc_curves_plt(
     for preds, model_name in zip(l_preds, l_model_names):
         preds = preds[:, 1]
         fpr, tpr, thresholds = roc_curve(labels, preds)
-        roc_auc = auc(fpr, tpr)
+        auroc = auc(fpr, tpr)
 
-        display = RocCurveDisplay(
-            fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=f"{model_name}"
-        )
-        display.plot(ax=ax)
+        ax.plot(fpr,tpr, label=f"{model_name} (AUC = {auroc:.4f})")
+
 
     ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
     ax.legend()
