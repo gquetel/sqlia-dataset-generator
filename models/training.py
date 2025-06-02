@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 from matplotlib import pyplot as plt
 from sklearn.datasets import make_classification
+from sklearn.dummy import DummyClassifier
 from sklearn.metrics import RocCurveDisplay, roc_curve, auc
 import numpy as np
 import random
@@ -151,10 +152,9 @@ def plot_confusion_matrices_by_technique(
     # techniques holds all attack techniques in test set.
     # We iterate over them to compute confusion matrices
     fig, axes = plt.subplots(
-        nrows=1, ncols=len(techniques), figsize=(5 * len(techniques), 10)
+        nrows=1, ncols=len(techniques) + 1, figsize=(5 * len(techniques), 10)
     )
-    if len(techniques) == 1:
-        axes = [axes]  # allows subscription
+
     for i, technique in enumerate(techniques):
         # Create boolean mask for the subset we want
         mask = (df_test["label"] == 0) | (df_test["attack_technique"] == technique)
@@ -167,8 +167,22 @@ def plot_confusion_matrices_by_technique(
             y_true=labels,
             y_pred=preds,
             ax=axes[i],
-            colorbar=(i == len(techniques) - 1),
+            colorbar=False,
         )
+
+    # Plot full confusion matrix
+    i = len(techniques)
+    labels = df_test["label"]
+    preds = df_test["preds"]
+
+    axes[i].set_title(f"Total")
+
+    ConfusionMatrixDisplay.from_predictions(
+        y_true=labels,
+        y_pred=preds,
+        ax=axes[i],
+        colorbar=True,
+    )
     fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}{suffix}.png"
     plt.savefig(fp_fig)
 
@@ -184,8 +198,8 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
             preds = preds.apply(lambda x: x[1])
         else:
             preds = preds[:, 1]
-        
-        precision, recall, _ = precision_recall_curve(labels, preds)
+
+        precision, recall, _ = precision_recall_curve(labels, preds,pos_label=1)
         auc_pr = auc(recall, precision)
 
         # Plot the curve
@@ -197,66 +211,37 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list):
     ax.set_title("AUPRC Comparison")
     ax.legend()
 
-    ax.grid(True, alpha=0.3)  
-    
+    ax.grid(True, alpha=0.3)
+
     # plt.tight_layout()
     plt.savefig(project_paths.output_path + "auprc_curves.png")
 
 
-def plot_roc_curves_plt(labels, l_preds: list, l_model_names: list):
+def plot_roc_curves_plt(labels : list, l_preds : list, l_model_names : list, suffix : str = ""):
     fig, ax = plt.subplots(figsize=(8, 6))
-
-    for preds, model_name in zip(l_preds, l_model_names):
-
-        if isinstance(preds, list):
-            preds = np.array(preds)[:, 1]
-        elif isinstance(preds, pd.Series):
-            preds = preds.apply(lambda x: x[1])
-        else:
-            preds = preds[:, 1]
+    for preds, model_name in zip(l_preds,l_model_names):
+        preds =  preds[:,1]
         fpr, tpr, thresholds = roc_curve(labels, preds)
         roc_auc = auc(fpr, tpr)
 
         display = RocCurveDisplay(
             fpr=fpr, tpr=tpr, roc_auc=roc_auc, estimator_name=f"{model_name}"
         )
-        display.plot(ax=ax)  # Plot on the same axis
+        display.plot(ax=ax) 
 
-    # Add reference line
     ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
     ax.legend()
     ax.set_title("ROC Curves Comparison")
     ax.grid(True, alpha=0.3)
 
-    plt.savefig(project_paths.output_path + "roc_curves.png")
+    plt.savefig(project_paths.output_path + f"roc_curves{suffix}.png")
 
-
-def plot_roc_curve_plotly(model, df_test: pd.DataFrame, model_name: str):
-    labels, ppreds = model.predict_proba(df_test)
-    ppreds = ppreds[:, 1]
-    fpr, tpr, thresholds = roc_curve(labels, ppreds)
-
-    fig = px.area(
-        x=fpr,
-        y=tpr,
-        title=f"ROC Curve for model {model_name} (AUC={auc(fpr, tpr):.4f})",
-        labels=dict(x="False Positive Rate", y="True Positive Rate"),
-        width=1600,
-        height=1920,
-    )
-
-    # Random line
-    fig.add_shape(type="line", line=dict(dash="dash"), x0=0, x1=1, y0=0, y1=1)
-
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
-    fig.update_xaxes(constrain="domain")
-    fp_fig = f"{project_paths.output_path}roc_score_{model_name}.png"
-    fig.write_image(fp_fig)
 
 
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
+
     # 1 => Probas (ppeds only)
     # Warning: having this variable and df_pped is VERY memory consuming
     # for CountVectorizer.
@@ -306,7 +291,7 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     )
 
     # For AUC plot
-    return df_pped["label"], df_pped["probas"]
+    return df_pped["label"], df_pped["probas"], df_pped["preds"]
 
 
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -371,7 +356,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "attack_technique": df_test["attack_technique"],
             "label": labels,
             "preds": preds,
-            "probas" : list(probas)
+            "probas": list(probas),
         }
     )
     plot_confusion_matrices_by_technique(df_test=_df, model_name=model_name)
@@ -383,7 +368,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     )
 
     # For AUC plot
-    return labels, probas
+    return  _df["label"], _df["probas"], _df["preds"]
 
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -396,19 +381,32 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         f" and number of normals {len(df_test[df_test['label'] == 0])}"
     )
 
-    _, ppreds_li = train_rf_li(df_train, df_test)
-    labels, ppreds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
+    # Train models and get their output.
+    labels_li, probas_li, preds_li = train_rf_li(df_train, df_test)
+    labels_cv, probas_cv, preds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
+    
+    # We put all probas variable to same type / structure
+    probas_li = np.vstack(probas_li.values)
+    probas_cv = np.vstack(probas_cv.values) 
+    assert np.array_equal(labels_li, labels_cv)
+
+
+    # Dummy classifier to see behavior of plots on default data.
+    X, y = make_classification(n_classes=2, n_samples=len(labels_li), random_state=42)
+    clf = DummyClassifier()
+    clf.fit(X, y)
+    preds_dummy = clf.predict_proba(X)
 
     plot_roc_curves_plt(
-        labels=labels,
-        l_preds=[ppreds_li, ppreds_cv],
-        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+        labels=labels_li,
+        l_preds=[probas_li, probas_cv, preds_dummy],
+        l_model_names=["Manual Features and RF", "CountVectorizer and RF", "Random"],
     )
 
     plot_pr_curves_plt(
-        labels=labels,
-        l_preds=[ppreds_li, ppreds_cv],
-        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+        labels=labels_li,
+        l_preds=[probas_li, probas_cv, preds_dummy],
+        l_model_names=["Manual Features and RF", "CountVectorizer and RF", "Random"],
     )
 
 
@@ -440,6 +438,4 @@ if __name__ == "__main__":
 
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
-    # from sklearn.model_selection import train_test_split
-    # df_train, df_test = train_test_split(df,test_size=0.2)
     train_models(df_train, df_test)
