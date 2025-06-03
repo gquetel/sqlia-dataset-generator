@@ -3,7 +3,7 @@ let
   pkgs = import inputs.nixpkgs {
     config.allowUnfree = true;
     # https://discourse.nixos.org/t/on-nixpkgs-and-the-ai-follow-up-to-2023-nix-developer-dialogues/37087
-    # config.cudaSupport = true;
+    config.cudaSupport = true;
   };
 
   mysql-connector =
