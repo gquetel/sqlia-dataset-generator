@@ -3,31 +3,25 @@
 from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
-from typing import Literal
-from matplotlib import pyplot as plt
-from sklearn.datasets import make_classification
-from sklearn.dummy import DummyClassifier
-from sklearn.metrics import RocCurveDisplay, roc_curve, auc
+
 import numpy as np
 import random
 import pandas as pd
 import sys
 import logging
-import plotly.express as px
+import torch
 
-from sklearn.metrics import (
-    ConfusionMatrixDisplay,
-    PrecisionRecallDisplay,
-    accuracy_score,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-    precision_recall_curve,
-)
 
 from RF_Li import CustomRF_Li, CustomDT_Li
 from RF_CountVect import CustomRF_CountVectorizer
+from Sentence_BERT import CustomBERT
+
+from explain import (
+    plot_confusion_matrices_by_technique,
+    plot_pr_curves_plt,
+    plot_roc_curves_plt,
+    print_and_save_metrics,
+)
 
 
 # ------------ Custom Data Structures  ------------
@@ -97,191 +91,6 @@ def init_logging():
     logging.basicConfig(level=logging.INFO, handlers=[lf, lstdo])
 
 
-def print_and_save_metrics(
-    all_targets: list,
-    all_predictions: list,
-    all_probas: np.ndarray,
-    average: Literal["binary", "macro", "micro"] = "binary",
-    model: str = "",
-    silent: bool = False,
-):
-    """Print the metrics for the given targets and predictions
-    Metrics are: Accuracy, F1 Score, Precision, Recall
-
-    Args:
-        all_targets (list): List of targets
-        all_predictions (list): List of predictions
-    """
-    accuracy = f"{accuracy_score(all_targets, all_predictions)* 100:.2f}%"
-    f1 = f"{f1_score(all_targets, all_predictions, average=average)* 100:.2f}%"
-    sprecision = (
-        f"{precision_score(all_targets, all_predictions, average=average)* 100:.2f}%"
-    )
-    srecall = f"{recall_score(all_targets, all_predictions, average=average)* 100:.2f}%"
-
-    C = confusion_matrix(all_targets, all_predictions)
-    TN, FP, _, _ = C.ravel()
-    FPR = FP / (FP + TN)
-    sfpr = f"{FPR* 100:.2f}%"
-
-    precision, recall, _ = precision_recall_curve(all_targets, all_probas[:, 1])
-    auc_pr = auc(recall, precision)
-
-    fpr, tpr, _ = roc_curve(all_targets, all_probas[:, 1])
-    auc_roc = auc(fpr, tpr)
-
-    # plot_pr_curves_plt(all_targets, [all_probas], [model], suffix=f"_{model}")
-    # plot_roc_curves_plt(all_targets, [all_probas], [model], suffix=f"_{model}")
-    if not silent:
-        logger.info(f"Metrics for {model}, using {average} average.")
-        logger.info(f"Accuracy: {accuracy}")
-        logger.info(f"F1 Score: {f1}")
-        logger.info(f"Precision: {sprecision}")
-        logger.info(f"Recall: {srecall}")
-        logger.info(f"False Positive Rate: {sfpr}")
-        logger.info(f"AUPRC : {auc_pr:.4f}")
-        logger.info(f"ROC-AUC: {auc_roc:.4f}")
-
-    training_results.append(
-        {
-            "model": model,
-            "fone": f1,
-            "accuracy": accuracy,
-            "precision": sprecision,
-            "recall": srecall,
-            "fpr": sfpr,
-            "auprc": f"{auc_pr:.4f}",
-            "rocauc": f"{auc_roc:.4f}",
-        }
-    )
-
-
-def plot_confusion_matrices_by_technique(
-    df_test: pd.DataFrame, model_name: str, suffix: str = ""
-):
-    """Compute confusion matrices from dataframe with preds.
-
-    Args:
-        model (_type_): _description_
-        df_test (pd.DataFrame): Dataframe with columns 'label', 'attack_technique'
-            and 'preds'
-        model_name (str): _description_
-    """
-    techniques = (
-        df_test.loc[df_test["label"] == 1, "attack_technique"].unique().tolist()
-    )
-    # techniques holds all attack techniques in test set.
-    # We iterate over them to compute confusion matrices
-    fig, axes = plt.subplots(
-        nrows=1, ncols=len(techniques) + 1, figsize=(5 * len(techniques), 10)
-    )
-
-    for i, technique in enumerate(techniques):
-        # Create boolean mask for the subset we want
-        mask = (df_test["label"] == 0) | (df_test["attack_technique"] == technique)
-
-        labels = df_test.loc[mask, "label"]
-        preds = df_test.loc[mask, "preds"]
-
-        axes[i].set_title(f"{technique} technique")
-        ConfusionMatrixDisplay.from_predictions(
-            y_true=labels,
-            y_pred=preds,
-            ax=axes[i],
-            colorbar=False,
-        )
-
-    # Plot full confusion matrix
-    i = len(techniques)
-    labels = df_test["label"]
-    preds = df_test["preds"]
-
-    axes[i].set_title(f"Total")
-
-    ConfusionMatrixDisplay.from_predictions(
-        y_true=labels,
-        y_pred=preds,
-        ax=axes[i],
-        colorbar=True,
-    )
-    folder_path = f"{project_paths.output_path}confmatrices/" 
-    Path(folder_path).mkdir(exist_ok=True,parents=True)
-    fp_fig = f"{folder_path}confusion_matrix_{model_name}{suffix}.png"
-    plt.savefig(fp_fig)
-
-
-def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str = ""):
-    fig, ax = plt.subplots(figsize=(8, 6))
-    folder_name = f"{project_paths.output_path}pr_curves/"
-    Path(folder_name).mkdir(exist_ok=True, parents=True)
-
-    for preds, model_name in zip(l_preds, l_model_names):
-        # I lost myself with all of the type conversion for the different pipelines
-        # Let's just impose a numpy array:
-        assert isinstance(preds, np.ndarray)
-
-        # Process predictions to get probabilities
-        preds = preds[:, 1]
-
-        precision, recall, _ = precision_recall_curve(labels, preds, pos_label=1)
-        auprc = auc(recall, precision)
-
-        # Plot the curve
-        ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
-
-        # Also let's save the results:
-        filepath = folder_name + f"{model_name}{suffix}.csv"
-        pd.DataFrame({"precision": precision, "recall": recall}).to_csv(
-            filepath, index=False
-        )
-
-    # y = prevalence
-    x = [0, 1]
-    y = [sum(labels) / len(labels)] * len(x)
-    ax.plot(x, y, label=f"Prevalence = {y[0]:.4f}")
-
-    # Customize plot
-    ax.set_xlabel("Recall")
-    ax.set_ylabel("Precision")
-    ax.set_title("AUPRC Comparison")
-    ax.legend()
-
-    ax.grid(True, alpha=0.3)
-
-    # plt.tight_layout()
-    plt.savefig(f"{folder_name}auprc_curves{suffix}.png")
-
-
-def plot_roc_curves_plt(
-    labels: list, l_preds: list, l_model_names: list, suffix: str = ""
-):
-    fig, ax = plt.subplots(figsize=(8, 6))
-    folder_name = f"{project_paths.output_path}roc_curves/"
-    Path(folder_name).mkdir(exist_ok=True, parents=True)
-
-    for preds, model_name in zip(l_preds, l_model_names):
-        # I lost myself with all of the type conversion for the different pipelines
-        # Let's just impose a numpy array:
-        assert isinstance(preds, np.ndarray)
-
-        preds = preds[:, 1]
-        fpr, tpr, thresholds = roc_curve(labels, preds)
-        auroc = auc(fpr, tpr)
-
-        ax.plot(fpr, tpr, label=f"{model_name} (AUC = {auroc:.4f})")
-
-        # Also let's save the results:
-        filepath = folder_name + f"{model_name}{suffix}.csv"
-        pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(filepath, index=False)
-
-    ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
-    ax.legend()
-    ax.set_title("ROC Curves Comparison")
-    ax.grid(True, alpha=0.3)
-
-    plt.savefig(f"{folder_name}roc_curves{suffix}.png")
-
-
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
@@ -298,35 +107,41 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     df_pped["preds"] = preds
 
     # 3 => print_and_save_metrics all
-    print_and_save_metrics(
-        df_pped["label"],
-        df_pped["preds"],
-        probas,
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=f"{model_name}_all",
+    training_results.append(
+        print_and_save_metrics(
+            df_pped["label"],
+            df_pped["preds"],
+            probas,
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_all",
+        )
     )
 
     # 4 =>  print_and_save_metrics challenging only
     df_chall = df_pped[df_pped["template_split"] == "challenging"]
 
     logger.info("Metrics for challenging set only:")
-    print_and_save_metrics(
-        df_chall["label"],
-        df_chall["preds"],
-        np.array(df_chall["probas"].to_list()),
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=f"{model_name}_chall",
+    training_results.append(
+        print_and_save_metrics(
+            df_chall["label"],
+            df_chall["preds"],
+            np.array(df_chall["probas"].to_list()),
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_chall",
+        )
     )
 
     # 5 =>  print_and_save_metrics original only
     df_og = df_pped[df_pped["template_split"] == "original"]
     logger.info("Metrics for original set only:")
-    print_and_save_metrics(
-        df_og["label"],
-        df_og["preds"],
-        np.array(df_og["probas"].to_list()),
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=f"{model_name}_origin",
+    training_results.append(
+        print_and_save_metrics(
+            df_og["label"],
+            df_og["preds"],
+            np.array(df_og["probas"].to_list()),
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_origin",
+        )
     )
 
     sdf = df_pped.sort_values(by="probas")[["probas", "label"]]
@@ -336,11 +151,16 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 6 => Confusion matrix all
     # This function needs the dataframe with the preds and the original
     # columns information (attack_technique).
-    plot_confusion_matrices_by_technique(df_test=df_pped, model_name=model_name)
+    plot_confusion_matrices_by_technique(
+        df_test=df_pped, model_name=model_name, project_paths=project_paths
+    )
 
     # 7 => Confusion matrix challenging
     plot_confusion_matrices_by_technique(
-        df_test=df_chall, model_name=model_name, suffix="_challenge"
+        df_test=df_chall,
+        model_name=model_name,
+        project_paths=project_paths,
+        suffix="_challenge",
     )
 
     # For AUC plot
@@ -386,12 +206,14 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     preds = np.argmax(probas, axis=1)
 
     # 3 => print_and_save_metrics all
-    print_and_save_metrics(
-        labels,
-        preds,
-        probas,
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=f"{model_name}_all",
+    training_results.append(
+        print_and_save_metrics(
+            labels,
+            preds,
+            probas,
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_all",
+        )
     )
 
     # 4 =>  print_and_save_metrics challenging only
@@ -402,23 +224,27 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
     logger.info("Metrics for challenging set only:")
 
-    print_and_save_metrics(
-        labels[ids_chall],
-        preds[ids_chall],
-        probas[ids_chall],
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=f"{model_name}_chall",
+    training_results.append(
+        print_and_save_metrics(
+            labels[ids_chall],
+            preds[ids_chall],
+            probas[ids_chall],
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_chall",
+        )
     )
 
     # 5 =>  print_and_save_metrics original only
     ids_og = df_test[df_test["template_split"] == "original"].index.tolist()
     logger.info("Metrics for original set only:")
-    print_and_save_metrics(
-        labels[ids_og],
-        preds[ids_og],
-        probas[ids_og],
-        average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=f"{model_name}_origin",
+    training_results.append(
+        print_and_save_metrics(
+            labels[ids_og],
+            preds[ids_og],
+            probas[ids_og],
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_origin",
+        )
     )
 
     # 6 => Confusion matrix all
@@ -434,19 +260,24 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "template_split": df_test["template_split"],
         }
     )
-    plot_confusion_matrices_by_technique(df_test=_df, model_name=model_name)
+    plot_confusion_matrices_by_technique(
+        df_test=_df, model_name=model_name, project_paths=project_paths
+    )
 
     _df_chall = _df[df_test["template_split"] == "challenging"]
     # 7 => Confusion matrix challenging
     plot_confusion_matrices_by_technique(
-        df_test=_df_chall, model_name=model_name, suffix="_challenge"
+        df_test=_df_chall,
+        model_name=model_name,
+        project_paths=project_paths,
+        suffix="_challenge",
     )
 
     # For AUC plot
     return _df["label"], _df["probas"], _df["preds"], ids_chall
 
 
-def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     logger.info(
         f"Training - number of attacks {len(df_train[df_train['label'] == 1])}"
         f" and number of normals {len(df_train[df_train['label'] == 0])}"
@@ -479,6 +310,7 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "CountVectorizer and RF",
             "Manual Features and DT",
         ],
+        project_paths=project_paths,
     )
     plot_roc_curves_plt(
         labels=labels_li,
@@ -488,6 +320,7 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "CountVectorizer and RF",
             "Manual Features and DT",
         ],
+        project_paths=project_paths,
     )
 
     # All of my indices are fucked up:
@@ -508,6 +341,7 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "CountVectorizer and RF",
             "Manual Features and DT",
         ],
+        project_paths=project_paths,
         suffix="_chall",
     )
     plot_roc_curves_plt(
@@ -522,12 +356,49 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "CountVectorizer and RF",
             "Manual Features and DT",
         ],
+        project_paths=project_paths,
         suffix="_chall",
     )
 
     # Finally, save results to csv.
     dfres = pd.DataFrame(training_results)
     dfres.to_csv("output/results.csv", index=False)
+
+
+def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Sentence-BERT"
+    save_model = False
+
+    logger.info(
+        f"Training - number of attacks {len(df_train[df_train['label'] == 1])}"
+        f" and number of normals {len(df_train[df_train['label'] == 0])}"
+    )
+    logger.info(
+        f"Testing - number of attacks {len(df_test[df_test['label'] == 1])}"
+        f" and number of normals {len(df_test[df_test['label'] == 0])}"
+    )
+
+    USE_CUDA = torch.cuda.is_available()
+    device = torch.device("cuda:1" if USE_CUDA else "cpu")
+    if USE_CUDA:
+        logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
+        torch.cuda.set_per_process_memory_fraction(0.99, 0)
+    else:
+        logger.info("Using CPU for experiments.")
+
+    myBERT = CustomBERT(
+        device=device,
+        model_name=model_name,
+        bert_model="ehsanaghaei/SecureBERT",
+        batch_size="16",
+        lr=2e-5,
+        epochs=1,
+        weight_decay=0.01,
+    )
+    myBERT.set_dataloader_train(df_train)
+    myBERT.train(save_models=save_model)
+
+    # Now evaluate
 
 
 if __name__ == "__main__":
@@ -558,4 +429,4 @@ if __name__ == "__main__":
 
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
-    train_models(df_train, df_test)
+    train_cpu_models(df_train, df_test)
