@@ -1,5 +1,6 @@
 """Definition of ML models configuration."""
 
+import argparse
 from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
@@ -59,6 +60,11 @@ class ProjectPaths:
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 
+    @property
+    def models_path(self) -> str:
+        path = f"{self.base_path}/output/models/"
+        Path(path).mkdir(exist_ok=True, parents=True)
+        return path
 
 # ------------ Global variables  ------------
 
@@ -91,10 +97,43 @@ def init_logging():
     logging.basicConfig(level=logging.INFO, handlers=[lf, lstdo])
 
 
+def init_device() -> torch.device:
+    """Initialize the device to use for experiments
+
+    Returns:
+        torch.device: device to use
+    """
+    USE_CUDA = torch.cuda.is_available()
+    device = torch.device("cuda:1" if USE_CUDA else "cpu")
+    if USE_CUDA:
+        logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
+        torch.cuda.set_per_process_memory_fraction(0.99, 0)
+    else:
+        logger.critical("Using CPU for experiments.")
+    return device
+
+
+def init_args() -> argparse.Namespace:
+    """Argsparse initializing function.
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--gpu",
+        action="store_true",
+        help="Enable the training and testing of GPU models.",
+    )
+
+    args = parser.parse_args()
+    return args
+
+
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
-    print("compute_metrics:")
     # 1 => Probas (ppeds only)
     # Warning: having this variable and df_pped is VERY memory consuming
     # for CountVectorizer.
@@ -377,35 +416,142 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         f"Testing - number of attacks {len(df_test[df_test['label'] == 1])}"
         f" and number of normals {len(df_test[df_test['label'] == 0])}"
     )
-
-    USE_CUDA = torch.cuda.is_available()
-    device = torch.device("cuda:1" if USE_CUDA else "cpu")
-    if USE_CUDA:
-        logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
-        torch.cuda.set_per_process_memory_fraction(0.99, 0)
-    else:
-        logger.info("Using CPU for experiments.")
+    device = init_device()
 
     myBERT = CustomBERT(
         device=device,
         model_name=model_name,
         bert_model="ehsanaghaei/SecureBERT",
-        batch_size="16",
+        project_paths=project_paths,
+        batch_size=32,
         lr=2e-5,
-        epochs=1,
+        epochs=3,
         weight_decay=0.01,
     )
     myBERT.set_dataloader_train(df_train)
     myBERT.train(save_models=save_model)
 
-    # Now evaluate
+    # Now evaluate, we want to avoid having to infer multiple times the same 
+    # sample. Therefore we first collect all data for original split, then
+    # challenging one. And we compute all stats from these.
 
+    # 1 => probas for original test set
+    _df_og = df_test[df_test["template_split"] == "original"]
+    myBERT.set_dataloader_test(_df_og)
+    labels_og, probas_og = myBERT.predict_probas()
+
+    # 1 => probas for original test set
+    _df_chall = df_test[df_test["template_split"] == "challenging"]
+    myBERT.set_dataloader_test(_df_chall)
+    labels_c, probas_c = myBERT.predict_probas()
+
+
+    # 2 => preds
+    preds_og = np.argmax(probas_og, axis=1)
+    preds_c = np.argmax(probas_c,axis=1)
+    
+    # 3 => print_and_save_metrics all
+    labels = np.concatenate([labels_og, labels_c])
+    probas = np.concatenate([probas_og, probas_c])
+    preds = np.concatenate([preds_og,preds_c])
+
+    training_results.append(
+        print_and_save_metrics(
+            labels,
+            preds,
+            probas,
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_all",
+        )
+    )
+
+    # 4 =>  print_and_save_metrics challenging only
+    logger.info("Metrics for challenging set only:")
+    training_results.append(
+        print_and_save_metrics(
+            labels_c,
+            preds_c,
+            probas_c,
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_chall",
+        )
+    )
+
+    # 5 =>  print_and_save_metrics original only
+    logger.info("Metrics for original set only:")
+    training_results.append(
+        print_and_save_metrics(
+            labels_og,
+            preds_og,
+            probas_og,
+            average=GENERIC.METRICS_AVERAGE_METHOD,
+            model=f"{model_name}_origin",
+        )
+    )
+
+    # We need to be sure that the order is kept.
+    # print(labels[:10],df_test.iloc[:10]["label"])
+    # assert(np.array_equal(labels,df_test["label"]))
+    # ORDER IS NOT KEPT, it is changed after prediction
+
+    # 6 => Confusion matrix all
+    # This function needs the dataframe with the preds and the original
+    # columns information (attack_technique).
+    # plot_confusion_matrices_by_technique(
+    #     df_test=df_pped, model_name=model_name, project_paths=project_paths
+    # )
+
+    # 7 => Confusion matrix challenging
+    # plot_confusion_matrices_by_technique(
+    #     df_test=df_chall,
+    #     model_name=model_name,
+    #     project_paths=project_paths,
+    #     suffix="_challenge",
+    # )
+
+    # 8 =>  Plot AUCPRC & AUROC for original dataset
+    plot_pr_curves_plt(
+        labels=labels,
+        l_preds=[probas],
+        l_model_names=[
+            "Sentence-BERT",
+        ],
+        project_paths=project_paths,
+    )
+    plot_roc_curves_plt(
+        labels=labels,
+        l_preds=[probas],
+        l_model_names=[
+            "Sentence-BERT",
+        ],
+        project_paths=project_paths,
+    )
+
+    # 9 => Plot AUPRC and AUROC for challenging testing set
+    plot_pr_curves_plt(
+        labels=labels_c,
+        l_preds=[probas_c],
+        l_model_names=[
+            "Sentence-BERT",
+        ],
+        project_paths=project_paths,
+        suffix="_chall",
+    )
+    plot_roc_curves_plt(
+        labels=labels_c,
+        l_preds=[probas_c],
+        l_model_names=[
+            "Sentence-BERT",
+        ],
+        project_paths=project_paths,
+        suffix="_chall",
+    )
 
 if __name__ == "__main__":
     init_logging()
     np.random.seed(GENERIC.RANDOM_SEED)
     random.seed(GENERIC.RANDOM_SEED)
-
+    args = init_args()
     df = pd.read_csv(
         project_paths.dataset_path,
         # "/home/gquetel/repos/sqlia-dataset/dataset.csv",
@@ -429,4 +575,8 @@ if __name__ == "__main__":
 
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
-    train_cpu_models(df_train, df_test)
+
+    if(args.gpu):
+        train_gpu_models(df_train, df_test)
+    else:
+        train_cpu_models(df_train, df_test)

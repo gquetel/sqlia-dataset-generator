@@ -15,7 +15,7 @@ from transformers import (
 from torch.utils.data import Dataset
 
 # We implement this: https://huggingface.co/docs/transformers/en/tasks/sequence_classification
-# This notebook is similar and with more details: 
+# This notebook is similar and with more details:
 # https://colab.research.google.com/github/huggingface/notebooks/blob/main/examples/text_classification.ipynb#scrollTo=71pt6N0eIrJo
 # Roberta API: https://huggingface.co/docs/transformers/model_doc/roberta
 
@@ -23,9 +23,10 @@ from torch.utils.data import Dataset
 class CustomSQLIADataset(Dataset):
     def __init__(self, df: pd.DataFrame, tokenizer: RobertaTokenizerFast):
         encodings = tokenizer(
-            df["sent_query"].tolist(),
+            df["full_query"].tolist(),
             truncation=True,
         )
+
         self.input_ids = encodings["input_ids"]
         self.attention_mask = encodings["attention_mask"]
         self.labels = torch.tensor(df["label"].values, dtype=torch.long)
@@ -71,17 +72,22 @@ class CustomBERT:
         self.bert_model = bert_model
         self.weight_decay = weight_decay
         self.model_name = model_name
-        self._checkpoints_dir = project_paths.models_path + "BERT-models/" + self.model_name + "/checkpoints"
+        self._checkpoints_dir = (
+            project_paths.models_path
+            + "BERT-models/"
+            + self.model_name
+            + "/checkpoints"
+        )
         self._output_dir = project_paths.models_path + "BERT-models/" + self.model_name
-        
+
         Path(self._checkpoints_dir).mkdir(parents=True, exist_ok=True)
         self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
 
         self.dataset_test = None
         self.dataset_train = None
 
-        self.id2label = {0: "normal", 1: "attack"}
-        self.label2id = {"normal": 0, "attack": 1}
+        self.id2label = {0: 0, 1: 1}
+        self.label2id = {0: 0, 1: 1}
 
         self.model = transformers.RobertaForSequenceClassification.from_pretrained(
             self.bert_model,
@@ -108,9 +114,9 @@ class CustomBERT:
             per_device_eval_batch_size=self.batch_size,
             num_train_epochs=self.epochs,
             weight_decay=self.weight_decay,
-            evaluation_strategy="epoch",
+            eval_strategy="no",
             save_strategy="epoch",
-            load_best_model_at_end=True,
+            load_best_model_at_end=False,
             push_to_hub=False,
         )
 
@@ -126,25 +132,24 @@ class CustomBERT:
         self.trainer = trainer
         trainer.train()
 
-        if(save_models):
+        if save_models:
             trainer.save_model(output_dir=self._output_dir)
 
     def set_dataloader_test(self, df: pd.DataFrame):
-        # Missing values mess with tokenizer.
-        df.dropna(inplace=True, axis="index")
         self.dataset_test = CustomSQLIADataset(df=df, tokenizer=self.tokenizer)
 
     def set_dataloader_train(self, df: pd.DataFrame):
-        df.dropna(inplace=True, axis="index")
         self.dataset_train = CustomSQLIADataset(df=df, tokenizer=self.tokenizer)
 
-    def infer(self) -> tuple[list, list]:
-        # dataset_test should probably not change, but we still provide it here
-        # in case some experiments override test once train is over.
-        
-        # trainer.predict() doc: https://huggingface.co/docs/transformers/main_classes/trainer#transformers.Trainer.predict
+    def predict(self) -> tuple[list, list]:
+        # trainer.predict() doc:
+        # https://huggingface.co/docs/transformers/main_classes/trainer#transformers.Trainer.predict
         nt = self.trainer.predict(test_dataset=self.dataset_test)
         preds = np.argmax(nt.predictions, axis=1)
-        
+
         # Return target, preds.
         return nt.label_ids, preds
+
+    def predict_probas(self) -> tuple[list, list]:
+        nt = self.trainer.predict(test_dataset=self.dataset_test)
+        return nt.label_ids, nt.predictions

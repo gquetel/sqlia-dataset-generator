@@ -28,21 +28,23 @@ let
     (pkgs.python312.withPackages (
       ps:
       [
-        ps.pandas
-        ps.numpy
-        ps.scikit-learn
-        ps.tqdm
         ps.matplotlib
         ps.matplotlib-venn
-
+        ps.numpy
+        ps.pandas
         ps.plotly
+        ps.scikit-learn
+        ps.tqdm
+        
+        # Notebooks
         ps.ipykernel
         ps.jupyter
 
         # BERT model
+        ps.accelerate
         ps.evaluate
-        ps.transformers
         ps.torch
+        ps.transformers
       ]
       ++ [ mysql-connector ]
     )).override

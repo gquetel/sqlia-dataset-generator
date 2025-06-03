@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from typing import Literal
 from matplotlib import pyplot as plt
@@ -16,10 +15,12 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     precision_recall_curve,
-    roc_curve, auc
+    roc_curve,
+    auc,
 )
 
 logger = logging.getLogger(__name__)
+
 
 def print_and_save_metrics(
     all_targets: list,
@@ -43,7 +44,9 @@ def print_and_save_metrics(
     )
     srecall = f"{recall_score(all_targets, all_predictions, average=average)* 100:.2f}%"
 
-    C = confusion_matrix(all_targets, all_predictions)
+    # Addind labels information prevent from only returning a single value
+    # causing the not enough values to unpack error.
+    C = confusion_matrix(all_targets, all_predictions, labels=[0, 1])
     TN, FP, _, _ = C.ravel()
     FPR = FP / (FP + TN)
     sfpr = f"{FPR* 100:.2f}%"
@@ -66,18 +69,16 @@ def print_and_save_metrics(
         logger.info(f"AUPRC : {auc_pr:.4f}")
         logger.info(f"ROC-AUC: {auc_roc:.4f}")
 
-    return (
-        {
-            "model": model,
-            "fone": f1,
-            "accuracy": accuracy,
-            "precision": sprecision,
-            "recall": srecall,
-            "fpr": sfpr,
-            "auprc": f"{auc_pr:.4f}",
-            "rocauc": f"{auc_roc:.4f}",
-        }
-    )
+    return {
+        "model": model,
+        "fone": f1,
+        "accuracy": accuracy,
+        "precision": sprecision,
+        "recall": srecall,
+        "fpr": sfpr,
+        "auprc": f"{auc_pr:.4f}",
+        "rocauc": f"{auc_roc:.4f}",
+    }
 
 
 def plot_confusion_matrices_by_technique(
@@ -134,7 +135,9 @@ def plot_confusion_matrices_by_technique(
     plt.savefig(fp_fig)
 
 
-def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, project_paths, suffix: str = ""):
+def plot_pr_curves_plt(
+    labels, l_preds: list, l_model_names: list, project_paths, suffix: str = ""
+):
     fig, ax = plt.subplots(figsize=(8, 6))
     folder_name = f"{project_paths.output_path}pr_curves/"
     Path(folder_name).mkdir(exist_ok=True, parents=True)
