@@ -1,9 +1,11 @@
 """Definition of ML models configuration."""
+
 import os
+
 # We force device on which training happens.
 # device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
 # into account apparently...
-os.environ["CUDA_VISIBLE_DEVICES"]="0,2" 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
 
 import argparse
 from logging.handlers import TimedRotatingFileHandler
@@ -69,6 +71,7 @@ class ProjectPaths:
         path = f"{self.base_path}/cache/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
+
 
 # ------------ Global variables  ------------
 
@@ -148,10 +151,23 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     preds = np.argmax(probas, axis=1)
     df_pped["probas"] = probas.tolist()
     df_pped["preds"] = preds
-    
+
     # 2.5 => Extract lines for which preds and labels are different and precise
     # Whether they are FP or FN.
-    # TODO.
+    miss_mask = df_pped["preds"] != labels
+    df_errors = df_pped.loc[miss_mask, ["full_query", "preds", "probas"]].copy()
+    df_errors["labels"] = labels[miss_mask]
+    df_errors["error_type"] = df_errors.apply(
+        lambda row: (
+            "FP"
+            if row["preds"] == 1 and row["labels"] == 0
+            else "FN" if row["preds"] == 0 and row["labels"] == 1 else "Other"
+        ),
+        axis=1,
+    )
+    folder_name = f"output/errors/"
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
+    df_errors.to_csv(f"{folder_name}{model_name}.csv", index=False)
 
     # 3 => print_and_save_metrics all
     training_results.append(
@@ -251,6 +267,26 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
     # 2 => Preds
     preds = np.argmax(probas, axis=1)
+
+    # 2.5 => Extract lines for which preds and labels are different and precise
+    # Whether they are FP or FN.
+    miss_mask = preds != labels
+    df_errors = df_test.loc[miss_mask, ["full_query"]].copy()
+    df_errors["preds"] = preds[miss_mask]
+    df_errors["probas"] = probas[miss_mask].tolist()
+    df_errors["labels"] = labels[miss_mask]
+    df_errors["error_type"] = df_errors.apply(
+        lambda row: (
+            "FP"
+            if row["preds"] == 1 and row["labels"] == 0
+            else "FN" if row["preds"] == 0 and row["labels"] == 1 else "Other"
+        ),
+        axis=1,
+    )
+    folder_name = f"output/errors/"
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
+    df_errors.to_csv(f"{folder_name}{model_name}.csv", index=False)
+
 
     # 3 => print_and_save_metrics all
     training_results.append(
@@ -433,13 +469,13 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         project_paths=project_paths,
         batch_size=32,
         lr=2e-5,
-        epochs=3,
+        epochs=0,
         weight_decay=0.01,
     )
     myBERT.set_dataloader_train(df_train)
     myBERT.train(save_models=save_model)
 
-    # Now evaluate, we want to avoid having to infer multiple times the same 
+    # Now evaluate, we want to avoid having to infer multiple times the same
     # sample. Therefore we first collect all data for original split, then
     # challenging one. And we compute all stats from these.
 
@@ -455,12 +491,13 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
     # 2 => preds
     preds_og = np.argmax(probas_og, axis=1)
-    preds_c = np.argmax(probas_c,axis=1)
-    
+    preds_c = np.argmax(probas_c, axis=1)
+
     # 3 => print_and_save_metrics all
     labels = np.concatenate([labels_og, labels_c])
     probas = np.concatenate([probas_og, probas_c])
-    preds = np.concatenate([preds_og,preds_c])
+    preds = np.concatenate([preds_og, preds_c])
+
 
     training_results.append(
         print_and_save_metrics(
@@ -499,7 +536,7 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # We need to be sure that the order is kept.
     # print(labels[:10],df_test.iloc[:10]["label"])
     # assert(np.array_equal(labels,df_test["label"]))
-    # ORDER IS NOT KEPT, it is changed after prediction
+    # ORDER IS NOT KEPT
 
     # 6 => Confusion matrix all
     # This function needs the dataframe with the preds and the original
@@ -554,6 +591,7 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         suffix="_chall",
     )
 
+
 if __name__ == "__main__":
     init_logging()
     np.random.seed(GENERIC.RANDOM_SEED)
@@ -580,14 +618,14 @@ if __name__ == "__main__":
         },
     )
 
+    
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
-    #df_train = df_train.sample(int(len(df_train)/20))
-    #df_test = df_test.sample(int(len(df_test)/20))
+    # df_train = df_train.sample(int(len(df_train) / 20))
+    # df_test = df_test.sample(int(len(df_test) / 20))
 
-
-    if(args.gpu):
+    if args.gpu:
         train_gpu_models(df_train, df_test)
     else:
         train_cpu_models(df_train, df_test)
