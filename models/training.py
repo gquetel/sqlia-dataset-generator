@@ -1,8 +1,12 @@
 """Definition of ML models configuration."""
+import os
+# We force device on which training happens.
+# device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
+# into account apparently...
+os.environ["CUDA_VISIBLE_DEVICES"]="0,2" 
 
 import argparse
 from logging.handlers import TimedRotatingFileHandler
-import os
 from pathlib import Path
 
 import numpy as np
@@ -62,7 +66,7 @@ class ProjectPaths:
 
     @property
     def models_path(self) -> str:
-        path = f"{self.base_path}/output/models/"
+        path = f"{self.base_path}/cache/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 
@@ -104,7 +108,7 @@ def init_device() -> torch.device:
         torch.device: device to use
     """
     USE_CUDA = torch.cuda.is_available()
-    device = torch.device("cuda:1" if USE_CUDA else "cpu")
+    device = torch.device("cuda:0" if USE_CUDA else "cpu")
     if USE_CUDA:
         logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
         torch.cuda.set_per_process_memory_fraction(0.99, 0)
@@ -144,6 +148,10 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     preds = np.argmax(probas, axis=1)
     df_pped["probas"] = probas.tolist()
     df_pped["preds"] = preds
+    
+    # 2.5 => Extract lines for which preds and labels are different and precise
+    # Whether they are FP or FN.
+    # TODO.
 
     # 3 => print_and_save_metrics all
     training_results.append(
@@ -445,7 +453,6 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     myBERT.set_dataloader_test(_df_chall)
     labels_c, probas_c = myBERT.predict_probas()
 
-
     # 2 => preds
     preds_og = np.argmax(probas_og, axis=1)
     preds_c = np.argmax(probas_c,axis=1)
@@ -575,6 +582,10 @@ if __name__ == "__main__":
 
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
+
+    #df_train = df_train.sample(int(len(df_train)/20))
+    #df_test = df_test.sample(int(len(df_test)/20))
+
 
     if(args.gpu):
         train_gpu_models(df_train, df_test)
