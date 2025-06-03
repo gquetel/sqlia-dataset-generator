@@ -25,7 +25,6 @@ from sklearn.metrics import (
     recall_score,
     precision_recall_curve,
 )
-from sklearn.tree import plot_tree
 
 from RF_Li import CustomRF_Li, CustomDT_Li
 from RF_CountVect import CustomRF_CountVectorizer
@@ -205,12 +204,16 @@ def plot_confusion_matrices_by_technique(
         ax=axes[i],
         colorbar=True,
     )
-    fp_fig = f"{project_paths.output_path}confusion_matrix_{model_name}{suffix}.png"
+    folder_path = f"{project_paths.output_path}confmatrices/" 
+    Path(folder_path).mkdir(exist_ok=True,parents=True)
+    fp_fig = f"{folder_path}confusion_matrix_{model_name}{suffix}.png"
     plt.savefig(fp_fig)
 
 
 def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str = ""):
     fig, ax = plt.subplots(figsize=(8, 6))
+    folder_name = f"{project_paths.output_path}pr_curves/"
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
 
     for preds, model_name in zip(l_preds, l_model_names):
         # I lost myself with all of the type conversion for the different pipelines
@@ -226,6 +229,12 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str =
         # Plot the curve
         ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
 
+        # Also let's save the results:
+        filepath = folder_name + f"{model_name}{suffix}.csv"
+        pd.DataFrame({"precision": precision, "recall": recall}).to_csv(
+            filepath, index=False
+        )
+
     # y = prevalence
     x = [0, 1]
     y = [sum(labels) / len(labels)] * len(x)
@@ -240,13 +249,16 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str =
     ax.grid(True, alpha=0.3)
 
     # plt.tight_layout()
-    plt.savefig(project_paths.output_path + f"auprc_curves{suffix}.png")
+    plt.savefig(f"{folder_name}auprc_curves{suffix}.png")
 
 
 def plot_roc_curves_plt(
     labels: list, l_preds: list, l_model_names: list, suffix: str = ""
 ):
     fig, ax = plt.subplots(figsize=(8, 6))
+    folder_name = f"{project_paths.output_path}roc_curves/"
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
+
     for preds, model_name in zip(l_preds, l_model_names):
         # I lost myself with all of the type conversion for the different pipelines
         # Let's just impose a numpy array:
@@ -258,12 +270,16 @@ def plot_roc_curves_plt(
 
         ax.plot(fpr, tpr, label=f"{model_name} (AUC = {auroc:.4f})")
 
+        # Also let's save the results:
+        filepath = folder_name + f"{model_name}{suffix}.csv"
+        pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(filepath, index=False)
+
     ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
     ax.legend()
     ax.set_title("ROC Curves Comparison")
     ax.grid(True, alpha=0.3)
 
-    plt.savefig(project_paths.output_path + f"roc_curves{suffix}.png")
+    plt.savefig(f"{folder_name}roc_curves{suffix}.png")
 
 
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
@@ -287,7 +303,7 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         df_pped["preds"],
         probas,
         average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
+        model=f"{model_name}_all",
     )
 
     # 4 =>  print_and_save_metrics challenging only
@@ -299,7 +315,7 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         df_chall["preds"],
         np.array(df_chall["probas"].to_list()),
         average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
+        model=f"{model_name}_chall",
     )
 
     # 5 =>  print_and_save_metrics original only
@@ -310,9 +326,9 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         df_og["preds"],
         np.array(df_og["probas"].to_list()),
         average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
+        model=f"{model_name}_origin",
     )
-    
+
     sdf = df_pped.sort_values(by="probas")[["probas", "label"]]
     sdf["probas"] = sdf["probas"].apply(lambda x: x[1])
     sdf.to_csv("output/random.csv")
@@ -326,7 +342,6 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     plot_confusion_matrices_by_technique(
         df_test=df_chall, model_name=model_name, suffix="_challenge"
     )
-
 
     # For AUC plot
     return (
@@ -376,7 +391,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
         preds,
         probas,
         average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
+        model=f"{model_name}_all",
     )
 
     # 4 =>  print_and_save_metrics challenging only
@@ -392,7 +407,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
         preds[ids_chall],
         probas[ids_chall],
         average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
+        model=f"{model_name}_chall",
     )
 
     # 5 =>  print_and_save_metrics original only
@@ -403,7 +418,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
         preds[ids_og],
         probas[ids_og],
         average=GENERIC.METRICS_AVERAGE_METHOD,
-        model=model_name,
+        model=f"{model_name}_origin",
     )
 
     # 6 => Confusion matrix all
@@ -443,13 +458,11 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
     # Train models and get their output.
 
-    
     labels_cv, probas_cv, preds_cv, ids_chall_cv = train_rf_cv(df_train, df_test)
     labels_lidt, probas_lidt, preds_lidt, ids_chall_lidt = train_dt_li(
         df_train, df_test
     )
     labels_li, probas_li, preds_li, ids_chall_li = train_rf_li(df_train, df_test)
-
 
     # We put all probas variable to same type / structure
     probas_li = np.array(probas_li.to_list())
