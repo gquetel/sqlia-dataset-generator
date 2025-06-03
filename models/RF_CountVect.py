@@ -42,7 +42,7 @@ class CustomRF_CountVectorizer:
         self, df: pd.DataFrame, drop_og_columns: bool = True
     ) -> tuple[pd.DataFrame, np.ndarray]:
         
-        labels = np.array(df["label"])
+        labels = df["label"]
         pp_queries = self.vectorizer.transform(df["full_query"])
         
         if drop_og_columns:

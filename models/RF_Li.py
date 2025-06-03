@@ -283,29 +283,34 @@ class CustomDT_Li:
         ppreds = self.clf.predict_proba(f_matrix.to_numpy())
         return labels, ppreds
 
-    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_RF_li(df_pped)
-        df_pped.drop(
-            ["label", "full_query"]
-            + [
-                "statement_type",
-                "query_template_id",
-                "user_inputs",
-                "attack_id",
-                "attack_technique",
-                "split",
-                "attack_desc",
-                "attack_status",
-                "attack_stage",
-                "tamper_method",
-                "template_split",
-            ],
-            axis=1,
-            inplace=True,
-            errors="ignore",
-        )
+
+        if drop_og_columns:
+            df_pped.drop(
+                ["label", "full_query"]
+                + [
+                    "statement_type",
+                    "query_template_id",
+                    "user_inputs",
+                    "attack_id",
+                    "attack_technique",
+                    "split",
+                    "attack_desc",
+                    "attack_status",
+                    "attack_stage",
+                    "tamper_method",
+                    "template_split",  
+                ],
+                axis=1,
+                inplace=True,
+                errors="ignore",
+            )
+
         return df_pped, labels
 
     def train_model(

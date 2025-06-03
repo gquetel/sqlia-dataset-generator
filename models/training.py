@@ -213,13 +213,12 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str =
     fig, ax = plt.subplots(figsize=(8, 6))
 
     for preds, model_name in zip(l_preds, l_model_names):
+        # I lost myself with all of the type conversion for the different pipelines
+        # Let's just impose a numpy array:
+        assert isinstance(preds, np.ndarray)
+
         # Process predictions to get probabilities
-        if isinstance(preds, list):
-            preds = np.array(preds)[:, 1]
-        elif isinstance(preds, pd.Series):
-            preds = preds.apply(lambda x: x[1])
-        else:
-            preds = preds[:, 1]
+        preds = preds[:, 1]
 
         precision, recall, _ = precision_recall_curve(labels, preds, pos_label=1)
         auprc = auc(recall, precision)
@@ -230,7 +229,7 @@ def plot_pr_curves_plt(labels, l_preds: list, l_model_names: list, suffix: str =
     # y = prevalence
     x = [0, 1]
     y = [sum(labels) / len(labels)] * len(x)
-    ax.plot(x, y, label=f"Prevalence = {y[0]}")
+    ax.plot(x, y, label=f"Prevalence = {y[0]:.4f}")
 
     # Customize plot
     ax.set_xlabel("Recall")
@@ -249,12 +248,15 @@ def plot_roc_curves_plt(
 ):
     fig, ax = plt.subplots(figsize=(8, 6))
     for preds, model_name in zip(l_preds, l_model_names):
+        # I lost myself with all of the type conversion for the different pipelines
+        # Let's just impose a numpy array:
+        assert isinstance(preds, np.ndarray)
+
         preds = preds[:, 1]
         fpr, tpr, thresholds = roc_curve(labels, preds)
         auroc = auc(fpr, tpr)
 
-        ax.plot(fpr,tpr, label=f"{model_name} (AUC = {auroc:.4f})")
-
+        ax.plot(fpr, tpr, label=f"{model_name} (AUC = {auroc:.4f})")
 
     ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
     ax.legend()
@@ -267,7 +269,7 @@ def plot_roc_curves_plt(
 def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
-
+    print("compute_metrics:")
     # 1 => Probas (ppeds only)
     # Warning: having this variable and df_pped is VERY memory consuming
     # for CountVectorizer.
@@ -290,6 +292,7 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
 
     # 4 =>  print_and_save_metrics challenging only
     df_chall = df_pped[df_pped["template_split"] == "challenging"]
+
     logger.info("Metrics for challenging set only:")
     print_and_save_metrics(
         df_chall["label"],
@@ -309,6 +312,10 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         average=GENERIC.METRICS_AVERAGE_METHOD,
         model=model_name,
     )
+    
+    sdf = df_pped.sort_values(by="probas")[["probas", "label"]]
+    sdf["probas"] = sdf["probas"].apply(lambda x: x[1])
+    sdf.to_csv("output/random.csv")
 
     # 6 => Confusion matrix all
     # This function needs the dataframe with the preds and the original
@@ -320,11 +327,14 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         df_test=df_chall, model_name=model_name, suffix="_challenge"
     )
 
-    # sdf = df_pped.sort_values(by="probas")[["probas", "label"]]
-    # sdf["probas"] = sdf["probas"].apply(lambda x: x[1])
-    # sdf.to_csv("output/random.csv")
+
     # For AUC plot
-    return df_pped["label"], df_pped["probas"], df_pped["preds"]
+    return (
+        df_pped["label"],
+        df_pped["probas"],
+        df_pped["preds"],
+        df_chall.index.tolist(),
+    )
 
 
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -334,10 +344,22 @@ def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
+def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Li-LSyn_DT"
+    model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
+    model.train_model(df=df_train, model_name=model_name)
+    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+
+
 def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer_RF"
     model = CustomRF_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
     model.train_model(df=df_train, model_name=model_name)
+
+    # The index of labels is also resetted when returned by preprocess_for_preds.
+    # If we don't reset the one of df_test earlier we get indexes mismatch
+    # The proper way to do this would probably be to avoid resetting the index, but
+    # I don't want to waste any more time on this.
     df_test = df_test.copy().reset_index(drop=True)
     # 0 => pped
     f_matrix, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=True)
@@ -364,6 +386,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     ids_chall = df_test[df_test["template_split"] == "challenging"].index.tolist()
 
     logger.info("Metrics for challenging set only:")
+
     print_and_save_metrics(
         labels[ids_chall],
         preds[ids_chall],
@@ -393,6 +416,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "label": labels,
             "preds": preds,
             "probas": list(probas),
+            "template_split": df_test["template_split"],
         }
     )
     plot_confusion_matrices_by_technique(df_test=_df, model_name=model_name)
@@ -404,7 +428,7 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     )
 
     # For AUC plot
-    return _df["label"], _df["probas"], _df["preds"]
+    return _df["label"], _df["probas"], _df["preds"], ids_chall
 
 
 def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -418,25 +442,77 @@ def train_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     )
 
     # Train models and get their output.
-    labels_li, probas_li, preds_li = train_rf_li(df_train, df_test)
-    labels_cv, probas_cv, preds_cv = train_rf_cv(df_train=df_train, df_test=df_test)
+
+    
+    labels_cv, probas_cv, preds_cv, ids_chall_cv = train_rf_cv(df_train, df_test)
+    labels_lidt, probas_lidt, preds_lidt, ids_chall_lidt = train_dt_li(
+        df_train, df_test
+    )
+    labels_li, probas_li, preds_li, ids_chall_li = train_rf_li(df_train, df_test)
+
 
     # We put all probas variable to same type / structure
-    probas_li = np.vstack(probas_li.values)
-    probas_cv = np.vstack(probas_cv.values)
+    probas_li = np.array(probas_li.to_list())
+    probas_cv = np.array(probas_cv.to_list())
+    probas_lidt = np.array(probas_lidt.to_list())
     assert np.array_equal(labels_li, labels_cv)
 
+    # Plot AUCPRC & AUROC for original dataset
     plot_pr_curves_plt(
         labels=labels_li,
-        l_preds=[probas_li, probas_cv],
-        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+        l_preds=[probas_li, probas_cv, probas_lidt],
+        l_model_names=[
+            "Manual Features and RF",
+            "CountVectorizer and RF",
+            "Manual Features and DT",
+        ],
     )
-
     plot_roc_curves_plt(
         labels=labels_li,
-        l_preds=[probas_li, probas_cv],
-        l_model_names=["Manual Features and RF", "CountVectorizer and RF"],
+        l_preds=[probas_li, probas_cv, probas_lidt],
+        l_model_names=[
+            "Manual Features and RF",
+            "CountVectorizer and RF",
+            "Manual Features and DT",
+        ],
     )
+
+    # All of my indices are fucked up:
+    # - labels_li possess the same index as df_test, is untouched
+    # - probas_li,probas_lidt &  probas_cv's index is reset because of the cast to a numpy array
+    # So while the values are not the same for ids_chall_li & ids_chall_cv,
+    # they still refer to the same samples. I don't have time to render the code cleaner.
+
+    plot_pr_curves_plt(
+        labels=labels_li[ids_chall_li],
+        l_preds=[
+            probas_li[ids_chall_cv],
+            probas_cv[ids_chall_cv],
+            probas_lidt[ids_chall_cv],
+        ],
+        l_model_names=[
+            "Manual Features and RF",
+            "CountVectorizer and RF",
+            "Manual Features and DT",
+        ],
+        suffix="_chall",
+    )
+    plot_roc_curves_plt(
+        labels=labels_cv[ids_chall_cv],
+        l_preds=[
+            probas_li[ids_chall_cv],
+            probas_cv[ids_chall_cv],
+            probas_lidt[ids_chall_cv],
+        ],
+        l_model_names=[
+            "Manual Features and RF",
+            "CountVectorizer and RF",
+            "Manual Features and DT",
+        ],
+        suffix="_chall",
+    )
+
+    # Finally, save results to csv.
     dfres = pd.DataFrame(training_results)
     dfres.to_csv("output/results.csv", index=False)
 
@@ -467,7 +543,6 @@ if __name__ == "__main__":
         },
     )
 
-    # df = df.sample(1000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
     train_models(df_train, df_test)
