@@ -21,7 +21,7 @@ let
     };
 
   pythonEnv = (
-    (pkgs.python311.withPackages (
+    (pkgs.python313.withPackages (
       ps:
       [
         ps.pandas
@@ -31,9 +31,12 @@ let
         ps.matplotlib
         ps.matplotlib-venn
 
-        ps.plotly
+        ps.plotly 
         ps.ipykernel
         ps.jupyter
+
+        # BERT model 
+        ps.evaluate
       ]
       ++ [ mysql-connector ]
     )).override

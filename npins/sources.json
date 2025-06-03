@@ -1,17 +1,11 @@
 {
   "pins": {
     "nixpkgs": {
-      "type": "Git",
-      "repository": {
-        "type": "GitHub",
-        "owner": "nixos",
-        "repo": "nixpkgs"
-      },
-      "branch": "nixos-24.11",
-      "revision": "02f2af8c8a8c3b2c05028936a1e84daefa1171d4",
-      "url": "https://github.com/nixos/nixpkgs/archive/02f2af8c8a8c3b2c05028936a1e84daefa1171d4.tar.gz",
-      "hash": "0zp5bqd00rl9id7xm3inwm1aib28b2mww91kmw75ym46hr1q3w7c"
+      "type": "Channel",
+      "name": "nixos-25.05",
+      "url": "https://releases.nixos.org/nixos/25.05/nixos-25.05.803297.10d7f8d34e5e/nixexprs.tar.xz",
+      "hash": "17ns1gwk6f2g4km9y3hwvr593gwlkskivnp5bd8rpynz5g5p32jm"
     }
   },
-  "version": 3
+  "version": 5
 }
