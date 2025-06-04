@@ -137,7 +137,14 @@ class DatasetBuilder:
         ratio_tno = 0.1  # TODO: add this in config
         n_tno = round(self.templates.shape[0] * ratio_tno)
         self.df_tno = self.templates.sample(n=n_tno)
-        self.templates = self.templates.drop(self.df_tno.index)
+       
+        # Also, a special case for template airport-S23, 
+        # for which we do not generate attacks either.
+        as23_template = self.templates[self.templates['ID'] == 'airport-S23']
+        self.df_tno = pd.concat([self.df_tno, as23_template])
+
+        self.templates = self.templates.drop(self.df_tno.index + as23_template.index)
+
 
         # Sample templates for df_test
         # 20% of the templates will be kept for test split.
@@ -229,6 +236,114 @@ class DatasetBuilder:
             n=n_n, replace=True, weights="normalized_weight"
         )
 
+    def get_random_conditions(template_info : dict) -> tuple[str, list]:
+        """ Randomly choose conditions to insert in query.
+
+        This functions mimic the behavior of a page with multiple possible 
+        search conditions, that might not all be used.
+
+        For now, templates allows this are: ['airport-S23']
+        Args:
+            template_info (dict): _description_
+        Returns:
+            tuple[str, list]: The string with all random conditions, 
+                and the syntetics user inputs
+        """
+        possible_fields = [
+            'type',
+            'name', 
+            'latitude',
+            'longitude',
+            'elevation_feet',
+            'scheduled_service',
+            'geo'  # This covers continent, iso_country, iso_region, municipality
+        ]
+        n_conds = random.randint(2, 7)
+        choosen_conds = random.sample(possible_fields, n_conds)
+
+        conditions = []
+        user_inputs = []
+
+        for field in choosen_conds: 
+            condition = None
+            if field == 'type':
+                type_patterns = [
+                    "type = '{airports_type}'",
+                    "type LIKE '{airports_type}'", 
+                    "type IN ('{airports_type}','{airports_type}')",
+                    "type IN ('{airports_type}','{airports_type}','{airports_type}')"
+                ]
+                condition = random.choice(type_patterns)
+                
+                
+            elif field == 'name':
+                name_patterns = [
+                    "name LIKE '%{ran_string1}%'",
+                    "name LIKE '%{ran_string1}%' OR name LIKE '%{ran_string2}%'"
+                ]
+                condition = random.choice(name_patterns)
+               
+                    
+            elif field == 'latitude':
+                lat_patterns = [
+                    "latitude >= {airports_latitude_deg}",
+                    "latitude <= {airports_latitude_deg}",
+                    "latitude BETWEEN {airports_latitude_deg} AND {airports_latitude_deg}"
+                ]
+                condition = random.choice(lat_patterns)
+                
+            elif field == 'longitude':
+                lng_patterns = [
+                    "longitude >= {airports_longitude_deg}",
+                    "longitude <= {airports_longitude_deg}", 
+                    "longitude BETWEEN {airports_longitude_deg} AND {airports_longitude_deg}"
+                ]
+                condition = random.choice(lng_patterns)
+                
+            elif field == 'elevation_feet':
+                elev_patterns = [
+                    "elevation_feet >= {airports_elevation_ft}",
+                    "elevation_feet <= {airports_elevation_ft}",
+                    "elevation_feet BETWEEN {airports_elevation_ft} AND {airports_elevation_ft}"
+                ]
+                condition = random.choice(elev_patterns)
+                
+            elif field == 'scheduled_service':
+                service_patterns = [
+                    "scheduled_service = {airports_scheduled_service}",
+                    "scheduled_service LIKE {airports_scheduled_service}"
+                ]
+                condition = random.choice(service_patterns)
+                
+            elif field == 'geo':
+                geo_fields = [
+                    "continent LIKE {airports_continent}",
+                    "continent = {airports_continent}",
+                    "iso_country = {airports_iso_country}",
+                    "iso_country LIKE {airports_iso_country}",
+                    "iso_region = {airports_iso_region}",
+                    "iso_region LIKE {airports_iso_region}",
+                    "municipality = {airports_municipality}",
+                    "municipality LIKE {airports_municipality}",
+                    "( FIND_IN_SET('{rand_string}', keywords_field) > 0 OR FIND_IN_SET('{rand_string}', keywords_field) > 0 OR FIND_IN_SET('{rand_string}', keywords_field) > 0)",
+                    "( FIND_IN_SET('{rand_string}', keywords_field) > 0 OR FIND_IN_SET('{rand_string}', keywords_field) > 0)",
+                    "( FIND_IN_SET('{rand_string}', keywords_field) > 0)",
+                ]
+                condition = random.choice(geo_fields)            
+            # Now fill condition with actual placeholder and keep their value in user_inputs.
+            # TODO
+            
+            # Then add it to conditions array
+            conditions.append(condition)
+        
+
+        condition_string = " AND ".join(conditions)
+        return condition_string, user_inputs  
+
+
+
+
+
     def generate_normal_queries(self, do_syn_check: bool):
         # Iterate over placeholders, and payload clause for type
         # Randomly choose a value in dict for that placeholder
@@ -254,8 +369,11 @@ class DatasetBuilder:
             for placeholder, type in zip(all_placeholders, all_types):
                 # Remove placeholder's artificial int suffix:
                 placeholder = placeholder.rstrip("123456789")
-
-                if placeholder == "rand_pos_number":
+                
+                if placeholder == "conditions":
+                    type = 'ignore'
+                    filler = 
+                elif placeholder == "rand_pos_number":
                     filler = random.randint(0, 64000)
                 elif placeholder == "rand_medium_pos_number":
                     filler = random.randint(1000, 6400)
@@ -280,8 +398,12 @@ class DatasetBuilder:
                         filler = str(filler).replace('"', '""')
 
                         query = query.replace(f"{{{placeholder}}}", f"{filler}", 1)
+                    case 'ignore':
+                        pass
                     case _:
                         raise ValueError(f"Unknown payload type: {type}.")
+                
+                
                 user_inputs.append(filler)
 
             if do_syn_check:
