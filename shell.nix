@@ -12,7 +12,7 @@ let
       version = "9.3.0";
       format = "wheel";
     in
-    pkgs.python311.pkgs.buildPythonPackage {
+    pkgs.python312.pkgs.buildPythonPackage {
       # Have to use direct fetchurl as package is not updated in nixkpgs
       # 9.3.0 or 9.2.0 are not available at https://files.pythonhosted.org/packages/source/m/mysql-connector-python/mysql-connector-python-9.3.0.tar.gz
       # And i couldn't make fetchPypi use the correct wheel address.
