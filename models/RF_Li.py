@@ -2,6 +2,7 @@ import logging
 import re
 from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
+from explain import plot_pca
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 
@@ -221,7 +222,7 @@ class CustomRF_Li:
         f_matrix, labels = self.preprocess_for_preds(df)
         ppreds = self.clf.predict_proba(f_matrix.to_numpy())
         return labels, ppreds
-    
+
     def preprocess_for_preds(
         self, df: pd.DataFrame, drop_og_columns: bool = True
     ) -> tuple[pd.DataFrame, np.ndarray]:
@@ -243,7 +244,7 @@ class CustomRF_Li:
                     "attack_status",
                     "attack_stage",
                     "tamper_method",
-                    "template_split",  
+                    "template_split",
                 ],
                 axis=1,
                 inplace=True,
@@ -255,11 +256,17 @@ class CustomRF_Li:
     def train_model(
         self,
         df: pd.DataFrame,
+        project_paths,
         model_name: str = None,
     ):
         self.model_name = model_name
         df_pped, train_labels = self.preprocess_for_preds(df)
-
+        plot_pca(
+            X=df_pped.to_numpy(),
+            y=train_labels,
+            project_paths=project_paths,
+            model_name=f"{model_name}_train",
+        )
         rf = RandomForestClassifier(
             random_state=self.GENERIC.RANDOM_SEED, max_depth=self.max_depth, n_jobs=-1
         )
@@ -304,7 +311,7 @@ class CustomDT_Li:
                     "attack_status",
                     "attack_stage",
                     "tamper_method",
-                    "template_split",  
+                    "template_split",
                 ],
                 axis=1,
                 inplace=True,
@@ -316,12 +323,21 @@ class CustomDT_Li:
     def train_model(
         self,
         df: pd.DataFrame,
+        project_paths,
         model_name: str = None,
+
     ):
         self.model_name = model_name
         df_pped, train_labels = self.preprocess_for_preds(df)
         self.feature_names = df_pped.columns
-
+        
+        plot_pca(
+            X=df_pped.to_numpy(),
+            y=train_labels,
+            project_paths=project_paths,
+            model_name=f"{model_name}_train",
+        )
+        
         dt = DecisionTreeClassifier(
             random_state=self.GENERIC.RANDOM_SEED, max_depth=self.max_depth
         )

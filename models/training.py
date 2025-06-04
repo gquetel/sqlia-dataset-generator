@@ -25,6 +25,7 @@ from Sentence_BERT import CustomBERT
 
 from explain import (
     plot_confusion_matrices_by_technique,
+    plot_pca,
     plot_pr_curves_plt,
     plot_roc_curves_plt,
     print_and_save_metrics,
@@ -147,6 +148,14 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     df_pped_wout_og_cols = df_pped.drop(df_test.columns.to_list(), axis=1)
     probas = model.clf.predict_proba(df_pped_wout_og_cols.to_numpy())
 
+    # 1.5 => PCA
+    plot_pca(
+        df_pped_wout_og_cols.to_numpy(),
+        labels,
+        project_paths=project_paths,
+        model_name=model_name,
+    )
+
     # 2 => Preds
     preds = np.argmax(probas, axis=1)
     df_pped["probas"] = probas.tolist()
@@ -238,14 +247,14 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
 def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_RF"
     model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
-    model.train_model(df=df_train, model_name=model_name)
+    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
 def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_DT"
     model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
-    model.train_model(df=df_train, model_name=model_name)
+    model.train_model(df=df_train, model_name=model_name,project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
@@ -286,7 +295,6 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     folder_name = f"output/errors/"
     Path(folder_name).mkdir(exist_ok=True, parents=True)
     df_errors.to_csv(f"{folder_name}{model_name}.csv", index=False)
-
 
     # 3 => print_and_save_metrics all
     training_results.append(
@@ -498,7 +506,6 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     probas = np.concatenate([probas_og, probas_c])
     preds = np.concatenate([preds_og, preds_c])
 
-
     training_results.append(
         print_and_save_metrics(
             labels,
@@ -618,7 +625,6 @@ if __name__ == "__main__":
         },
     )
 
-    
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 

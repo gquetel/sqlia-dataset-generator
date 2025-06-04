@@ -132,7 +132,40 @@ def plot_confusion_matrices_by_technique(
     folder_path = f"{project_paths.output_path}confmatrices/"
     Path(folder_path).mkdir(exist_ok=True, parents=True)
     fp_fig = f"{folder_path}confusion_matrix_{model_name}{suffix}.png"
-    plt.savefig(fp_fig)
+    plt.savefig(fp_fig)  
+
+    
+def plot_pca(X : np.ndarray, y : np.ndarray, project_paths, model_name : str):
+    from sklearn.decomposition import PCA
+    assert(isinstance(X,np.ndarray))
+
+    pca = PCA(n_components=2)
+    X_r = pca.fit_transform(X)
+    print(
+    "explained variance ratio (first two components): %s"
+    % str(pca.explained_variance_ratio_)
+    )
+
+    plt.figure(figsize=(8, 6))
+    
+    classes = np.unique(y)
+    colors = ["darkorange", "turquoise"]
+    
+    for i, class_label in enumerate(classes):
+        mask = y == class_label
+        plt.scatter(X_r[mask, 0], X_r[mask, 1], 
+                   c=colors[i], alpha=0.3, s=50,
+                   label=f'Class {class_label}')
+    
+    plt.xlabel(f'First Principal Component ({pca.explained_variance_ratio_[0]:.2%} variance)')
+    plt.ylabel(f'Second Principal Component ({pca.explained_variance_ratio_[1]:.2%} variance)')
+    plt.title('PCA of Binary Classification Data')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    folder_name = f"{project_paths.output_path}pca_analysis/"
+    Path(folder_name).mkdir(exist_ok=True,parents=True)
+    plt.savefig(f"{folder_name}pca_{model_name}.png")
 
 
 def plot_pr_curves_plt(
