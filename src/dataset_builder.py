@@ -139,11 +139,13 @@ class DatasetBuilder:
         self.df_tno = self.templates.sample(n=n_tno)
        
         # Also, a special case for template airport-S23, 
+        # "SELECT id FROM airports WHERE {conditions}",airport-S23,Retrieve airport ids based on generated conditions,string
         # for which we do not generate attacks either.
-        as23_template = self.templates[self.templates['ID'] == 'airport-S23']
-        self.df_tno = pd.concat([self.df_tno, as23_template])
+        # as23_template = self.templates[self.templates['ID'] == 'airport-S23']
+        # self.df_tno = pd.concat([self.df_tno, as23_template])
 
-        self.templates = self.templates.drop(self.df_tno.index + as23_template.index)
+        # self.templates = self.templates.drop(self.df_tno.index + as23_template.index)
+        self.templates = self.templates.drop(self.df_tno.index)
 
 
         # Sample templates for df_test
@@ -332,7 +334,7 @@ class DatasetBuilder:
                 condition = random.choice(geo_fields)            
             # Now fill condition with actual placeholder and keep their value in user_inputs.
             # TODO
-            
+
             # Then add it to conditions array
             conditions.append(condition)
         
