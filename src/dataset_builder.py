@@ -127,6 +127,7 @@ class DatasetBuilder:
         # Testing settings, allows for quick iteration over templates.
         if testing_mode:
             n_templates = 10
+            # n_templates = len(self.templates)
             self.templates = self.templates.sample(n=n_templates)
             logger.warning(
                 f"Testing mode enabled, using {n_templates} templates and error technique"
@@ -256,6 +257,10 @@ class DatasetBuilder:
 
                 if placeholder == "rand_pos_number":
                     filler = random.randint(0, 64000)
+                elif placeholder == "rand_medium_pos_number":
+                    filler = random.randint(1000, 6400)
+                elif placeholder == "rand_small_pos_number":
+                    filler = random.randint(2, 5)
                 elif placeholder == "rand_string":
                     alphabet = string.ascii_letters + string.digits
                     filler = "".join(secrets.choice(alphabet) for i in range(20))
@@ -282,7 +287,7 @@ class DatasetBuilder:
             if do_syn_check:
                 if not self._verify_syntactic_validity_query(query=query):
                     raise ValueError("Failed normal query: ", query)
-            # TODO: user_inputs
+            user_inputs = [str(u) for u in user_inputs]
             generated_normal_queries.append(
                 {
                     "full_query": query,
@@ -325,7 +330,7 @@ class DatasetBuilder:
             templates=self.templates, sqlconnector=self.sqlc, port=server_port
         )
         server.start_server()
-
+        
         # Now iterate over templates and techniques to generate payloads.
         sqlg = sqlmapGenerator(
             config=self.config,
@@ -335,6 +340,7 @@ class DatasetBuilder:
             port=server_port,
         )
         generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
+        # input()
         server.stop_server()
 
         self._n_attacks = len(generated_attack_queries)

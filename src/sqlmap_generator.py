@@ -8,6 +8,8 @@ import urllib.request
 import urllib.error
 import mysql.connector
 import re
+import string
+import secrets
 
 import random
 
@@ -201,7 +203,17 @@ class sqlmapGenerator:
 
         for param in parameters:
             param_no_sx = param.rstrip("123456789")
-            ran_values = random.choices(self.pdl[(schema_name, param_no_sx)], k=10)
+            if param_no_sx == "rand_pos_number":
+                ran_values = [random.randint(0, 64000) for _ in range(10)]
+            elif param_no_sx == "rand_medium_pos_number":
+                ran_values = [random.randint(1000, 6400) for _ in range(10)]
+            elif param_no_sx == "rand_small_pos_number":
+                ran_values = [random.randint(2, 5) for _ in range(10)]
+            elif param_no_sx == "rand_string":
+                alphabet = string.ascii_letters + string.digits
+                ran_values = ["".join(secrets.choice(alphabet) for i in range(20)) for _ in range(10)]
+            else:
+                ran_values = random.choices(self.pdl[(schema_name, param_no_sx)], k=10)
 
             values_str = str(ran_values).replace('"', '\\"')
             e_str += f"{param}=random.choice({values_str});"
@@ -299,7 +311,6 @@ class sqlmapGenerator:
             logger.info(f">> Using recon command: {recon_command}")
 
             retcode = self.call_sqlmap_subprocess(command=recon_command)
-
             # Fetch all queries for current parameter
             recon_queries = self.sqlc.get_and_empty_sent_queries()
             full_queries = list(filter(lambda a: a != default_query, recon_queries))
@@ -410,7 +421,19 @@ class sqlmapGenerator:
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
             param_no_sx = param.rstrip("123456789")
-            random_param_value = random.choice(self.pdl[(schema_name, param_no_sx)])
+            
+            if param_no_sx == "rand_pos_number":
+                random_param_value = random.randint(0, 64000)
+            elif param_no_sx == "rand_medium_pos_number":
+                random_param_value = random.randint(1000, 6400)
+            elif param_no_sx == "rand_small_pos_number":
+                random_param_value = random.randint(2, 5)
+            elif param_no_sx == "rand_string":
+                alphabet = string.ascii_letters + string.digits
+                random_param_value = "".join(secrets.choice(alphabet) for i in range(20))
+            else:
+                random_param_value = random.choice(self.pdl[(schema_name, param_no_sx)])
+            
             params[param] = random_param_value
 
         encoded_params = urllib.parse.urlencode(params)
@@ -508,6 +531,7 @@ class sqlmapGenerator:
                     )
                     self._scenario_id += 1
                     continue
+                
                 self.perform_attack(i, template, debug_mode)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
