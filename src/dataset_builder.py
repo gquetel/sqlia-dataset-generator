@@ -107,20 +107,19 @@ class DatasetBuilder:
         return _all_templates
 
     def change_split(self, args):
-        testing_mode = args.testing 
-        do_syn_check = args.no_syn_check
+        testing_mode = args.testing
+        do_syn_check = not args.no_syn_check
         train_size = 0.7
 
         # Load dataset
         _df = pd.read_csv(self.outpath)
-        
+
         # Only keep attacks
         self.df = _df[_df["label"] == 1]
         self._n_attacks = len(self.df)
 
         # Init templates
         self.select_templates(testing_mode=testing_mode)
-
 
         l_normal_templates = (
             list(self.templates["ID"].unique())
@@ -167,7 +166,7 @@ class DatasetBuilder:
             self.templates = pd.concat([self.templates, as23_template])
 
         # Samples templates for normal only generation:
-        ratio_tno = 0.1  # TODO: add this in config
+        ratio_tno = 0.1 # TODO: add this in config
         n_tno = round(self.templates.shape[0] * ratio_tno)
         self.df_tno = self.templates.sample(n=n_tno)
 
