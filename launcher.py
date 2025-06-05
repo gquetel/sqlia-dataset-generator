@@ -38,6 +38,13 @@ def init_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--change-split",
+        dest="change_split",
+        action="store_true",
+        help="Generate new normal queries and a new train test split based on already generated attacks.",
+    )
+
+    parser.add_argument(
         "--testing",
         action="store_true",
         help="Enable testing mode, for fast generation of a smaller dataset.",
@@ -72,10 +79,15 @@ def main():
     init_logging(args.debug)
     config = init_config(args)
 
-    db = DatasetBuilder(config)
-    db.build(args)
+    if args.change_split: 
+        db = DatasetBuilder(config)
+        db.change_split(args)
+    else: 
+        db = DatasetBuilder(config)
+        db.build(args)
+    
     db.save()
-
+    
 
 if __name__ == "__main__":
     main()

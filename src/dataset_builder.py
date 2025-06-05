@@ -106,6 +106,35 @@ class DatasetBuilder:
         )
         return _all_templates
 
+    def change_split(self, args):
+        testing_mode = args.testing 
+        do_syn_check = args.no_syn_check
+        train_size = 0.7
+
+        # Load dataset
+        _df = pd.read_csv(self.outpath)
+        
+        # Only keep attacks
+        self.df = _df[_df["label"] == 1]
+        self._n_attacks = len(self.df)
+
+        # Init templates
+        self.select_templates(testing_mode=testing_mode)
+
+
+        l_normal_templates = (
+            list(self.templates["ID"].unique())
+            + list(self.df_tno["ID"].unique())
+            + list(self.df_tadmin["ID"].unique())
+        )
+        self.populate_normal_templates(self._n_attacks, l_normal_templates)
+        self.generate_normal_queries(do_syn_check)
+
+        self._add_split_column_include(train_size=train_size)
+        self._augment_test_set_normal_queries(do_syn_check)
+
+        self._add_template_split_info()
+
     def select_templates(self, testing_mode: bool):
         """Modify self.templates according to the generation settings.
 
@@ -149,7 +178,7 @@ class DatasetBuilder:
 
         # Sample templates for df_test
         # 20% of the templates will be kept for test split.
-        ratio_tt = 0.2
+        ratio_tt = 0.5
         n_tt = round(self.templates.shape[0] * ratio_tt)
         self.df_templates_test = self.templates.sample(n=n_tt)
 
@@ -288,17 +317,17 @@ class DatasetBuilder:
             condition = None
             if field == "type":
                 type_patterns = [
-                    "type = \"{airports_type}\"",
-                    "type LIKE \"{airports_type}\"",
-                    "type IN (\"{airports_type}\",\"{airports_type}\")",
-                    "type IN (\"{airports_type}\",\"{airports_type}\",\"{airports_type}\")",
+                    'type = "{airports_type}"',
+                    'type LIKE "{airports_type}"',
+                    'type IN ("{airports_type}","{airports_type}")',
+                    'type IN ("{airports_type}","{airports_type}","{airports_type}")',
                 ]
                 condition = random.choice(type_patterns)
 
             elif field == "name":
                 name_patterns = [
-                    "name LIKE \"%{rand_string}%\"",
-                    "name LIKE \"%{rand_string}%\" OR name LIKE \"%{rand_string}%\"",
+                    'name LIKE "%{rand_string}%"',
+                    'name LIKE "%{rand_string}%" OR name LIKE "%{rand_string}%"',
                 ]
                 condition = random.choice(name_patterns)
 
@@ -328,24 +357,24 @@ class DatasetBuilder:
 
             elif field == "scheduled_service":
                 service_patterns = [
-                    "scheduled_service = \"{airports_scheduled_service}\"",
-                    "scheduled_service LIKE \"{airports_scheduled_service}\"",
+                    'scheduled_service = "{airports_scheduled_service}"',
+                    'scheduled_service LIKE "{airports_scheduled_service}"',
                 ]
                 condition = random.choice(service_patterns)
 
             elif field == "geo":
                 geo_fields = [
-                    "continent LIKE \"{airports_continent}\"",
-                    "continent = \"{airports_continent}\"",
-                    "iso_country = \"{airports_iso_country}\"",
-                    "iso_country LIKE \"{airports_iso_country}\"",
-                    "iso_region = \"{airports_iso_region}\"",
-                    "iso_region LIKE \"{airports_iso_region}\"",
-                    "municipality = \"{airports_municipality}\"",
-                    "municipality LIKE \"{airports_municipality}\"",
-                    "( FIND_IN_SET(\"{rand_string}\", keywords_field) > 0 OR FIND_IN_SET(\"{rand_string}\", keywords_field) > 0 OR FIND_IN_SET(\"{rand_string}\", keywords_field) > 0)",
-                    "( FIND_IN_SET(\"{rand_string}\", keywords_field) > 0 OR FIND_IN_SET(\"{rand_string}\", keywords_field) > 0)",
-                    "( FIND_IN_SET(\"{rand_string}\", keywords_field) > 0)",
+                    'continent LIKE "{airports_continent}"',
+                    'continent = "{airports_continent}"',
+                    'iso_country = "{airports_iso_country}"',
+                    'iso_country LIKE "{airports_iso_country}"',
+                    'iso_region = "{airports_iso_region}"',
+                    'iso_region LIKE "{airports_iso_region}"',
+                    'municipality = "{airports_municipality}"',
+                    'municipality LIKE "{airports_municipality}"',
+                    '( FIND_IN_SET("{rand_string}", keywords_field) > 0 OR FIND_IN_SET("{rand_string}", keywords_field) > 0 OR FIND_IN_SET("{rand_string}", keywords_field) > 0)',
+                    '( FIND_IN_SET("{rand_string}", keywords_field) > 0 OR FIND_IN_SET("{rand_string}", keywords_field) > 0)',
+                    '( FIND_IN_SET("{rand_string}", keywords_field) > 0)',
                 ]
                 condition = random.choice(geo_fields)
             # Now fill condition with actual placeholder and keep their value in user_inputs.
