@@ -119,6 +119,7 @@ class DatasetBuilder:
         """
 
         self.templates = self.get_all_templates()
+        as23_template = self.templates[self.templates["ID"] == "airport-S23"]
 
         # First, remove administrator statements to not mess with ratios computations
         self.df_tadmin = self.templates[self.templates["ID"].str.contains("admin")]
@@ -127,26 +128,24 @@ class DatasetBuilder:
         # Testing settings, allows for quick iteration over templates.
         if testing_mode:
             n_templates = 10
-            # n_templates = len(self.templates)
+
             self.templates = self.templates.sample(n=n_templates)
             logger.warning(
                 f"Testing mode enabled, using {n_templates} templates and error technique"
             )
 
+            # TODO: remove after testing, force presence of S23
+            self.templates = pd.concat([self.templates, as23_template])
+
         # Samples templates for normal only generation:
         ratio_tno = 0.1  # TODO: add this in config
         n_tno = round(self.templates.shape[0] * ratio_tno)
         self.df_tno = self.templates.sample(n=n_tno)
-       
-        # Also, a special case for template airport-S23, 
-        # "SELECT id FROM airports WHERE {conditions}",airport-S23,Retrieve airport ids based on generated conditions,string
+
+        # Also, a special case for template airport-S23,
         # for which we do not generate attacks either.
-        # as23_template = self.templates[self.templates['ID'] == 'airport-S23']
-        # self.df_tno = pd.concat([self.df_tno, as23_template])
-
-        # self.templates = self.templates.drop(self.df_tno.index + as23_template.index)
+        self.df_tno = pd.concat([self.df_tno, as23_template])
         self.templates = self.templates.drop(self.df_tno.index)
-
 
         # Sample templates for df_test
         # 20% of the templates will be kept for test split.
@@ -238,27 +237,46 @@ class DatasetBuilder:
             n=n_n, replace=True, weights="normalized_weight"
         )
 
-    def get_random_conditions(template_info : dict) -> tuple[str, list]:
-        """ Randomly choose conditions to insert in query.
+    def fill_placeholder(
+        self, query: str, placeholder: str, schema_name: str, count: int = 1
+    ) -> tuple[str, str]:
+        if placeholder == "rand_pos_number":
+            filler = random.randint(0, 64000)
+        elif placeholder == "rand_medium_pos_number":
+            filler = random.randint(1000, 6400)
+        elif placeholder == "rand_small_pos_number":
+            filler = random.randint(2, 5)
+        elif placeholder == "rand_string":
+            alphabet = string.ascii_letters + string.digits
+            filler = "".join(secrets.choice(alphabet) for i in range(20))
+        else:
+            filler = random.choice(self.dictionaries[(schema_name, placeholder)])
+        filler = str(filler).replace('"', '""')
+        return (query.replace(f"{{{placeholder}}}", f"{filler}", 1), filler)
 
-        This functions mimic the behavior of a page with multiple possible 
+    def fill_condition_randomly(
+        self, query: str, template_info: dict
+    ) -> tuple[str, list]:
+        """Randomly choose conditions to insert in query.
+
+        This functions mimic the behavior of a page with multiple possible
         search conditions, that might not all be used.
 
         For now, templates allows this are: ['airport-S23']
         Args:
             template_info (dict): _description_
         Returns:
-            tuple[str, list]: The string with all random conditions, 
+            tuple[str, list]: The string with all random conditions,
                 and the syntetics user inputs
         """
         possible_fields = [
-            'type',
-            'name', 
-            'latitude',
-            'longitude',
-            'elevation_feet',
-            'scheduled_service',
-            'geo'  # This covers continent, iso_country, iso_region, municipality
+            "type",
+            "name",
+            "latitude",
+            "longitude",
+            "elevation_feet",
+            "scheduled_service",
+            "geo",  # This covers continent, iso_country, iso_region, municipality
         ]
         n_conds = random.randint(2, 7)
         choosen_conds = random.sample(possible_fields, n_conds)
@@ -266,85 +284,91 @@ class DatasetBuilder:
         conditions = []
         user_inputs = []
 
-        for field in choosen_conds: 
+        for field in choosen_conds:
             condition = None
-            if field == 'type':
+            if field == "type":
                 type_patterns = [
-                    "type = '{airports_type}'",
-                    "type LIKE '{airports_type}'", 
-                    "type IN ('{airports_type}','{airports_type}')",
-                    "type IN ('{airports_type}','{airports_type}','{airports_type}')"
+                    "type = \"{airports_type}\"",
+                    "type LIKE \"{airports_type}\"",
+                    "type IN (\"{airports_type}\",\"{airports_type}\")",
+                    "type IN (\"{airports_type}\",\"{airports_type}\",\"{airports_type}\")",
                 ]
                 condition = random.choice(type_patterns)
-                
-                
-            elif field == 'name':
+
+            elif field == "name":
                 name_patterns = [
-                    "name LIKE '%{ran_string1}%'",
-                    "name LIKE '%{ran_string1}%' OR name LIKE '%{ran_string2}%'"
+                    "name LIKE \"%{rand_string}%\"",
+                    "name LIKE \"%{rand_string}%\" OR name LIKE \"%{rand_string}%\"",
                 ]
                 condition = random.choice(name_patterns)
-               
-                    
-            elif field == 'latitude':
+
+            elif field == "latitude":
                 lat_patterns = [
                     "latitude >= {airports_latitude_deg}",
                     "latitude <= {airports_latitude_deg}",
-                    "latitude BETWEEN {airports_latitude_deg} AND {airports_latitude_deg}"
+                    "latitude BETWEEN {airports_latitude_deg} AND {airports_latitude_deg}",
                 ]
                 condition = random.choice(lat_patterns)
-                
-            elif field == 'longitude':
+
+            elif field == "longitude":
                 lng_patterns = [
                     "longitude >= {airports_longitude_deg}",
-                    "longitude <= {airports_longitude_deg}", 
-                    "longitude BETWEEN {airports_longitude_deg} AND {airports_longitude_deg}"
+                    "longitude <= {airports_longitude_deg}",
+                    "longitude BETWEEN {airports_longitude_deg} AND {airports_longitude_deg}",
                 ]
                 condition = random.choice(lng_patterns)
-                
-            elif field == 'elevation_feet':
+
+            elif field == "elevation_feet":
                 elev_patterns = [
                     "elevation_feet >= {airports_elevation_ft}",
                     "elevation_feet <= {airports_elevation_ft}",
-                    "elevation_feet BETWEEN {airports_elevation_ft} AND {airports_elevation_ft}"
+                    "elevation_feet BETWEEN {airports_elevation_ft} AND {airports_elevation_ft}",
                 ]
                 condition = random.choice(elev_patterns)
-                
-            elif field == 'scheduled_service':
+
+            elif field == "scheduled_service":
                 service_patterns = [
-                    "scheduled_service = {airports_scheduled_service}",
-                    "scheduled_service LIKE {airports_scheduled_service}"
+                    "scheduled_service = \"{airports_scheduled_service}\"",
+                    "scheduled_service LIKE \"{airports_scheduled_service}\"",
                 ]
                 condition = random.choice(service_patterns)
-                
-            elif field == 'geo':
+
+            elif field == "geo":
                 geo_fields = [
-                    "continent LIKE {airports_continent}",
-                    "continent = {airports_continent}",
-                    "iso_country = {airports_iso_country}",
-                    "iso_country LIKE {airports_iso_country}",
-                    "iso_region = {airports_iso_region}",
-                    "iso_region LIKE {airports_iso_region}",
-                    "municipality = {airports_municipality}",
-                    "municipality LIKE {airports_municipality}",
-                    "( FIND_IN_SET('{rand_string}', keywords_field) > 0 OR FIND_IN_SET('{rand_string}', keywords_field) > 0 OR FIND_IN_SET('{rand_string}', keywords_field) > 0)",
-                    "( FIND_IN_SET('{rand_string}', keywords_field) > 0 OR FIND_IN_SET('{rand_string}', keywords_field) > 0)",
-                    "( FIND_IN_SET('{rand_string}', keywords_field) > 0)",
+                    "continent LIKE \"{airports_continent}\"",
+                    "continent = \"{airports_continent}\"",
+                    "iso_country = \"{airports_iso_country}\"",
+                    "iso_country LIKE \"{airports_iso_country}\"",
+                    "iso_region = \"{airports_iso_region}\"",
+                    "iso_region LIKE \"{airports_iso_region}\"",
+                    "municipality = \"{airports_municipality}\"",
+                    "municipality LIKE \"{airports_municipality}\"",
+                    "( FIND_IN_SET(\"{rand_string}\", keywords_field) > 0 OR FIND_IN_SET(\"{rand_string}\", keywords_field) > 0 OR FIND_IN_SET(\"{rand_string}\", keywords_field) > 0)",
+                    "( FIND_IN_SET(\"{rand_string}\", keywords_field) > 0 OR FIND_IN_SET(\"{rand_string}\", keywords_field) > 0)",
+                    "( FIND_IN_SET(\"{rand_string}\", keywords_field) > 0)",
                 ]
-                condition = random.choice(geo_fields)            
+                condition = random.choice(geo_fields)
             # Now fill condition with actual placeholder and keep their value in user_inputs.
-            # TODO
+            all_placeholders = re.findall(r"\{([-a-zA-Z_]+)\}", condition)
+            schema_name = template_info.ID.split("-")[0]
+
+            for placeholder in all_placeholders:
+                condition, filler = self.fill_placeholder(
+                    query=condition,
+                    placeholder=placeholder,
+                    schema_name=schema_name,
+                    count=1,
+                )
+                # Add generated fillers to user_input array
+                user_inputs.append(filler)
 
             # Then add it to conditions array
             conditions.append(condition)
-        
 
         condition_string = " AND ".join(conditions)
-        return condition_string, user_inputs  
+        query = query.replace(f"{{conditions}}", f"{condition_string}", 1)
 
-
-
-
+        return query, user_inputs
 
     def generate_normal_queries(self, do_syn_check: bool):
         # Iterate over placeholders, and payload clause for type
@@ -354,59 +378,31 @@ class DatasetBuilder:
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
-
-            # template_row.payload_type is na when no input needs filling.
-            if not pd.isna(template_row.payload_type):
-                all_types = template_row.payload_type.split()
-            else:
-                all_types = []
-
-            # print(all_types,all_placeholders)
-            assert len(all_types) == len(all_placeholders)
             schema_name = template_row.ID.split("-")[0]
 
-            # Replace 1 by 1 all placeholders by a randomly choosen dict value
             query = template_row.template
             user_inputs = []
-            for placeholder, type in zip(all_placeholders, all_types):
+
+            # Replace 1 by 1 all placeholders by a randomly choosen dict value
+            for placeholder in all_placeholders:
                 # Remove placeholder's artificial int suffix:
                 placeholder = placeholder.rstrip("123456789")
-                
+
+                # Special case for query on which conditions vary for each
+                # input (airport-S23).
                 if placeholder == "conditions":
-                    type = 'ignore'
-                    filler = 
-                elif placeholder == "rand_pos_number":
-                    filler = random.randint(0, 64000)
-                elif placeholder == "rand_medium_pos_number":
-                    filler = random.randint(1000, 6400)
-                elif placeholder == "rand_small_pos_number":
-                    filler = random.randint(2, 5)
-                elif placeholder == "rand_string":
-                    alphabet = string.ascii_letters + string.digits
-                    filler = "".join(secrets.choice(alphabet) for i in range(20))
-                else:
-                    filler = random.choice(
-                        self.dictionaries[(schema_name, placeholder)]
+                    query, fillers = self.fill_condition_randomly(
+                        query=query, template_info=template_row
                     )
-
-                match type:
-                    case "int" | "float":
-                        query = query.replace(f"{{{placeholder}}}", str(filler), 1)
-                    case "string":
-                        # New templating method, the string should
-                        # not be escaped. It is done in the template.
-
-                        # However, we also use double quotes, we need to escape those in filler
-                        filler = str(filler).replace('"', '""')
-
-                        query = query.replace(f"{{{placeholder}}}", f"{filler}", 1)
-                    case 'ignore':
-                        pass
-                    case _:
-                        raise ValueError(f"Unknown payload type: {type}.")
-                
-                
-                user_inputs.append(filler)
+                    user_inputs = user_inputs + fillers
+                else:
+                    query, filler = self.fill_placeholder(
+                        query=query,
+                        placeholder=placeholder,
+                        schema_name=schema_name,
+                        count=1,
+                    )
+                    user_inputs.append(filler)
 
             if do_syn_check:
                 if not self._verify_syntactic_validity_query(query=query):
@@ -454,7 +450,7 @@ class DatasetBuilder:
             templates=self.templates, sqlconnector=self.sqlc, port=server_port
         )
         server.start_server()
-        
+
         # Now iterate over templates and techniques to generate payloads.
         sqlg = sqlmapGenerator(
             config=self.config,
