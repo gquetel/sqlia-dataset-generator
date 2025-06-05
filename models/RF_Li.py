@@ -212,6 +212,7 @@ class CustomRF_Li:
     def __init__(self, GENERIC, max_depth: int | None = None):
         self.max_depth = max_depth
         self.GENERIC = GENERIC
+        self.model_name = None
 
     def predict(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         df_pped, labels = self.preprocess_for_preds(df)
@@ -279,7 +280,8 @@ class CustomDT_Li:
         self.max_depth = max_depth
         self.GENERIC = GENERIC
         self.feature_names = None
-
+        self.model_name = None
+    
     def predict(self, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         df_pped, labels = self.preprocess_for_preds(df)
         preds = self.clf.predict(df_pped.to_numpy())
@@ -323,21 +325,13 @@ class CustomDT_Li:
     def train_model(
         self,
         df: pd.DataFrame,
-        project_paths,
         model_name: str = None,
 
     ):
         self.model_name = model_name
         df_pped, train_labels = self.preprocess_for_preds(df)
         self.feature_names = df_pped.columns
-        
-        plot_pca(
-            X=df_pped.to_numpy(),
-            y=train_labels,
-            project_paths=project_paths,
-            model_name=f"{model_name}_train",
-        )
-        
+                
         dt = DecisionTreeClassifier(
             random_state=self.GENERIC.RANDOM_SEED, max_depth=self.max_depth
         )

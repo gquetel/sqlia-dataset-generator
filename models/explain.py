@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 from matplotlib import pyplot as plt
+from sklearn.tree import plot_tree
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -81,6 +82,47 @@ def print_and_save_metrics(
     }
 
 
+def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
+    """ Display Recall score per technique from a dataframe with preds. """
+    techniques = (
+        df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
+    )
+    logger.info(f"Computing recall for model: {model_name}{suffix}")
+    for i, technique in enumerate(techniques):
+        mask = (df["attack_technique"] == technique)
+        preds = df.loc[mask, "preds"]
+        labels = df.loc[mask, "label"]
+        srecall= (
+            f"{recall_score(labels, preds, average="binary")* 100:.2f}%"
+        )
+        logger.info(f"Recall for technique {technique}: {srecall}")
+
+
+
+    
+
+def plot_tree_clf(model, project_paths, max_depth: int | None = None):
+    n_leaves = model.clf.get_n_leaves()
+    w = np.sqrt(n_leaves * 10)
+    h = np.sqrt(n_leaves * 10)
+    plt.figure(figsize=(w, h))
+
+    plt.title(f"Decision tree for {model}")
+    folder_path = f"{project_paths.output_path}tree_plots/"
+    Path(folder_path).mkdir(exist_ok=True, parents=True)
+    _full_path = f"{folder_path}{model.model_name}"
+    plot_tree(
+        model.clf,
+        proportion=False,
+        feature_names=model.feature_names,
+        fontsize=5,
+        max_depth=max_depth,
+    )
+    plt.savefig(_full_path, dpi=200)
+    logger.info(f"Saved decision tree plot at {_full_path}. ")
+    plt.clf()
+
+
 def plot_confusion_matrices_by_technique(
     df_test: pd.DataFrame, model_name: str, project_paths, suffix: str = ""
 ):
@@ -132,39 +174,49 @@ def plot_confusion_matrices_by_technique(
     folder_path = f"{project_paths.output_path}confmatrices/"
     Path(folder_path).mkdir(exist_ok=True, parents=True)
     fp_fig = f"{folder_path}confusion_matrix_{model_name}{suffix}.png"
-    plt.savefig(fp_fig)  
+    plt.savefig(fp_fig)
 
-    
-def plot_pca(X : np.ndarray, y : np.ndarray, project_paths, model_name : str):
+
+def plot_pca(X: np.ndarray, y: np.ndarray, project_paths, model_name: str):
     from sklearn.decomposition import PCA
-    assert(isinstance(X,np.ndarray))
+
+    assert isinstance(X, np.ndarray)
 
     pca = PCA(n_components=2)
     X_r = pca.fit_transform(X)
     print(
-    "explained variance ratio (first two components): %s"
-    % str(pca.explained_variance_ratio_)
+        "explained variance ratio (first two components): %s"
+        % str(pca.explained_variance_ratio_)
     )
 
     plt.figure(figsize=(8, 6))
-    
+
     classes = np.unique(y)
     colors = ["darkorange", "turquoise"]
-    
+
     for i, class_label in enumerate(classes):
         mask = y == class_label
-        plt.scatter(X_r[mask, 0], X_r[mask, 1], 
-                   c=colors[i], alpha=0.3, s=50,
-                   label=f'Class {class_label}')
-    
-    plt.xlabel(f'First Principal Component ({pca.explained_variance_ratio_[0]:.2%} variance)')
-    plt.ylabel(f'Second Principal Component ({pca.explained_variance_ratio_[1]:.2%} variance)')
-    plt.title('PCA of Binary Classification Data')
+        plt.scatter(
+            X_r[mask, 0],
+            X_r[mask, 1],
+            c=colors[i],
+            alpha=0.3,
+            s=50,
+            label=f"Class {class_label}",
+        )
+
+    plt.xlabel(
+        f"First Principal Component ({pca.explained_variance_ratio_[0]:.2%} variance)"
+    )
+    plt.ylabel(
+        f"Second Principal Component ({pca.explained_variance_ratio_[1]:.2%} variance)"
+    )
+    plt.title("PCA of Binary Classification Data")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     folder_name = f"{project_paths.output_path}pca_analysis/"
-    Path(folder_name).mkdir(exist_ok=True,parents=True)
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
     plt.savefig(f"{folder_name}pca_{model_name}.png")
 
 

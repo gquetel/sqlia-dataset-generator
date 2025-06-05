@@ -24,10 +24,12 @@ from RF_CountVect import CustomRF_CountVectorizer
 from Sentence_BERT import CustomBERT
 
 from explain import (
+    get_recall_per_attack,
     plot_confusion_matrices_by_technique,
     plot_pca,
     plot_pr_curves_plt,
     plot_roc_curves_plt,
+    plot_tree_clf,
     print_and_save_metrics,
 )
 
@@ -235,6 +237,10 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
         suffix="_challenge",
     )
 
+    # 8 => Recall per technique
+    get_recall_per_attack(df=df_pped, model_name=model_name)
+    get_recall_per_attack(df=df_chall, model_name=model_name, suffix="_chall")
+
     # For AUC plot
     return (
         df_pped["label"],
@@ -254,7 +260,8 @@ def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
 def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Li-LSyn_DT"
     model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
-    model.train_model(df=df_train, model_name=model_name,project_paths=project_paths)
+    model.train_model(df=df_train, model_name=model_name)
+    plot_tree_clf(model=model, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
@@ -363,6 +370,10 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
         project_paths=project_paths,
         suffix="_challenge",
     )
+
+    # 8 => Recall per technique
+    get_recall_per_attack(df=_df, model_name=model_name)
+    get_recall_per_attack(df=_df_chall, model_name=model_name, suffix="_chall")
 
     # For AUC plot
     return _df["label"], _df["probas"], _df["preds"], ids_chall
