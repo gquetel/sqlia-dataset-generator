@@ -20,7 +20,7 @@ import torch
 
 
 from RF_Li import CustomRF_Li, CustomDT_Li
-from RF_CountVect import CustomRF_CountVectorizer
+from RF_CountVect import CustomDT_CountVectorizer, CustomRF_CountVectorizer
 from Sentence_BERT import CustomBERT
 
 from explain import (
@@ -141,7 +141,7 @@ def init_args() -> argparse.Namespace:
     return args
 
 
-def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
+def compute_metrics_li(model, df_test: pd.DataFrame, model_name: str):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
     # 1 => Probas (ppeds only)
@@ -151,12 +151,12 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     probas = model.clf.predict_proba(df_pped_wout_og_cols.to_numpy())
 
     # 1.5 => PCA
-    plot_pca(
-        df_pped_wout_og_cols.to_numpy(),
-        labels,
-        project_paths=project_paths,
-        model_name=model_name,
-    )
+    # plot_pca(
+    #     df_pped_wout_og_cols.to_numpy(),
+    #     labels,
+    #     project_paths=project_paths,
+    #     model_name=model_name,
+    # )
 
     # 2 => Preds
     preds = np.argmax(probas, axis=1)
@@ -225,21 +225,21 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     # 6 => Confusion matrix all
     # This function needs the dataframe with the preds and the original
     # columns information (attack_technique).
-    plot_confusion_matrices_by_technique(
-        df_test=df_pped, model_name=model_name, project_paths=project_paths
-    )
+    # plot_confusion_matrices_by_technique(
+    #     df_test=df_pped, model_name=model_name, project_paths=project_paths
+    # )
 
     # 7 => Confusion matrix challenging
-    plot_confusion_matrices_by_technique(
-        df_test=df_chall,
-        model_name=model_name,
-        project_paths=project_paths,
-        suffix="_challenge",
-    )
+    # plot_confusion_matrices_by_technique(
+    #     df_test=df_chall,
+    #     model_name=model_name,
+    #     project_paths=project_paths,
+    #     suffix="_challenge",
+    # )
 
     # 8 => Recall per technique
-    get_recall_per_attack(df=df_pped, model_name=model_name)
-    get_recall_per_attack(df=df_chall, model_name=model_name, suffix="_chall")
+    # get_recall_per_attack(df=df_pped, model_name=model_name)
+    # get_recall_per_attack(df=df_chall, model_name=model_name, suffix="_chall")
 
     # For AUC plot
     return (
@@ -250,26 +250,7 @@ def compute_metrics(model, df_test: pd.DataFrame, model_name: str):
     )
 
 
-def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Li-LSyn_RF"
-    model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
-    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
-
-
-def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Li-LSyn_DT"
-    model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
-    model.train_model(df=df_train, model_name=model_name)
-    plot_tree_clf(model=model, project_paths=project_paths)
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
-
-
-def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "CountVectorizer_RF"
-    model = CustomRF_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
-    model.train_model(df=df_train, model_name=model_name)
-
+def compute_metrics_cv(model, df_test: pd.DataFrame, model_name: str):
     # The index of labels is also resetted when returned by preprocess_for_preds.
     # If we don't reset the one of df_test earlier we get indexes mismatch
     # The proper way to do this would probably be to avoid resetting the index, but
@@ -358,25 +339,55 @@ def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
             "template_split": df_test["template_split"],
         }
     )
-    plot_confusion_matrices_by_technique(
-        df_test=_df, model_name=model_name, project_paths=project_paths
-    )
+    # plot_confusion_matrices_by_technique(
+    #     df_test=_df, model_name=model_name, project_paths=project_paths
+    # )
 
     _df_chall = _df[df_test["template_split"] == "challenging"]
     # 7 => Confusion matrix challenging
-    plot_confusion_matrices_by_technique(
-        df_test=_df_chall,
-        model_name=model_name,
-        project_paths=project_paths,
-        suffix="_challenge",
-    )
+    # plot_confusion_matrices_by_technique(
+    #     df_test=_df_chall,
+    #     model_name=model_name,
+    #     project_paths=project_paths,
+    #     suffix="_challenge",
+    # )
 
     # 8 => Recall per technique
-    get_recall_per_attack(df=_df, model_name=model_name)
-    get_recall_per_attack(df=_df_chall, model_name=model_name, suffix="_chall")
+    # get_recall_per_attack(df=_df, model_name=model_name)
+    # get_recall_per_attack(df=_df_chall, model_name=model_name, suffix="_chall")
 
     # For AUC plot
     return _df["label"], _df["probas"], _df["preds"], ids_chall
+
+
+def train_rf_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Li-LSyn_RF"
+    model = CustomRF_Li(GENERIC=GENERIC, max_depth=None)
+    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
+    return compute_metrics_li(model=model, df_test=df_test, model_name=model_name)
+
+
+def train_dt_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Li-LSyn_DT"
+    model = CustomDT_Li(GENERIC=GENERIC, max_depth=None)
+    model.train_model(df=df_train, model_name=model_name)
+    plot_tree_clf(model=model, project_paths=project_paths, max_depth=20)
+    return compute_metrics_li(model=model, df_test=df_test, model_name=model_name)
+
+
+def train_rf_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "CountVectorizer_RF"
+    model = CustomRF_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
+    model.train_model(df=df_train, model_name=model_name)
+    return compute_metrics_cv(model=model, df_test=df_test, model_name=model_name)
+
+
+def train_dt_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "CountVectorizer_DT"
+    model = CustomDT_CountVectorizer(GENERIC=GENERIC, max_depth=None, max_features=None)
+    model.train_model(df=df_train, model_name=model_name)
+    plot_tree_clf(model=model, project_paths=project_paths, max_depth=20)
+    return compute_metrics_cv(model=model, df_test=df_test, model_name=model_name)
 
 
 def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -396,7 +407,7 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         df_train, df_test
     )
     labels_li, probas_li, preds_li, ids_chall_li = train_rf_li(df_train, df_test)
-
+    _, _, _, _ = train_dt_cv(df_train=df_train, df_test=df_test)
     # We put all probas variable to same type / structure
     probas_li = np.array(probas_li.to_list())
     probas_cv = np.array(probas_cv.to_list())
@@ -639,8 +650,8 @@ if __name__ == "__main__":
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
-    # df_train = df_train.sample(int(len(df_train) / 20))
-    # df_test = df_test.sample(int(len(df_test) / 20))
+    # df_train = df_train.sample(int(len(df_train) / 200))
+    # df_test = df_test.sample(int(len(df_test) / 200))
 
     if args.gpu:
         train_gpu_models(df_train, df_test)

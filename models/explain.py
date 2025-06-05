@@ -97,8 +97,6 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
         )
         logger.info(f"Recall for technique {technique}: {srecall}")
 
-
-
     
 
 def plot_tree_clf(model, project_paths, max_depth: int | None = None):
