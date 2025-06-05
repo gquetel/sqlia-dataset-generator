@@ -477,7 +477,7 @@ def train_gpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         project_paths=project_paths,
         batch_size=32,
         lr=2e-5,
-        epochs=0,
+        epochs=3,
         weight_decay=0.01,
     )
     myBERT.set_dataloader_train(df_train)
