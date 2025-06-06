@@ -1,15 +1,12 @@
 import logging
-from sklearn.ensemble import RandomForestClassifier
 import pandas as pd
 from sklearn.svm import OneClassSVM
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import IsolationForest
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 
-
 logger = logging.getLogger(__name__)
-
 
 class OCSVM_CV:
     def __init__(
@@ -86,6 +83,79 @@ class OCSVM_CV:
         pp_queries_df = pd.DataFrame(pp_queries.toarray())
         df_copy = df.copy().reset_index(drop=True)
         df_pped = pd.concat([df_copy, pp_queries_df], axis=1)
-
         return df_pped, labels
  
+class IF_CV:
+    def __init__(
+        self,
+        GENERIC,
+        contamination: float = 0.1,
+        max_samples: int | str = "auto",
+        max_features: int | float = 1.0,
+        vectorizer_max_features: int | None = None
+    ):
+        self.contamination = contamination
+        self.max_samples = max_samples
+        self.max_features = max_features
+        self.random_state = GENERIC.RANDOM_SEED
+        self.vectorizer = CountVectorizer(max_features=vectorizer_max_features)
+        
+        self.GENERIC = GENERIC
+        self.clf = None
+        self.model_name = None
+        self.feature_names = None
+
+    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
+        df_pped = df.copy()
+        # Fit Vectorizer and transform queries at the same time.
+        pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
+        return pp_queries
+
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        project_paths,
+        model_name: str = None,
+    ):
+        self.model_name = model_name
+        f_matrix = self.preprocess_for_train(df)
+        
+        model = IsolationForest(
+            contamination=self.contamination,
+            max_samples=self.max_samples,
+            max_features=self.max_features,
+            random_state=self.random_state,
+        )
+        
+        self.feature_names = self.vectorizer.get_feature_names_out()
+        model.fit(f_matrix)
+        self.clf = model
+
+    def preprocess_for_preds(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        """ Return preprocessed queries.
+
+        WARNING: A New DataFrame with both features and original columns is returned if 
+        drop_og_columns is set to true. This means a new index is generated.        
+
+        Args:
+            df (pd.DataFrame): _description_
+            drop_og_columns (bool, optional): _description_. Defaults to True.
+
+        Returns:
+            tuple[pd.DataFrame, np.ndarray]: _description_
+        """
+        labels = df["label"]
+        pp_queries = self.vectorizer.transform(df["full_query"])
+        
+        if drop_og_columns:
+            return pp_queries, labels
+            
+        # Else, we need to keep track of initial columns. We artificially create a
+        # new dataframe. The index is resetted for cases where passed df does not
+        # possess a 0-based index.
+        pp_queries_df = pd.DataFrame(pp_queries.toarray())
+        df_copy = df.copy().reset_index(drop=True)
+        df_pped = pd.concat([df_copy, pp_queries_df], axis=1)
+        return df_pped, labels

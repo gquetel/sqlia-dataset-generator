@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 from sklearn.svm import OneClassSVM
-from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import IsolationForest
 
 logger = logging.getLogger(__name__)
 
@@ -197,8 +197,7 @@ def _get_ocsvm_li_features_from_query(s: pd.Series) -> pd.Series:
     d_features = extract_li_features(s["full_query"])
     return pd.Series({**s, **d_features})
 
-
-def pre_process_for_ocsvm_li(df: pd.DataFrame) -> pd.DataFrame:
+def pre_process_for_li(df: pd.DataFrame) -> pd.DataFrame:
     # input df has 2 columns: full_query, label
     # output df has the two previous columns and the new features
     _df = df.copy()
@@ -228,7 +227,7 @@ class OCSVM_Li:
     ) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
-        df_pped = pre_process_for_ocsvm_li(df_pped)
+        df_pped = pre_process_for_li(df_pped)
 
         if drop_og_columns:
             df_pped.drop(
@@ -281,6 +280,84 @@ class OCSVM_Li:
             kernel=self.kernel,
             gamma=self.gamma,
             max_iter=self.max_iter,
+        )
+        self.feature_columns = df_pped.columns.tolist()
+        model.fit(df_pped)
+
+        self.clf = model
+
+class IF_Li:
+    def __init__(
+        self,
+        GENERIC,
+        max_samples: str = "auto",
+        contamination: float = 0.1,
+    ):
+        self.max_samples = max_samples
+        self.contamination = contamination
+
+        self.random_state = GENERIC.RANDOM_SEED
+        self.clf = None
+        self.GENERIC = GENERIC
+        self.model_name = None
+
+    def preprocess_for_preds(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        df_pped = df.copy()
+        labels = np.array(df_pped["label"])
+        df_pped = pre_process_for_li(df_pped)
+
+        if drop_og_columns:
+            df_pped.drop(
+                ["label", "full_query"]
+                + [
+                    "statement_type",
+                    "query_template_id",
+                    "user_inputs",
+                    "attack_id",
+                    "attack_technique",
+                    "split",
+                    "attack_desc",
+                    "attack_status",
+                    "attack_stage",
+                    "tamper_method",
+                    "template_split",
+                ],
+                axis=1,
+                inplace=True,
+                errors="ignore",
+            )
+
+        return df_pped, labels
+
+    def preprocess_for_train(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> pd.DataFrame:
+        """Preprocess data for training. We ignore label data.
+
+        Args:
+            df (pd.DataFrame): _description_
+            drop_og_columns (bool, optional): _description_. Defaults to True.
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
+        return df_pped
+
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        project_paths,
+        model_name: str = None,
+    ):
+        self.model_name = model_name
+        df_pped = self.preprocess_for_train(df)
+        model = IsolationForest(
+            max_samples=self.max_samples,
+            contamination=self.contamination,
+            random_state=self.random_state,
         )
         self.feature_columns = df_pped.columns.tolist()
         model.fit(df_pped)
