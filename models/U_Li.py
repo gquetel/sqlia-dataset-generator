@@ -1,9 +1,9 @@
 import logging
 import re
 import pandas as pd
+from sklearn.neighbors import LocalOutlierFactor
 import numpy as np
 from sklearn.svm import OneClassSVM
-from sklearn.ensemble import IsolationForest
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +197,7 @@ def _get_ocsvm_li_features_from_query(s: pd.Series) -> pd.Series:
     d_features = extract_li_features(s["full_query"])
     return pd.Series({**s, **d_features})
 
+
 def pre_process_for_li(df: pd.DataFrame) -> pd.DataFrame:
     # input df has 2 columns: full_query, label
     # output df has the two previous columns and the new features
@@ -286,15 +287,16 @@ class OCSVM_Li:
 
         self.clf = model
 
-class IF_Li:
+
+class LOF_Li:
     def __init__(
         self,
         GENERIC,
-        max_samples: str = "auto",
+        n_jobs: int = -1,
         contamination: float = 0.1,
     ):
-        self.max_samples = max_samples
         self.contamination = contamination
+        self.n_jobs = n_jobs
 
         self.random_state = GENERIC.RANDOM_SEED
         self.clf = None
@@ -354,11 +356,7 @@ class IF_Li:
     ):
         self.model_name = model_name
         df_pped = self.preprocess_for_train(df)
-        model = IsolationForest(
-            max_samples=self.max_samples,
-            contamination=self.contamination,
-            random_state=self.random_state,
-        )
+        model = LocalOutlierFactor(n_jobs=self.n_jobs, novelty=True)
         self.feature_columns = df_pped.columns.tolist()
         model.fit(df_pped)
 

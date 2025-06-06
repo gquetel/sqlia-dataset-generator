@@ -2,6 +2,8 @@
 
 import os
 
+from U_Sentence_BERT import OCSVM_SecureBERT
+
 
 # We force device on which training happens.
 # device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
@@ -19,9 +21,8 @@ import sys
 import logging
 import torch
 
-from U_Li import IF_Li, OCSVM_Li
-from U_CountVect import IF_CV, OCSVM_CV
-
+from U_Li import LOF_Li, OCSVM_Li
+from U_CountVect import  LOF_CV, OCSVM_CV
 
 from explain import (
     get_recall_per_attack,
@@ -145,7 +146,7 @@ def init_args() -> argparse.Namespace:
 
 
 def compute_metrics(
-    model: OCSVM_Li | OCSVM_CV | IF_CV, df_test: pd.DataFrame, model_name: str
+    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li, df_test: pd.DataFrame, model_name: str
 ):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
@@ -168,6 +169,17 @@ def compute_metrics(
     )
 
 
+def compute_metrics_sbert(
+    model: OCSVM_SecureBERT, df_test: pd.DataFrame, model_name: str
+):
+    # 0 => pped + original columns
+    df_pped = model.preprocess()
+    labels = np.array(df_pped["labels"].tolist())
+
+    # 1 => Probas (ppeds only)
+    scores = model.get_scores(df_pped)
+
+
 def train_ocsvm_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer_OCSVM"
     model = OCSVM_CV(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
@@ -182,12 +194,11 @@ def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
-def train_if_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "CountVectorizer_IF"
-    model = IF_CV(
+def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "CountVectorizer_LOF"
+    model = LOF_CV(
         GENERIC=GENERIC,
-        contamination=0.1,
-        max_samples="auto",
+        n_jobs=-1,
         vectorizer_max_features=None,
     )
     model.train_model(
@@ -198,12 +209,12 @@ def train_if_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
-def train_if_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Li-LSyn_IF"
-    model = IF_Li(
+def train_lof_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Li-LSyn_LOF"
+    model = LOF_Li(
         GENERIC=GENERIC,
-        contamination=0.1,
-        max_samples="auto",
+        n_jobs=-1,
+
     )
     model.train_model(
         df=df_train,
@@ -226,34 +237,34 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     l_ocsvm_li, scores_ocsvm_li = train_ocsvm_li(df_train=df_train, df_test=df_test)
     l_ocsvm_cv, scores_ocsvm_cv = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    l_if_cv, scores_if_cv = train_if_cv(df_train=df_train, df_test=df_test)
-    l_if_li, scores_if_li = train_if_li(df_train=df_train, df_test=df_test)
+    l_lof_cv, scores_lof_cv = train_lof_cv(df_train=df_train, df_test=df_test)
+    l_lof_li, scores_lof_li = train_lof_li(df_train=df_train, df_test=df_test)
 
     assert np.array_equal(l_ocsvm_li, l_ocsvm_cv)
-    assert np.array_equal(l_ocsvm_li, l_if_cv)
-    assert np.array_equal(l_ocsvm_li, l_if_li)
+    assert np.array_equal(l_ocsvm_li, l_lof_cv)
+    assert np.array_equal(l_ocsvm_li, l_lof_li)
 
     # Plot AUCPRC & AUROC for original dataset
     plot_pr_curves_plt_from_scores(
         labels=l_ocsvm_li,
-        l_scores=[scores_ocsvm_li, scores_ocsvm_cv, scores_if_cv, scores_if_li],
+        l_scores=[scores_ocsvm_li, scores_ocsvm_cv, scores_lof_cv, scores_lof_li],
         l_model_names=[
             "Manual Features (Li) and OCSVM",
             "CountVectorizer and OCSVM",
-            "CountVectorizer and IF",
-            "Manual Features (Li) and IF",
+            "CountVectorizer and LOF",
+            "Manual Features (Li) and LOF",
         ],
         project_paths=project_paths,
     )
 
     plot_roc_curves_plt_from_scores(
         labels=l_ocsvm_li,
-        l_scores=[scores_ocsvm_li, scores_ocsvm_cv, scores_if_cv, scores_if_li],
+        l_scores=[scores_ocsvm_li, scores_ocsvm_cv, scores_lof_cv, scores_lof_li],
         l_model_names=[
             "Manual Features (Li) and OCSVM",
             "CountVectorizer and OCSVM",
-            "CountVectorizer and IF",
-            "Manual Features (Li) and IF",
+            "CountVectorizer and LOF",
+            "Manual Features (Li) and LOF",
         ],
         project_paths=project_paths,
     )
@@ -288,7 +299,6 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    df = df.sample(20000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
