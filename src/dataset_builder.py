@@ -166,7 +166,7 @@ class DatasetBuilder:
             self.templates = pd.concat([self.templates, as23_template])
 
         # Samples templates for normal only generation:
-        ratio_tno = 0.1 # TODO: add this in config
+        ratio_tno = 0.1  # TODO: add this in config
         n_tno = round(self.templates.shape[0] * ratio_tno)
         self.df_tno = self.templates.sample(n=n_tno)
 
@@ -214,6 +214,20 @@ class DatasetBuilder:
 
         self.df = pd.concat([_df_test, _df_train])
 
+    def _add_split_column(self):
+        """Add a split column information for unsupervised dataset generation
+
+        At the time this function is called. self.df contains the same number of attacks
+        as normal samples. Normal samples will be used for training. Attack samples for
+        testing.
+
+        Args:
+            train_size (float, optional): _description_. Defaults to 0.7.
+        """
+        atk_mask = self.df["label"] == 1
+        self.df.loc[atk_mask, "split"] = "test"
+        self.df.loc[~atk_mask, "split"] = "train"
+
     def _augment_test_set_normal_queries(self, do_syn_check: bool):
         """We augment the number of normal queries in test set."""
         atk_ratio = config_parser.get_attacks_ratio(self.config)
@@ -221,8 +235,9 @@ class DatasetBuilder:
         n_attack_test_set = self.df[
             (self.df["split"] == "test") & (self.df["label"] == 1)
         ].shape[0]
-        target_n_normal_test = int(n_attack_test_set / atk_ratio)
 
+        target_n_normal_test = int(n_attack_test_set / atk_ratio)
+        
         # Here, we upsample from:
         # - all templates used to generate attacks (self.templates)
         # - Plus those sampled by  self.select_templates to be considered as normal
@@ -513,8 +528,6 @@ class DatasetBuilder:
         debug_mode = args.debug
         do_syn_check = not args.no_syn_check
 
-        train_size = 0.7
-
         # First, sample queries templates according to scenario.
         self.select_templates(testing_mode=testing_mode)
         self.generate_attack_queries_sqlmapapi(
@@ -533,10 +546,9 @@ class DatasetBuilder:
         )
         self.populate_normal_templates(self._n_attacks, l_normal_templates)
         self.generate_normal_queries(do_syn_check)
+        self._add_split_column()
 
-        self._add_split_column_include(train_size=train_size)
         self._augment_test_set_normal_queries(do_syn_check)
-
         self._add_template_split_info()
 
     def save(self):
