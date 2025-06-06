@@ -261,7 +261,6 @@ def plot_pr_curves_plt(
     # plt.tight_layout()
     plt.savefig(f"{folder_name}auprc_curves{suffix}.png")
 
-
 def plot_roc_curves_plt(
     labels: list, l_preds: list, l_model_names: list, project_paths, suffix: str = ""
 ):
@@ -276,6 +275,74 @@ def plot_roc_curves_plt(
 
         preds = preds[:, 1]
         fpr, tpr, thresholds = roc_curve(labels, preds)
+        auroc = auc(fpr, tpr)
+
+        ax.plot(fpr, tpr, label=f"{model_name} (AUC = {auroc:.4f})")
+
+        # Also let's save the results:
+        filepath = folder_name + f"{model_name}{suffix}.csv"
+        pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(filepath, index=False)
+
+    ax.plot([0, 1], [0, 1], "k--", alpha=0.6, label="Random Classifier")
+    ax.legend()
+    ax.set_title("ROC Curves Comparison")
+    ax.grid(True, alpha=0.3)
+
+    plt.savefig(f"{folder_name}roc_curves{suffix}.png")
+
+
+def plot_pr_curves_plt_from_scores(
+    labels, l_scores: list, l_model_names: list, project_paths, suffix: str = ""
+):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    folder_name = f"{project_paths.output_path}pr_curves/"
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
+
+    for scores, model_name in zip(l_scores, l_model_names):
+        assert isinstance(scores, np.ndarray)
+        precision, recall, _ = precision_recall_curve(labels, scores,pos_label=1)
+        auprc = auc(recall, precision)
+
+        # Plot the curve
+        ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
+
+        # Also let's save the results:
+        filepath = folder_name + f"{model_name}{suffix}.csv"
+        pd.DataFrame({"precision": precision, "recall": recall}).to_csv(
+            filepath, index=False
+        )
+
+    # y = prevalence
+    x = [0, 1]
+    y = [sum(labels) / len(labels)] * len(x)
+    ax.plot(x, y, label=f"Prevalence = {y[0]:.4f}")
+
+    # Customize plot
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title("AUPRC Comparison")
+    ax.legend()
+
+    ax.grid(True, alpha=0.3)
+
+    # plt.tight_layout()
+    plt.savefig(f"{folder_name}auprc_curves{suffix}.png")
+
+
+
+def plot_roc_curves_plt_from_scores(
+    labels: list, l_scores: list, l_model_names: list, project_paths, suffix: str = ""
+):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    folder_name = f"{project_paths.output_path}roc_curves/"
+    Path(folder_name).mkdir(exist_ok=True, parents=True)
+
+    for scores, model_name in zip(l_scores, l_model_names):
+        # I lost myself with all of the type conversion for the different pipelines
+        # Let's just impose a numpy array:
+        assert isinstance(scores, np.ndarray)
+
+        fpr, tpr, thresholds = roc_curve(labels, scores)
         auroc = auc(fpr, tpr)
 
         ax.plot(fpr, tpr, label=f"{model_name} (AUC = {auroc:.4f})")

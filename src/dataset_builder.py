@@ -175,9 +175,9 @@ class DatasetBuilder:
         self.df_tno = pd.concat([self.df_tno, as23_template])
         self.templates = self.templates.drop(self.df_tno.index)
 
-        # Sample templates for df_test
-        # 20% of the templates will be kept for test split.
-        ratio_tt = 0.5
+        # Sample templates for df_test: DEPRECATED
+        # 0% of the templates will be kept for test split.
+        ratio_tt = 0.0
         n_tt = round(self.templates.shape[0] * ratio_tt)
         self.df_templates_test = self.templates.sample(n=n_tt)
 
