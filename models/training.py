@@ -21,7 +21,7 @@ import sys
 import logging
 import torch
 
-from U_Li import LOF_Li, OCSVM_Li
+from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li
 from U_CountVect import LOF_CV, OCSVM_CV
 
 from explain import (
@@ -94,18 +94,20 @@ logger = logging.getLogger(__name__)
 training_results = []
 
 
-def init_logging():
+def init_logging(args):
     lf = TimedRotatingFileHandler(
         project_paths.logs_path + "/training.log",
         when="midnight",
     )
-    lf.setLevel(logging.INFO)
+
+    lg_lvl = logging.DEBUG if args.debug else logging.INFO
+    lf.setLevel(lg_lvl)
     lstdo = logging.StreamHandler(sys.stdout)
-    lstdo.setLevel(logging.INFO)
+    lstdo.setLevel(lg_lvl)
 
     lstdof = logging.Formatter(" %(message)s")
     lstdo.setFormatter(lstdof)
-    logging.basicConfig(level=logging.INFO, handlers=[lf, lstdo])
+    logging.basicConfig(level=lg_lvl, handlers=[lf, lstdo])
 
 
 def init_device() -> torch.device:
@@ -133,11 +135,10 @@ def init_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--gpu",
+        "--debug",
         action="store_true",
-        help="Enable the training and testing of GPU models.",
+        help="Prints more details on about model training",
     )
-
     args = parser.parse_args()
     return args
 
@@ -146,7 +147,7 @@ def init_args() -> argparse.Namespace:
 
 
 def compute_metrics(
-    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li, df_test: pd.DataFrame, model_name: str
+    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li | AutoEncoder_Li, df_test: pd.DataFrame, model_name: str
 ):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
@@ -192,33 +193,30 @@ def compute_metrics_sbert(
 
 
 def train_ocsvm_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "CountVectorizer_OCSVM"
+    model_name = "CountVectorizer and OCSVM"
+    logger.info(f"Training model: {model_name}")
     model = OCSVM_CV(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
-
 def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Li-LSyn_OCSVM"
+    model_name = "Manual Features (Li) and OCSVM"
     model = OCSVM_Li(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
-
 def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Sentence-BERT_OCSVM"
+    model_name = "SBERT and OCSVM"
+    logger.info(f"Training model: {model_name}")
     model = OCSVM_SecureBERT(device=init_device())
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(model=model, df_test=df_test, model_name=model_name)
 
-def train_lof_sbert(df_train : pd.DataFrame, df_test : pd.DataFrame):
-    model_name = "Sentence-BERT_LOF"
-    model = LOF_SecureBERT(device=init_device(),n_jobs=-1)
-    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
-    return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
 
 def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "CountVectorizer_LOF"
+    model_name = "CountVectorizer and LOF"
+    logger.info(f"Training model: {model_name}")
+
     model = LOF_CV(
         GENERIC=GENERIC,
         n_jobs=-1,
@@ -233,7 +231,8 @@ def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
 
 def train_lof_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Li-LSyn_LOF"
+    model_name = "Manual Features (Li) and LOF"
+    logger.info(f"Training model: {model_name}")
     model = LOF_Li(
         GENERIC=GENERIC,
         n_jobs=-1,
@@ -244,6 +243,29 @@ def train_lof_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
         project_paths=project_paths,
     )
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+
+def train_lof_sbert(df_train : pd.DataFrame, df_test : pd.DataFrame):
+    model_name = "SBERT and LOF"
+    logger.info(f"Training model: {model_name}")
+    model = LOF_SecureBERT(device=init_device(),n_jobs=-1)
+    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
+
+# -- Autoencoders --
+
+def train_ae_li(df_train : pd.DataFrame, df_test : pd.DataFrame):
+    model_name = "Manual Features (Li) and AE"
+    logger.info(f"Training model: {model_name}")
+    model = AutoEncoder_Li(GENERIC=GENERIC,learning_rate=0.001,epochs=100,batch_size=1024)
+    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    return compute_metrics(model, df_test=df_test, model_name=model_name)
+
+def train_ae_cv(df_train : pd.DataFrame, df_test : pd.DataFrame):
+    model_name = "CountVectorizer and AE"
+    logger.info(f"Training model: {model_name}")
+    model = AutoEncoder_Li(GENERIC=GENERIC,learning_rate=0.001,epochs=100,batch_size=1024)
+    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    return compute_metrics(model, df_test=df_test, model_name=model_name)
 
 
 def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -261,24 +283,26 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     models = {}
 
-    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    # models["Manual Features (Li) and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
+    models["Manual Features (Li) and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and LOF"] = (labels, scores)
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and LOF"] = (labels, scores)
 
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
-    # models["Manual Features (Li) and LOF"] = (labels, scores)
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
+    models["Manual Features (Li) and LOF"] = (labels, scores)
 
-    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
-    # models["SBERT and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
+    models["SBERT and OCSVM"] = (labels, scores)
 
     labels, scores = train_lof_sbert(df_train=df_train,df_test=df_test)
     models["SBERT and LOF"] = (labels, scores)
 
+    labels, scores = train_ae_li(df_train=df_train,df_test=df_test)
+    models["AE and Li"] = (labels, scores)
 
 
     labels_list = [labels for labels, _ in models.values()]
@@ -311,10 +335,11 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
 
 
 if __name__ == "__main__":
-    init_logging()
     np.random.seed(GENERIC.RANDOM_SEED)
     random.seed(GENERIC.RANDOM_SEED)
     args = init_args()
+    init_logging(args)
+
     df = pd.read_csv(
         project_paths.dataset_path,
         # "/home/gquetel/repos/sqlia-dataset/dataset.csv",
@@ -335,13 +360,10 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    df = df.sample(100)
+    df = df.sample(int(len(df) / 20))
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
     df_train = df_train[df_train["label"] == 0]
 
-    if args.gpu:
-        logger.critical(f"Not implemented yet.")
-    else:
-        train_cpu_models(df_train, df_test)
+    train_cpu_models(df_train, df_test)

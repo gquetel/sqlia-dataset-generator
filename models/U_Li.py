@@ -7,6 +7,10 @@ from sklearn.svm import OneClassSVM
 
 logger = logging.getLogger(__name__)
 
+import torch.nn as nn
+import torch.nn.functional as F
+import torch
+
 
 def extract_li_features(query: str) -> dict:
     """Extract SQL keywords and patterns from a query.
@@ -114,8 +118,8 @@ def get_escape_char_number(query: str) -> dict:
 def has_tautology(query):
     pattern = r"(\w+)=\1"
     if re.search(pattern=pattern, string=query) == None:
-        return False
-    return True
+        return 0
+    return 1
 
 
 def get_char_kinds_number(query: str) -> dict:
@@ -361,3 +365,159 @@ class LOF_Li:
         model.fit(df_pped)
 
         self.clf = model
+
+
+class MyAutoEncoder(nn.Module):
+    # From: https://github.com/udacity/deep-learning-v2-pytorch/blob/master/autoencoder/linear-autoencoder/Simple_Autoencoder_Solution.ipynb
+    def __init__(self, input_dim):
+        super(MyAutoEncoder, self).__init__()
+
+        self.input_dim = input_dim
+        self._inter_dim_1 = int(0.67 * input_dim)
+        self._inter_dim_2 = int(0.33 * input_dim)
+        logger.info(
+            f"Autoencoder dimensions - input: {input_dim}, "
+            f"inter1: {self._inter_dim_1}, inter2: {self._inter_dim_2}."
+        )
+
+        # encoder
+        self.fc1 = nn.Linear(input_dim, self._inter_dim_1)
+        self.fc2 = nn.Linear(self._inter_dim_1, self._inter_dim_2)
+
+        ## decoder ##
+        self.fc3 = nn.Linear(self._inter_dim_2, self._inter_dim_1)
+        self.fc4 = nn.Linear(self._inter_dim_1, self.input_dim)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        encoded = F.relu(self.fc2(x))
+
+        x = F.relu(self.fc3(encoded))
+        decoded = F.sigmoid(self.fc4(x))
+
+        return decoded
+
+    def decision_function(self, features: np.ndarray) -> np.ndarray:
+        """Compute anomaly scores using MSE for reconstruction error scores.
+
+        We manually define this function to possess the same behavior as
+        sklearn-based model to keep the same training functions.
+
+        Args:
+            features (np.ndarray):
+
+        Returns:
+            np.ndarray: _description_
+        """
+
+        test_data = torch.tensor(features, dtype=torch.float32)
+        self.eval()
+        with torch.no_grad():
+            recon = self(test_data)
+            mse_per_sample = F.mse_loss(recon, test_data, reduction="none").mean(dim=1)
+            recon_errors = mse_per_sample.numpy()
+        scores = -recon_errors
+        return scores
+
+
+class AutoEncoder_Li:
+    def __init__(
+        self,
+        GENERIC,
+        learning_rate: float = 0.001,
+        epochs: int = 100,
+        batch_size: int = 32,
+    ):
+        self.random_state = GENERIC.RANDOM_SEED
+        self.clf = None
+        self.GENERIC = GENERIC
+        self.model_name = None
+
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+        self.feature_columns = None
+
+    def preprocess_for_preds(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        df_pped = df.copy()
+        labels = np.array(df_pped["label"])
+        df_pped = pre_process_for_li(df_pped)
+        if drop_og_columns:
+            df_pped.drop(
+                ["label", "full_query"]
+                + [
+                    "statement_type",
+                    "query_template_id",
+                    "user_inputs",
+                    "attack_id",
+                    "attack_technique",
+                    "split",
+                    "attack_desc",
+                    "attack_status",
+                    "attack_stage",
+                    "tamper_method",
+                    "template_split",
+                ],
+                axis=1,
+                inplace=True,
+                errors="ignore",
+            )
+        return df_pped, labels
+
+    def preprocess_for_train(
+        self, df: pd.DataFrame, drop_og_columns: bool = True
+    ) -> pd.DataFrame:
+        """Preprocess data for training. We ignore label data.
+        Args:
+            df (pd.DataFrame): Input dataframe
+            drop_og_columns (bool, optional): Whether to drop original columns. Defaults to True.
+        Returns:
+            pd.DataFrame: Preprocessed dataframe
+        """
+        df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
+        return df_pped
+
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        project_paths,
+        model_name: str = None,
+    ):
+        # Init variables for training + model
+        self.model_name = model_name
+        df_pped = self.preprocess_for_train(df)
+        self.feature_columns = df_pped.columns.tolist()
+        input_dim = len(self.feature_columns)
+        
+        self.clf = MyAutoEncoder(
+            input_dim=input_dim,
+        )
+        criterion = nn.MSELoss()
+        optimizer = torch.optim.Adam(
+            self.clf.parameters(), lr=self.learning_rate
+        )
+
+        # Convert training df to torch data.
+        train_data = torch.FloatTensor(np.array(df_pped).tolist())
+
+        self.clf.train()
+        for epoch in range(self.epochs):
+            total_loss = 0
+            for i in range(0, len(train_data), self.batch_size):
+                batch = train_data[i : i + self.batch_size]
+
+                optimizer.zero_grad()
+                reconstructed = self.clf(batch)
+                loss = criterion(reconstructed, batch)
+                loss.backward()
+                optimizer.step()
+
+                total_loss += loss.item()
+
+            logger.debug(
+                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
+            )
+
