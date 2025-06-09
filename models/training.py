@@ -2,7 +2,7 @@
 
 import os
 
-from U_Sentence_BERT import OCSVM_SecureBERT
+from U_Sentence_BERT import LOF_SecureBERT, OCSVM_SecureBERT
 
 
 # We force device on which training happens.
@@ -170,7 +170,7 @@ def compute_metrics(
 
 
 def compute_metrics_sbert(
-    model: OCSVM_SecureBERT, df_test: pd.DataFrame, model_name: str
+    model: OCSVM_SecureBERT | LOF_SecureBERT, df_test: pd.DataFrame, model_name: str
 ):
     # 0 => pped + original columns
     df_pped = model.preprocess(df=df_test)
@@ -211,6 +211,11 @@ def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(model=model, df_test=df_test, model_name=model_name)
 
+def train_lof_sbert(df_train : pd.DataFrame, df_test : pd.DataFrame):
+    model_name = "Sentence-BERT_LOF"
+    model = LOF_SecureBERT(device=init_device(),n_jobs=-1)
+    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
 
 def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer_LOF"
@@ -256,20 +261,23 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     models = {}
 
-    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    models["Manual Features (Li) and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
+    # models["Manual Features (Li) and OCSVM"] = (labels, scores)
 
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
 
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and LOF"] = (labels, scores)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and LOF"] = (labels, scores)
 
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
-    models["Manual Features (Li) and LOF"] = (labels, scores)
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
+    # models["Manual Features (Li) and LOF"] = (labels, scores)
 
-    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
-    models["SBERT and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
+    # models["SBERT and OCSVM"] = (labels, scores)
+
+    labels, scores = train_lof_sbert(df_train=df_train,df_test=df_test)
+    models["SBERT and LOF"] = (labels, scores)
 
 
 
@@ -327,7 +335,7 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(5000)
+    df = df.sample(100)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
