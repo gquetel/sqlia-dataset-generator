@@ -2,9 +2,6 @@
 
 import os
 
-from U_Sentence_BERT import LOF_SecureBERT, OCSVM_SecureBERT
-
-
 # We force device on which training happens.
 # device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
 # into account apparently...
@@ -12,7 +9,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
 
 import argparse
 from logging.handlers import TimedRotatingFileHandler
-from pathlib import Path
 
 import numpy as np
 import random
@@ -22,7 +18,9 @@ import logging
 import torch
 
 from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li
-from U_CountVect import LOF_CV, OCSVM_CV
+from U_CountVect import LOF_CV, OCSVM_CV, AutoEncoder_CV
+from U_Sentence_BERT import AutoEncoder_SecureBERT, LOF_SecureBERT, OCSVM_SecureBERT
+from constants import DotDict, ProjectPaths
 
 from explain import (
     get_recall_per_attack,
@@ -33,49 +31,6 @@ from explain import (
     plot_tree_clf,
     print_and_save_metrics,
 )
-
-
-# ------------ Custom Data Structures  ------------
-class DotDict(dict):
-    def __getattr__(self, attr):
-        try:
-            return self[attr]
-        except KeyError:
-            raise AttributeError(f"Attribute {attr} not found")
-
-    def __setattr__(self, attr, value):
-        self[attr] = value
-
-
-class ProjectPaths:
-    def __init__(
-        self,
-        base_path: str,
-    ):
-        self.base_path = base_path
-
-    @property
-    def dataset_path(self) -> str:
-        return f"{self.base_path}/../dataset.csv"
-
-    @property
-    def output_path(self) -> str:
-        path = f"{self.base_path}/output/"
-        Path(path).mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def logs_path(self) -> str:
-        path = f"{self.base_path}../logs/"
-        Path(path).mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def models_path(self) -> str:
-        path = f"{self.base_path}/cache/"
-        Path(path).mkdir(exist_ok=True, parents=True)
-        return path
-
 
 # ------------ Global variables  ------------
 
@@ -147,7 +102,9 @@ def init_args() -> argparse.Namespace:
 
 
 def compute_metrics(
-    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li | AutoEncoder_Li, df_test: pd.DataFrame, model_name: str
+    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li | AutoEncoder_Li,
+    df_test: pd.DataFrame,
+    model_name: str,
 ):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
@@ -199,11 +156,13 @@ def train_ocsvm_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
+
 def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Manual Features (Li) and OCSVM"
     model = OCSVM_Li(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+
 
 def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and OCSVM"
@@ -244,28 +203,47 @@ def train_lof_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     )
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
-def train_lof_sbert(df_train : pd.DataFrame, df_test : pd.DataFrame):
+
+def train_lof_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and LOF"
     logger.info(f"Training model: {model_name}")
-    model = LOF_SecureBERT(device=init_device(),n_jobs=-1)
-    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    model = LOF_SecureBERT(device=init_device(), n_jobs=-1)
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
 
-# -- Autoencoders --
 
-def train_ae_li(df_train : pd.DataFrame, df_test : pd.DataFrame):
+# -- Autoencoders --
+def train_ae_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Manual Features (Li) and AE"
     logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Li(GENERIC=GENERIC,learning_rate=0.001,epochs=100,batch_size=1024)
-    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    model = AutoEncoder_Li(
+        GENERIC=GENERIC, learning_rate=0.001, epochs=100, batch_size=1024
+    )
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics(model, df_test=df_test, model_name=model_name)
 
-def train_ae_cv(df_train : pd.DataFrame, df_test : pd.DataFrame):
+
+def train_ae_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer and AE"
     logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Li(GENERIC=GENERIC,learning_rate=0.001,epochs=100,batch_size=1024)
-    model.train_model(df=df_train,project_paths=project_paths,model_name=model_name)
+    model = AutoEncoder_CV(
+        GENERIC=GENERIC,
+        learning_rate=0.001,
+        epochs=100,
+        batch_size=1024,
+        vectorizer_max_features=None,
+    )
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics(model, df_test=df_test, model_name=model_name)
+
+def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "SBERT and AE"
+    logger.info(f"Training model: {model_name}")
+    model = AutoEncoder_SecureBERT(
+        device=init_device(), learning_rate=0.001, epochs=100, batch_size=32
+    )
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
+    return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
 
 
 def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -277,8 +255,6 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         f"Testing - number of attacks {len(df_test[df_test['label'] == 1])}"
         f" and number of normals {len(df_test[df_test['label'] == 0])}"
     )
-
-    results = {}
 
     # Train models and get their output.
     models = {}
@@ -295,20 +271,24 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
     models["Manual Features (Li) and LOF"] = (labels, scores)
 
-    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
-    models["SBERT and OCSVM"] = (labels, scores)
+    labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
+    models["Li and AE"] = (labels, scores)
 
-    labels, scores = train_lof_sbert(df_train=df_train,df_test=df_test)
-    models["SBERT and LOF"] = (labels, scores)
+    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and AE"] = (labels, scores)
+    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
+    # models["SBERT and OCSVM"] = (labels, scores)
 
-    labels, scores = train_ae_li(df_train=df_train,df_test=df_test)
-    models["AE and Li"] = (labels, scores)
+    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test)
+    # models["SBERT and LOF"] = (labels, scores)
 
+    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test)
+    # models["SBERT and AE"] = (labels, scores)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
     names_list = list(models.keys())
-    
+
     ref_labels = labels_list[0]
     for labels in labels_list[1:]:
         # assert np.array_equal(ref_labels, labels)
@@ -360,7 +340,8 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    df = df.sample(int(len(df) / 20))
+    # df = df.sample(int(len(df) / 200))
+    # df = df.sample(100)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
