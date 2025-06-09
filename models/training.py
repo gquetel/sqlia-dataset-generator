@@ -152,14 +152,15 @@ def compute_metrics_sbert(
 def train_ocsvm_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "CountVectorizer and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_CV(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
+    model = OCSVM_CV(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=1000)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
 def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "Manual Features (Li) and OCSVM"
-    model = OCSVM_Li(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
+    logger.info(f"Training model: {model_name}")
+    model = OCSVM_Li(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=1000)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
@@ -167,7 +168,7 @@ def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
 def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_SecureBERT(device=init_device())
+    model = OCSVM_SecureBERT(device=init_device(),max_iter=1000)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(model=model, df_test=df_test, model_name=model_name)
 
