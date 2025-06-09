@@ -33,6 +33,7 @@ class OCSVM_SecureBERT:
         self.rb_model.eval()
 
         self.clf = None
+        self.model_name = None
 
     def preprocess(self, df: pd.DataFrame) -> np.ndarray:
         """
@@ -50,7 +51,7 @@ class OCSVM_SecureBERT:
         queries = df["full_query"].values
         with torch.no_grad():
             for query in queries:
-                inputs = self.tokenizer(query, return_tensors="pt")
+                inputs = self.tokenizer(query, return_tensors="pt",truncation=True)
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 outputs = self.rb_model(**inputs, output_hidden_states=True)
 
@@ -62,15 +63,23 @@ class OCSVM_SecureBERT:
         result_df["embeddings"] = embeddings
         return result_df
 
-    def train_model(self, df: pd.DataFrame):
-        embeddings = self.preprocess(df)
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        project_paths,
+        model_name: str = None,
+    ):
+        self.model_name = model_name
+        df_pp = self.preprocess(df=df)
+
+        embeddings = np.array(df_pp["embeddings"].tolist())
         self.clf = OneClassSVM(
             nu=self.nu, kernel=self.kernel, gamma=self.gamma, max_iter=self.max_iter
         )
         self.clf.fit(embeddings)
 
     def get_scores(self, df: pd.DataFrame):
-        """ Get scores from Dataset
+        """Get scores from Dataset
 
         Args:
             df (pd.DataFrame): _description_
@@ -81,4 +90,4 @@ class OCSVM_SecureBERT:
         df_we = self.preprocess(df)
         embeddings = np.array(df_we["embeddings"].tolist())
         dists = self.clf.decision_function(embeddings)
-        return (df["labels"].to_numpy(), dists)
+        return (df["label"].to_numpy(), dists)

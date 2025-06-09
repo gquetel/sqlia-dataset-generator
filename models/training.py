@@ -22,7 +22,7 @@ import logging
 import torch
 
 from U_Li import LOF_Li, OCSVM_Li
-from U_CountVect import  LOF_CV, OCSVM_CV
+from U_CountVect import LOF_CV, OCSVM_CV
 
 from explain import (
     get_recall_per_attack,
@@ -173,11 +173,22 @@ def compute_metrics_sbert(
     model: OCSVM_SecureBERT, df_test: pd.DataFrame, model_name: str
 ):
     # 0 => pped + original columns
-    df_pped = model.preprocess()
-    labels = np.array(df_pped["labels"].tolist())
+    df_pped = model.preprocess(df=df_test)
+    labels = np.array(df_pped["label"].tolist())
 
     # 1 => Probas (ppeds only)
-    scores = model.get_scores(df_pped)
+    labels_inf, dists = model.get_scores(df_pped)
+
+    # dists are a distance to the separating hyperplane.
+    # Negative distance is an outlier (attack)
+    # Positive distance is an inlier (normal)
+    scores = -dists
+
+    # For AUC plot
+    return (
+        labels,
+        scores,  # For AUPRC computation and AUC-ROC
+    )
 
 
 def train_ocsvm_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -192,6 +203,13 @@ def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model = OCSVM_Li(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=-1)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+
+
+def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
+    model_name = "Sentence-BERT_OCSVM"
+    model = OCSVM_SecureBERT(device=init_device())
+    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
+    return compute_metrics_sbert(model=model, df_test=df_test, model_name=model_name)
 
 
 def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -214,7 +232,6 @@ def train_lof_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model = LOF_Li(
         GENERIC=GENERIC,
         n_jobs=-1,
-
     )
     model.train_model(
         df=df_train,
@@ -234,38 +251,49 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
         f" and number of normals {len(df_test[df_test['label'] == 0])}"
     )
 
+    results = {}
+
     # Train models and get their output.
-    l_ocsvm_li, scores_ocsvm_li = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    l_ocsvm_cv, scores_ocsvm_cv = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    l_lof_cv, scores_lof_cv = train_lof_cv(df_train=df_train, df_test=df_test)
-    l_lof_li, scores_lof_li = train_lof_li(df_train=df_train, df_test=df_test)
+    models = {}
 
-    assert np.array_equal(l_ocsvm_li, l_ocsvm_cv)
-    assert np.array_equal(l_ocsvm_li, l_lof_cv)
-    assert np.array_equal(l_ocsvm_li, l_lof_li)
+    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
+    models["Manual Features (Li) and OCSVM"] = (labels, scores)
 
-    # Plot AUCPRC & AUROC for original dataset
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and OCSVM"] = (labels, scores)
+
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and LOF"] = (labels, scores)
+
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
+    models["Manual Features (Li) and LOF"] = (labels, scores)
+
+    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
+    models["SBERT and OCSVM"] = (labels, scores)
+
+
+
+    labels_list = [labels for labels, _ in models.values()]
+    scores_list = [scores for _, scores in models.values()]
+    names_list = list(models.keys())
+    
+    ref_labels = labels_list[0]
+    for labels in labels_list[1:]:
+        # assert np.array_equal(ref_labels, labels)
+        if not np.array_equal(ref_labels, labels):
+            logger.critical(f"Label mismatch detected")
+
     plot_pr_curves_plt_from_scores(
-        labels=l_ocsvm_li,
-        l_scores=[scores_ocsvm_li, scores_ocsvm_cv, scores_lof_cv, scores_lof_li],
-        l_model_names=[
-            "Manual Features (Li) and OCSVM",
-            "CountVectorizer and OCSVM",
-            "CountVectorizer and LOF",
-            "Manual Features (Li) and LOF",
-        ],
+        labels=ref_labels,
+        l_scores=scores_list,
+        l_model_names=names_list,
         project_paths=project_paths,
     )
 
     plot_roc_curves_plt_from_scores(
-        labels=l_ocsvm_li,
-        l_scores=[scores_ocsvm_li, scores_ocsvm_cv, scores_lof_cv, scores_lof_li],
-        l_model_names=[
-            "Manual Features (Li) and OCSVM",
-            "CountVectorizer and OCSVM",
-            "CountVectorizer and LOF",
-            "Manual Features (Li) and LOF",
-        ],
+        labels=ref_labels,
+        l_scores=scores_list,
+        l_model_names=names_list,
         project_paths=project_paths,
     )
 
@@ -299,6 +327,7 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
+    # df = df.sample(5000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
