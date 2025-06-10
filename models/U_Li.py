@@ -382,7 +382,7 @@ class LOF_Li:
         df_pped = self.preprocess_for_train(df)
         model = LocalOutlierFactor(n_jobs=self.n_jobs, novelty=True)
         if self.use_scaler:
-            df_pped = self._scaler.transform(df_pped)
+            df_pped = self._scaler.fit_transform(df_pped)
 
         model.fit(df_pped)
         self.clf = model
