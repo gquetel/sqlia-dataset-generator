@@ -1,8 +1,10 @@
 import logging
 import re
 import pandas as pd
+from sklearn.discriminant_analysis import StandardScaler
 from sklearn.neighbors import LocalOutlierFactor
-from constants import MyAutoEncoder
+from sklearn.preprocessing import MaxAbsScaler
+from constants import MyAutoEncoder, MyAutoEncoderRelu
 import numpy as np
 from sklearn.svm import OneClassSVM
 
@@ -219,19 +221,24 @@ class OCSVM_Li:
         kernel: str = "rbf",
         gamma: str = "scale",
         max_iter: int = -1,
+        use_scaler: bool = False,
     ):
         self.nu = nu
         self.kernel = kernel
         self.gamma = gamma
         self.clf = None
+
+        self._scaler = StandardScaler()
+
         self.GENERIC = GENERIC
         self.model_name = None
         self.max_iter = max_iter
+        self.use_scaler = use_scaler
 
     def preprocess_for_preds(
         self, df: pd.DataFrame, drop_og_columns: bool = True
     ) -> tuple[pd.DataFrame, np.ndarray]:
-        df_pped = df.copy()
+        df_pped = df.copy()  # Mem ~OK
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
 
@@ -281,15 +288,20 @@ class OCSVM_Li:
     ):
         self.model_name = model_name
         df_pped = self.preprocess_for_train(df)
+
+        self.feature_columns = df_pped.columns.tolist()
+
+        if self.use_scaler:
+            df_pped = self._scaler.fit_transform(df_pped.values)
+
         model = OneClassSVM(
             nu=self.nu,
             kernel=self.kernel,
             gamma=self.gamma,
             max_iter=self.max_iter,
         )
-        self.feature_columns = df_pped.columns.tolist()
-        model.fit(df_pped)
 
+        model.fit(df_pped)
         self.clf = model
 
 
@@ -299,14 +311,18 @@ class LOF_Li:
         GENERIC,
         n_jobs: int = -1,
         contamination: float = 0.1,
+        use_scaler: bool = False,
     ):
         self.contamination = contamination
         self.n_jobs = n_jobs
+
+        self._scaler = StandardScaler()
 
         self.random_state = GENERIC.RANDOM_SEED
         self.clf = None
         self.GENERIC = GENERIC
         self.model_name = None
+        self.use_scaler = use_scaler
 
     def preprocess_for_preds(
         self, df: pd.DataFrame, drop_og_columns: bool = True
@@ -351,6 +367,9 @@ class LOF_Li:
             pd.DataFrame: _description_
         """
         df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
+        self.feature_columns = df_pped.columns.tolist()
+        df_pped = self._scaler.fit_transform(df_pped.values)
+
         return df_pped
 
     def train_model(
@@ -360,12 +379,15 @@ class LOF_Li:
         model_name: str = None,
     ):
         self.model_name = model_name
+
         df_pped = self.preprocess_for_train(df)
         model = LocalOutlierFactor(n_jobs=self.n_jobs, novelty=True)
-        self.feature_columns = df_pped.columns.tolist()
-        model.fit(df_pped)
+        if self.use_scaler:
+            df_pped = self._scaler.transform(df_pped)
 
+        model.fit(df_pped)
         self.clf = model
+
 
 class AutoEncoder_Li:
     def __init__(
@@ -374,15 +396,20 @@ class AutoEncoder_Li:
         learning_rate: float = 0.001,
         epochs: int = 100,
         batch_size: int = 32,
+        use_scaler: bool = False,
     ):
         self.random_state = GENERIC.RANDOM_SEED
         self.clf = None
         self.GENERIC = GENERIC
         self.model_name = None
 
+        # Let's use MaxAbsScaler => 0 and 1
+        self._scaler = MaxAbsScaler()
+
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.batch_size = batch_size
+        self.use_scaler = use_scaler
 
         self.feature_columns = None
 
@@ -392,6 +419,7 @@ class AutoEncoder_Li:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
+
         if drop_og_columns:
             df_pped.drop(
                 ["label", "full_query"]
@@ -413,6 +441,30 @@ class AutoEncoder_Li:
                 errors="ignore",
             )
         return df_pped, labels
+
+    def _dataframe_to_tensor_batched(self, df, batch_size=4096):
+        """
+        Used during testing.
+
+        Args:
+            df (_type_): _description_
+            batch_size (int, optional): _description_. Defaults to 4096.
+
+        Returns:
+            _type_: _description_
+        """
+        n_samples = len(df)
+        tensors = []
+
+        for i in range(0, n_samples, batch_size):
+            batch_end = min(i + batch_size, n_samples)
+            df_batch = df.iloc[i:batch_end]
+            batch_dense = df_batch.values
+            if self.use_scaler:
+                batch_dense = self._scaler.transform(batch_dense)
+            tensors.append(torch.FloatTensor(batch_dense))
+
+        return torch.cat(tensors, dim=0)
 
     def preprocess_for_train(
         self, df: pd.DataFrame, drop_og_columns: bool = True
@@ -438,17 +490,23 @@ class AutoEncoder_Li:
         df_pped = self.preprocess_for_train(df)
         self.feature_columns = df_pped.columns.tolist()
         input_dim = len(self.feature_columns)
-        
-        self.clf = MyAutoEncoder(
-            input_dim=input_dim,
-        )
-        criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(
-            self.clf.parameters(), lr=self.learning_rate
-        )
 
-        # Convert training df to torch data.
-        train_data = torch.FloatTensor(np.array(df_pped).tolist())
+        # Let's apply Scaler here and not in preprocess, as we want to keep
+        # information about the columns
+        if self.use_scaler:
+            scaled_data = self._scaler.fit_transform(np.array(df_pped).tolist())
+            self._scaler_min = scaled_data.min(axis=None)
+            self._scaler_max = scaled_data.max(axis=None)
+            train_data = torch.FloatTensor(scaled_data)
+            self.clf = MyAutoEncoder(
+                input_dim=input_dim,
+            )
+        else:
+            train_data = torch.FloatTensor(np.array(df_pped).tolist())
+            self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+
+        criterion = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
 
         self.clf.train()
         for epoch in range(self.epochs):
@@ -467,4 +525,3 @@ class AutoEncoder_Li:
             logger.debug(
                 f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
             )
-

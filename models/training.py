@@ -15,6 +15,7 @@ import random
 import pandas as pd
 import sys
 import logging
+import scipy
 import torch
 
 from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li
@@ -105,13 +106,51 @@ def compute_metrics(
     model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li | AutoEncoder_Li,
     df_test: pd.DataFrame,
     model_name: str,
+    use_scaler: bool = False,
 ):
     # 0 => pped + original columns
     df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
 
     # 1 => Probas (ppeds only)
     df_pped_wout_og_cols = df_pped.drop(df_test.columns.to_list(), axis=1)
-    dists = model.clf.decision_function(df_pped_wout_og_cols.to_numpy())
+
+    # Some models use scaler some does not. Because we want to keep column information
+    # For some tests, we perform the scaling here after the original columns have been
+    # removed.
+
+    if use_scaler:
+        df_pped_wout_og_cols = model._scaler.transform(df_pped_wout_og_cols.to_numpy())
+
+    dists = model.clf.decision_function(df_pped_wout_og_cols)
+    # dists are a distance to the separating hyperplane.
+    # Negative distance is an outlier (attack)
+    # Positive distance is an inlier (normal)
+
+    # 2 => Process dists so that positive class is > 0 as asked by
+    # average_precision_score & roc_auc_score
+    scores = -dists
+
+    # For AUC plot
+    return (
+        labels,
+        scores,  # For AUPRC computation and AUC-ROC
+    )
+
+
+def compute_metrics_ae(
+    model: AutoEncoder_CV,
+    df_test: pd.DataFrame,
+    model_name: str,
+):
+    # 0 => pped + original columns
+    df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
+    # 1 => Probas (ppeds only)
+    df_pped_wout_og_cols = df_pped.drop(df_test.columns.to_list(), axis=1)
+
+    # We transform the data as a tensor here using a memory efficient approach
+    tensors = model._dataframe_to_tensor_batched(df_pped_wout_og_cols, batch_size=4096)
+    # print(tensors[0])
+    dists = model.clf.decision_function(tensors, is_tensor=True)
     # dists are a distance to the separating hyperplane.
     # Negative distance is an outlier (attack)
     # Positive distance is an inlier (normal)
@@ -149,38 +188,62 @@ def compute_metrics_sbert(
     )
 
 
-def train_ocsvm_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_ocsvm_cv(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+):
     model_name = "CountVectorizer and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_CV(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=1000)
+    model = OCSVM_CV(
+        GENERIC=GENERIC,
+        nu=0.05,
+        kernel="rbf",
+        gamma="scale",
+        max_iter=1000,
+        use_scaler=use_scaler,
+    )
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
-def train_ocsvm_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Manual Features (Li) and OCSVM"
+def train_ocsvm_li(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+):
+    model_name = "Li and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_Li(GENERIC=GENERIC, nu=0.05, kernel="rbf", gamma="scale", max_iter=1000)
-    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+    model = OCSVM_Li(
+        GENERIC=GENERIC,
+        nu=0.05,
+        kernel="rbf",
+        gamma="scale",
+        max_iter=1000,
+        use_scaler=use_scaler,
+    )
+    model.train_model(
+        df=df_train,
+        model_name=model_name,
+        project_paths=project_paths,
+    )
+    return compute_metrics(
+        model=model, df_test=df_test, model_name=model_name, use_scaler=use_scaler
+    )
 
 
 def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_SecureBERT(device=init_device(),max_iter=1000)
+    model = OCSVM_SecureBERT(device=init_device(), max_iter=1000)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(model=model, df_test=df_test, model_name=model_name)
 
 
-def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_lof_cv(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+):
     model_name = "CountVectorizer and LOF"
     logger.info(f"Training model: {model_name}")
 
     model = LOF_CV(
-        GENERIC=GENERIC,
-        n_jobs=-1,
-        vectorizer_max_features=None,
+        GENERIC=GENERIC, n_jobs=-1, vectorizer_max_features=None, use_scaler=use_scaler
     )
     model.train_model(
         df=df_train,
@@ -190,19 +253,20 @@ def train_lof_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
     return compute_metrics(model=model, df_test=df_test, model_name=model_name)
 
 
-def train_lof_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Manual Features (Li) and LOF"
+def train_lof_li(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+):
+    model_name = "Li and LOF"
     logger.info(f"Training model: {model_name}")
-    model = LOF_Li(
-        GENERIC=GENERIC,
-        n_jobs=-1,
-    )
+    model = LOF_Li(GENERIC=GENERIC, n_jobs=-1, use_scaler=use_scaler)
     model.train_model(
         df=df_train,
         model_name=model_name,
         project_paths=project_paths,
     )
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+    return compute_metrics(
+        model=model, df_test=df_test, model_name=model_name, use_scaler=use_scaler
+    )
 
 
 def train_lof_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
@@ -212,30 +276,43 @@ def train_lof_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
 
-
 # -- Autoencoders --
-def train_ae_li(df_train: pd.DataFrame, df_test: pd.DataFrame):
-    model_name = "Manual Features (Li) and AE"
+def train_ae_li(df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler : bool = False):
+    random.seed(GENERIC.RANDOM_SEED)
+    np.random.seed(GENERIC.RANDOM_SEED)
+    torch.manual_seed(GENERIC.RANDOM_SEED)
+
+    model_name = "Li and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_Li(
-        GENERIC=GENERIC, learning_rate=0.001, epochs=100, batch_size=1024
+        GENERIC=GENERIC, learning_rate=0.005, epochs=100, batch_size=1024, use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics(model, df_test=df_test, model_name=model_name)
+    return compute_metrics_ae(
+        model, df_test=df_test, model_name=model_name
+    )
 
 
-def train_ae_cv(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_ae_cv(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+):
+    random.seed(GENERIC.RANDOM_SEED)
+    np.random.seed(GENERIC.RANDOM_SEED)
+    torch.manual_seed(GENERIC.RANDOM_SEED)
+
     model_name = "CountVectorizer and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_CV(
         GENERIC=GENERIC,
         learning_rate=0.001,
-        epochs=100,
+        epochs=20,
         batch_size=1024,
         vectorizer_max_features=None,
+        use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics(model, df_test=df_test, model_name=model_name)
+    return compute_metrics_ae(model, df_test=df_test, model_name=model_name)
+
 
 def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and AE"
@@ -261,28 +338,40 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     models = {}
 
     labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    models["Manual Features (Li) and OCSVM"] = (labels, scores)
+    models["Li and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["Li and OCSVM - scaler"] = (labels, scores)
 
     labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
     models["CountVectorizer and OCSVM"] = (labels, scores)
-
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and LOF"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
-    models["Manual Features (Li) and LOF"] = (labels, scores)
+    models["Li and LOF"] = (labels, scores)
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["Li and LOF - scaler"] = (labels, scores)
+
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and LOF "] = (labels, scores)
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["CountVectorizer and LOF - scaler"] = (labels, scores)
+
 
     labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
     models["Li and AE"] = (labels, scores)
+    labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["Li and AE - scaler"] = (labels, scores)
 
     labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and AE"] = (labels, scores)
+    models["CountVectorizer and AE (relu)"] = (labels, scores)
+    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
+    
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and OCSVM"] = (labels, scores)
-
     # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and LOF"] = (labels, scores)
-
     # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and AE"] = (labels, scores)
 
@@ -341,7 +430,9 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df) / 200))
+    # df = df.sample(int(len(df) / 15))
+    # df.to_csv("../dataset-small.csv", index=False)
+    # exit()
     # df = df.sample(100)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]

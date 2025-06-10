@@ -327,7 +327,7 @@ class sqlmapGenerator:
                             "attack_stage": "recon",
                             "tamper_method": tamper_script,
                             "attack_status": attack_status,
-                            # "attacked_parameter": param, # TODO ?
+                            # "attacked_parameter": param, 
                         }
                     ),
                 ]

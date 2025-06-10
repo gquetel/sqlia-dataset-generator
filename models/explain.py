@@ -82,6 +82,8 @@ def print_and_save_metrics(
     }
 
 
+# TODO recall / atk
+# TODO: FPR à 10-3 / 10-4
 def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
     """ Display Recall score per technique from a dataframe with preds. """
     techniques = (
@@ -237,6 +239,7 @@ def plot_pr_curves_plt(
         auprc = auc(recall, precision)
 
         # Plot the curve
+        # TODO: Enlever "AUC =" , Manual Features -> Li,et figure en plus grand. 
         ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
 
         # Also let's save the results:
@@ -248,7 +251,8 @@ def plot_pr_curves_plt(
     # y = prevalence
     x = [0, 1]
     y = [sum(labels) / len(labels)] * len(x)
-    ax.plot(x, y, label=f"Prevalence = {y[0]:.4f}")
+    # TODO: Pointillés et en noir
+    ax.plot(x, y, label=f"Random = {y[0]:.4f}")
 
     # Customize plot
     ax.set_xlabel("Recall")
@@ -294,7 +298,7 @@ def plot_roc_curves_plt(
 def plot_pr_curves_plt_from_scores(
     labels, l_scores: list, l_model_names: list, project_paths, suffix: str = ""
 ):
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 10))
     folder_name = f"{project_paths.output_path}pr_curves/"
     Path(folder_name).mkdir(exist_ok=True, parents=True)
 
@@ -304,7 +308,7 @@ def plot_pr_curves_plt_from_scores(
         auprc = auc(recall, precision)
 
         # Plot the curve
-        ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
+        ax.plot(recall, precision, label=f"{model_name} ({auprc:.4f})")
 
         # Also let's save the results:
         filepath = folder_name + f"{model_name}{suffix}.csv"
@@ -315,7 +319,7 @@ def plot_pr_curves_plt_from_scores(
     # y = prevalence
     x = [0, 1]
     y = [sum(labels) / len(labels)] * len(x)
-    ax.plot(x, y, label=f"Prevalence = {y[0]:.4f}")
+    ax.plot(x, y,  "k--", alpha=0.6, label=f"Random Classifier = {y[0]:.4f}")
 
     # Customize plot
     ax.set_xlabel("Recall")
@@ -333,7 +337,7 @@ def plot_pr_curves_plt_from_scores(
 def plot_roc_curves_plt_from_scores(
     labels: list, l_scores: list, l_model_names: list, project_paths, suffix: str = ""
 ):
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 10))
     folder_name = f"{project_paths.output_path}roc_curves/"
     Path(folder_name).mkdir(exist_ok=True, parents=True)
 
@@ -345,7 +349,7 @@ def plot_roc_curves_plt_from_scores(
         fpr, tpr, thresholds = roc_curve(labels, scores)
         auroc = auc(fpr, tpr)
 
-        ax.plot(fpr, tpr, label=f"{model_name} (AUC = {auroc:.4f})")
+        ax.plot(fpr, tpr, label=f"{model_name} ({auroc:.4f})")
 
         # Also let's save the results:
         filepath = folder_name + f"{model_name}{suffix}.csv"

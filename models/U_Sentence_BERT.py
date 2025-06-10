@@ -49,7 +49,6 @@ class OCSVM_SecureBERT:
 
         Args:
             queries: List of SQL queries to process
-            layer_idx: Which layer to extract embeddings from (-1 for pooler output)
 
         Returns:
             numpy array of embeddings
@@ -62,8 +61,10 @@ class OCSVM_SecureBERT:
                 inputs = self.tokenizer(query, return_tensors="pt", truncation=True)
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 outputs = self.rb_model(**inputs, output_hidden_states=True)
-
                 # Pooler_output represents the whole class.
+                
+                # TODO: Voir si valeur du vecteur sont entre -1 & 1 
+                # Sentence-BERT AE => remplacer sigmoide par tanh
                 embedding = outputs.pooler_output
                 embeddings.append(embedding.cpu().numpy().flatten())
 
