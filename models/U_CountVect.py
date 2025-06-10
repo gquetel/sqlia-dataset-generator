@@ -70,6 +70,7 @@ class OCSVM_CV:
         model.fit(f_matrix)
         self.clf = model
 
+    # @profile
     def preprocess_for_preds(
         self, df: pd.DataFrame, drop_og_columns: bool = True
     ) -> tuple[pd.DataFrame, np.ndarray]:
@@ -95,15 +96,15 @@ class OCSVM_CV:
         # new dataframe. The index is resetted for cases where passed df does not
         # possess a 0-based index.
         df_copy = df.copy().reset_index(drop=True)
-        batch_size = 50000
+        batch_size = 5000
 
         batch_dfs = []
 
         # CountVectorizer is too big to perform a toarray directly, we process
         # samples by batches then:
-        for start_idx in range(0, len(df), batch_size):
+        for start_idx in range(0, len(df_copy), batch_size):
             # Select end idx
-            end_idx = min(start_idx + batch_size, len(df))
+            end_idx = min(start_idx + batch_size, len(df_copy))
 
             # Fetch corresponding samples, transform to df (transform if needed)
             batch_queries = pp_queries[start_idx:end_idx].toarray()
@@ -113,7 +114,7 @@ class OCSVM_CV:
 
             # And then retrieve original columns
             batch_original = df_copy.iloc[start_idx:end_idx].copy()
-            batch_combined = pd.concat([batch_original, batch_queries_df], axis=1)
+            batch_combined = pd.concat([batch_original.reset_index(drop=True), batch_queries_df], axis=1)
             batch_dfs.append(batch_combined)
 
         # Then merge all.
@@ -209,7 +210,7 @@ class LOF_CV:
 
             # And then retrieve original columns
             batch_original = df_copy.iloc[start_idx:end_idx].copy()
-            batch_combined = pd.concat([batch_original, batch_queries_df], axis=1)
+            batch_combined = pd.concat([batch_original.reset_index(drop=True), batch_queries_df], axis=1)
             batch_dfs.append(batch_combined)
 
         # Then merge all.
@@ -297,7 +298,7 @@ class AutoEncoder_CV:
             batch_queries_df = pd.DataFrame(batch_queries)
             # And then retrieve original columns
             batch_original = df_copy.iloc[start_idx:end_idx].copy()
-            batch_combined = pd.concat([batch_original, batch_queries_df], axis=1)
+            batch_combined = pd.concat([batch_original.reset_index(drop=True), batch_queries_df], axis=1)
             batch_dfs.append(batch_combined)
 
         # Then merge all.

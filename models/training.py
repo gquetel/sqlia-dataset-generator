@@ -102,38 +102,55 @@ def init_args() -> argparse.Namespace:
 # ------------- MODELS TRAINING -------------
 
 
+# @profile
 def compute_metrics(
     model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li | AutoEncoder_Li,
     df_test: pd.DataFrame,
     model_name: str,
     use_scaler: bool = False,
 ):
-    # 0 => pped + original columns
-    df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
+    """Process test set in batches of 20k samples to manage memory usage."""
+    batch_size = 20000
+    all_labels = []
+    all_scores = []
 
-    # 1 => Probas (ppeds only)
-    df_pped_wout_og_cols = df_pped.drop(df_test.columns.to_list(), axis=1)
+    for start_idx in range(0, len(df_test), batch_size):
+        end_idx = min(start_idx + batch_size, len(df_test))
+        batch_df = df_test.iloc[start_idx:end_idx]
 
-    # Some models use scaler some does not. Because we want to keep column information
-    # For some tests, we perform the scaling here after the original columns have been
-    # removed.
+        # 0 => pped + original columns
+        df_pped, labels = model.preprocess_for_preds(df=batch_df, drop_og_columns=False)
 
-    if use_scaler:
-        df_pped_wout_og_cols = model._scaler.transform(df_pped_wout_og_cols.to_numpy())
+        # 1 => Probas (ppeds only)
+        df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
 
-    dists = model.clf.decision_function(df_pped_wout_og_cols)
-    # dists are a distance to the separating hyperplane.
-    # Negative distance is an outlier (attack)
-    # Positive distance is an inlier (normal)
+        # Some models use scaler some does not. Because we want to keep column information
+        # For some tests, we perform the scaling here after the original columns have been
+        # removed.
+        if use_scaler:
+            df_pped_wout_og_cols = model._scaler.transform(
+                df_pped_wout_og_cols.to_numpy()
+            )
 
-    # 2 => Process dists so that positive class is > 0 as asked by
-    # average_precision_score & roc_auc_score
-    scores = -dists
+        dists = model.clf.decision_function(df_pped_wout_og_cols)
 
-    # For AUC plot
+        # dists are a distance to the separating hyperplane.
+        # Negative distance is an outlier (attack)
+        # Positive distance is an inlier (normal)
+
+        # 2 => Process dists so that positive class is > 0 as asked by
+        # average_precision_score & roc_auc_score
+        scores = -dists
+
+        all_labels.extend(labels)
+        all_scores.extend(scores)
+        logger.debug(
+            f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
+        )
+
     return (
-        labels,
-        scores,  # For AUPRC computation and AUC-ROC
+        np.array(all_labels),
+        np.array(all_scores),  # For AUPRC computation and AUC-ROC
     )
 
 
@@ -142,27 +159,44 @@ def compute_metrics_ae(
     df_test: pd.DataFrame,
     model_name: str,
 ):
-    # 0 => pped + original columns
-    df_pped, labels = model.preprocess_for_preds(df=df_test, drop_og_columns=False)
-    # 1 => Probas (ppeds only)
-    df_pped_wout_og_cols = df_pped.drop(df_test.columns.to_list(), axis=1)
+    """Process test set in batches of 20k samples to manage memory usage."""
+    batch_size = 20000
+    all_labels = []
+    all_scores = []
 
-    # We transform the data as a tensor here using a memory efficient approach
-    tensors = model._dataframe_to_tensor_batched(df_pped_wout_og_cols, batch_size=4096)
-    # print(tensors[0])
-    dists = model.clf.decision_function(tensors, is_tensor=True)
-    # dists are a distance to the separating hyperplane.
-    # Negative distance is an outlier (attack)
-    # Positive distance is an inlier (normal)
+    for start_idx in range(0, len(df_test), batch_size):
+        end_idx = min(start_idx + batch_size, len(df_test))
+        batch_df = df_test.iloc[start_idx:end_idx]
 
-    # 2 => Process dists so that positive class is > 0 as asked by
-    # average_precision_score & roc_auc_score
-    scores = -dists
+        # 0 => pped + original columns
+        df_pped, labels = model.preprocess_for_preds(df=batch_df, drop_og_columns=False)
 
-    # For AUC plot
+        # 1 => Probas (ppeds only)
+        df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
+
+        tensors = model._dataframe_to_tensor_batched(
+            df_pped_wout_og_cols, batch_size=4096
+        )
+        dists = model.clf.decision_function(tensors, is_tensor=True)
+
+        # dists are a distance to the separating hyperplane.
+        # Negative distance is an outlier (attack)
+        # Positive distance is an inlier (normal)
+
+        # 2 => Process dists so that positive class is > 0 as asked by
+        # average_precision_score & roc_auc_score
+        scores = -dists
+
+        # Collect results from this batch
+        all_labels.extend(labels)
+        all_scores.extend(scores)
+        logger.debug(
+            f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
+        )
+
     return (
-        labels,
-        scores,  # For AUPRC computation and AUC-ROC
+        np.array(all_labels),
+        np.array(all_scores),  # For AUPRC computation and AUC-ROC
     )
 
 
@@ -188,10 +222,13 @@ def compute_metrics_sbert(
     )
 
 
+# @profile
 def train_ocsvm_cv(
     df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
 ):
     model_name = "CountVectorizer and OCSVM"
+    if use_scaler:
+        model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
     model = OCSVM_CV(
         GENERIC=GENERIC,
@@ -209,6 +246,9 @@ def train_ocsvm_li(
     df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
 ):
     model_name = "Li and OCSVM"
+    if use_scaler:
+        model_name += "-scaler"
+
     logger.info(f"Training model: {model_name}")
     model = OCSVM_Li(
         GENERIC=GENERIC,
@@ -240,6 +280,8 @@ def train_lof_cv(
     df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
 ):
     model_name = "CountVectorizer and LOF"
+    if use_scaler:
+        model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
 
     model = LOF_CV(
@@ -257,6 +299,8 @@ def train_lof_li(
     df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
 ):
     model_name = "Li and LOF"
+    if use_scaler:
+        model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
     model = LOF_Li(GENERIC=GENERIC, n_jobs=-1, use_scaler=use_scaler)
     model.train_model(
@@ -276,21 +320,28 @@ def train_lof_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
 
+
 # -- Autoencoders --
-def train_ae_li(df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler : bool = False):
+def train_ae_li(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+):
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
     torch.manual_seed(GENERIC.RANDOM_SEED)
 
     model_name = "Li and AE"
+    if use_scaler:
+        model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_Li(
-        GENERIC=GENERIC, learning_rate=0.005, epochs=100, batch_size=1024, use_scaler=use_scaler,
+        GENERIC=GENERIC,
+        learning_rate=0.005,
+        epochs=100,
+        batch_size=1024,
+        use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_ae(
-        model, df_test=df_test, model_name=model_name
-    )
+    return compute_metrics_ae(model, df_test=df_test, model_name=model_name)
 
 
 def train_ae_cv(
@@ -301,6 +352,9 @@ def train_ae_cv(
     torch.manual_seed(GENERIC.RANDOM_SEED)
 
     model_name = "CountVectorizer and AE"
+    if use_scaler:
+        model_name += "-scaler"
+
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_CV(
         GENERIC=GENERIC,
@@ -357,7 +411,6 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
     models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-
     labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
     models["Li and AE"] = (labels, scores)
     labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
@@ -367,7 +420,7 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     models["CountVectorizer and AE (relu)"] = (labels, scores)
     labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
     models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
-    
+
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and OCSVM"] = (labels, scores)
     # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test)
@@ -430,10 +483,10 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df) / 15))
+    # df = df.sample(int(len(df) / 2))
     # df.to_csv("../dataset-small.csv", index=False)
     # exit()
-    # df = df.sample(100)
+    # df = df.sample(1000)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 
