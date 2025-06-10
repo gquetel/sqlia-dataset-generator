@@ -368,7 +368,6 @@ class LOF_Li:
         """
         df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
         self.feature_columns = df_pped.columns.tolist()
-        df_pped = self._scaler.fit_transform(df_pped.values)
 
         return df_pped
 

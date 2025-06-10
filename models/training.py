@@ -47,7 +47,6 @@ GENERIC = DotDict(
 project_paths = ProjectPaths(GENERIC.BASE_PATH)
 # project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
 logger = logging.getLogger(__name__)
-training_results = []
 
 
 def init_logging(args):
@@ -104,7 +103,7 @@ def init_args() -> argparse.Namespace:
 
 # @profile
 def compute_metrics(
-    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li | AutoEncoder_Li,
+    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li,
     df_test: pd.DataFrame,
     model_name: str,
     use_scaler: bool = False,
@@ -221,8 +220,6 @@ def compute_metrics_sbert(
         scores,  # For AUPRC computation and AUC-ROC
     )
 
-
-# @profile
 def train_ocsvm_cv(
     df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
 ):
@@ -391,15 +388,15 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     models = {}
 
-    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    models["Li and OCSVM"] = (labels, scores)
-    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["Li and OCSVM - scaler"] = (labels, scores)
+    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
+    # models["Li and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["Li and OCSVM - scaler"] = (labels, scores)
 
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
     models["Li and LOF"] = (labels, scores)
@@ -411,15 +408,15 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
     models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-    labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
-    models["Li and AE"] = (labels, scores)
-    labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["Li and AE - scaler"] = (labels, scores)
+    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
+    # models["Li and AE"] = (labels, scores)
+    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["Li and AE - scaler"] = (labels, scores)
 
-    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and AE (relu)"] = (labels, scores)
-    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
+    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and AE (relu)"] = (labels, scores)
+    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and OCSVM"] = (labels, scores)

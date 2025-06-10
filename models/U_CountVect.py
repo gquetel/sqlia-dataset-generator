@@ -108,8 +108,6 @@ class OCSVM_CV:
 
             # Fetch corresponding samples, transform to df (transform if needed)
             batch_queries = pp_queries[start_idx:end_idx].toarray()
-            if self.use_scaler:
-                batch_queries = self._scaler.transform(batch_queries)
             batch_queries_df = pd.DataFrame(batch_queries)
 
             # And then retrieve original columns
@@ -183,10 +181,6 @@ class LOF_CV:
         labels = df["label"]
         pp_queries = self.vectorizer.transform(df["full_query"])
 
-        # TODO: Test, does this work ?
-        if self.use_scaler:
-            pp_queries = self._scaler.transform(pp_queries)
-
         if drop_og_columns:
             return pp_queries, labels
 
@@ -252,7 +246,9 @@ class AutoEncoder_CV:
 
         WARNING: A New DataFrame with both features and original columns is returned if
         drop_og_columns is set to true. This means a new index is generated.
-
+        
+        WARNING 2: This function performs scaling, no need to do it again afterwards.
+        
         Args:
             df (pd.DataFrame): _description_
             drop_og_columns (bool, optional): _description_. Defaults to True.
@@ -262,9 +258,6 @@ class AutoEncoder_CV:
         """
         labels = df["label"]
         pp_queries = self.vectorizer.transform(df["full_query"])
-
-        if self.use_scaler:
-            pp_queries = self._scaler.transform(pp_queries)
 
         if drop_og_columns:
             return pp_queries, labels
