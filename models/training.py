@@ -49,6 +49,7 @@ project_paths = ProjectPaths(GENERIC.BASE_PATH)
 logger = logging.getLogger(__name__)
 training_results = []
 
+
 def init_logging(args):
     lf = TimedRotatingFileHandler(
         project_paths.logs_path + "/training.log",
@@ -200,25 +201,41 @@ def compute_metrics_ae(
 
 
 def compute_metrics_sbert(
-    model: OCSVM_SecureBERT | LOF_SecureBERT, df_test: pd.DataFrame, model_name: str
+    model: OCSVM_SecureBERT | LOF_SecureBERT | AutoEncoder_SecureBERT, df_test: pd.DataFrame, model_name: str
 ):
-    # 0 => pped + original columns
-    df_pped = model.preprocess(df=df_test)
-    labels = np.array(df_pped["label"].tolist())
+    """Process test set in batches of 20k samples to manage memory usage."""
+    batch_size = 20000
+    all_labels = []
+    all_scores = []
 
-    # 1 => Probas (ppeds only)
-    labels_inf, dists = model.get_scores(df_pped)
+    for start_idx in range(0, len(df_test), batch_size):
+        end_idx = min(start_idx + batch_size, len(df_test))
+        batch_df = df_test.iloc[start_idx:end_idx]
 
-    # dists are a distance to the separating hyperplane.
-    # Negative distance is an outlier (attack)
-    # Positive distance is an inlier (normal)
-    scores = -dists
+        # 0 => pped + original columns
+        df_pped = model.preprocess(df=batch_df)
+        labels = np.array(df_pped["label"].tolist())
 
-    # For AUC plot
+        # 1 => Probas (ppeds only)
+        labels_inf, dists = model.get_scores(df_pped)
+
+        # dists are a distance to the separating hyperplane.
+        # Negative distance is an outlier (attack)
+        # Positive distance is an inlier (normal)
+        scores = -dists
+
+        all_labels.extend(labels)
+        all_scores.extend(scores)
+
+        logger.debug(
+            f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
+        )
+
     return (
-        labels,
-        scores,  # For AUPRC computation and AUC-ROC
+        np.array(all_labels),
+        np.array(all_scores),  # For AUPRC computation and AUC-ROC
     )
+
 
 def train_ocsvm_cv(
     df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
@@ -367,6 +384,7 @@ def train_ae_cv(
 
 def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and AE"
+    # TODO: Verifier pooler_output format and adapt decode accordingly.
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_SecureBERT(
         device=init_device(), learning_rate=0.001, epochs=100, batch_size=32
@@ -483,7 +501,7 @@ if __name__ == "__main__":
     # df = df.sample(int(len(df) / 2))
     # df.to_csv("../dataset-small.csv", index=False)
     # exit()
-    # df = df.sample(1000)
+    # df = df.sample(100)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 

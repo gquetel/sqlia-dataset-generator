@@ -303,7 +303,6 @@ class AutoEncoder_CV:
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
         self._scaler_min = pp_queries.min(axis=None)
         self._scaler_max = pp_queries.max(axis=None)
-
         return pp_queries
 
     def _dataframe_to_tensor_batched(self, df, batch_size=4096):
