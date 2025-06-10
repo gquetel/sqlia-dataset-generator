@@ -31,6 +31,7 @@ from explain import (
     plot_roc_curves_plt_from_scores,
     plot_tree_clf,
     print_and_save_metrics,
+    print_and_save_metrics_for_max_fpr,
 )
 
 # ------------ Global variables  ------------
@@ -148,10 +149,24 @@ def compute_metrics(
             f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
         )
 
-    return (
-        np.array(all_labels),
-        np.array(all_scores),  # For AUPRC computation and AUC-ROC
+    # 3 => Print metrics
+    all_labels = np.array(all_labels)
+    all_scores = np.array(all_scores)
+
+    # This function display metrics for a given max fpr, also return preds.
+    # From which we can compute recall per technique
+    d_res, preds = print_and_save_metrics_for_max_fpr(
+        labels=all_labels,
+        scores=all_scores,
+        model_name=model_name,
+        max_fpr=0.001,
+        project_paths=project_paths,
     )
+
+    # TODO
+    # 4 => Compute recall per technique given preds, and add them to d_res
+    training_results.append(d_res)
+    return all_labels, all_scores
 
 
 def compute_metrics_ae(
@@ -194,14 +209,27 @@ def compute_metrics_ae(
             f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
         )
 
-    return (
-        np.array(all_labels),
-        np.array(all_scores),  # For AUPRC computation and AUC-ROC
+    # 3 => Print metrics
+    all_labels = np.array(all_labels)
+    all_scores = np.array(all_scores)
+
+    # This function display metrics for a given max fpr, also return preds.
+    # From which we can compute recall per technique
+    d_res, preds = print_and_save_metrics_for_max_fpr(
+        labels=all_labels,
+        scores=all_scores,
+        model_name=model_name,
+        max_fpr=0.001,
+        project_paths=project_paths,
     )
+    training_results.append(d_res)
+    return all_labels, all_scores
 
 
 def compute_metrics_sbert(
-    model: OCSVM_SecureBERT | LOF_SecureBERT | AutoEncoder_SecureBERT, df_test: pd.DataFrame, model_name: str
+    model: OCSVM_SecureBERT | LOF_SecureBERT | AutoEncoder_SecureBERT,
+    df_test: pd.DataFrame,
+    model_name: str,
 ):
     """Process test set in batches of 20k samples to manage memory usage."""
     batch_size = 20000
@@ -231,10 +259,21 @@ def compute_metrics_sbert(
             f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
         )
 
-    return (
-        np.array(all_labels),
-        np.array(all_scores),  # For AUPRC computation and AUC-ROC
+    # 3 => Print metrics
+    all_labels = np.array(all_labels)
+    all_scores = np.array(all_scores)
+
+    # This function display metrics for a given max fpr, also return preds.
+    # From which we can compute recall per technique
+    d_res, preds = print_and_save_metrics_for_max_fpr(
+        labels=all_labels,
+        scores=all_scores,
+        model_name=model_name,
+        max_fpr=0.001,
+        project_paths=project_paths,
     )
+    training_results.append(d_res)
+    return all_labels, all_scores
 
 
 def train_ocsvm_cv(
@@ -411,30 +450,30 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
     models["Li and OCSVM - scaler"] = (labels, scores)
 
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
-    models["Li and LOF"] = (labels, scores)
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["Li and LOF - scaler"] = (labels, scores)
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
+    # models["Li and LOF"] = (labels, scores)
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["Li and LOF - scaler"] = (labels, scores)
 
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and LOF "] = (labels, scores)
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["CountVectorizer and LOF - scaler"] = (labels, scores)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and LOF "] = (labels, scores)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-    labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
-    models["Li and AE"] = (labels, scores)
-    labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["Li and AE - scaler"] = (labels, scores)
+    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
+    # models["Li and AE"] = (labels, scores)
+    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["Li and AE - scaler"] = (labels, scores)
 
-    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
-    models["CountVectorizer and AE (relu)"] = (labels, scores)
-    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
+    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
+    # models["CountVectorizer and AE (relu)"] = (labels, scores)
+    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and OCSVM"] = (labels, scores)
@@ -498,10 +537,6 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df) / 2))
-    # df.to_csv("../dataset-small.csv", index=False)
-    # exit()
-    # df = df.sample(100)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 

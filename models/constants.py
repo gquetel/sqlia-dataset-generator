@@ -35,7 +35,7 @@ class ProjectPaths:
         path = f"{self.base_path}/output/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
-
+    
     @property
     def logs_path(self) -> str:
         path = f"{self.base_path}../logs/"

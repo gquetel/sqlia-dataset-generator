@@ -23,6 +23,57 @@ from sklearn.metrics import (
 logger = logging.getLogger(__name__)
 
 
+def print_and_save_metrics_for_max_fpr(
+    labels: np.ndarray,
+    scores: np.ndarray,
+    project_paths,
+    model_name: str = "",
+    max_fpr: float = 0.001,
+):
+    fpr, tpr, thresholds = roc_curve(labels, scores)
+    valid_indices = np.where(fpr <= max_fpr)[0]
+    # From ROC tresholds we search for the best one
+    if len(valid_indices) > 0:
+        best_idx = valid_indices[np.argmax(tpr[valid_indices])]
+        threshold = thresholds[best_idx]
+        achieved_fpr = fpr[best_idx]
+    else:
+        # If we can't find one below max_fpr, we go to the next one.
+        best_idx = np.argmin(fpr)
+        threshold = thresholds[best_idx]
+        achieved_fpr = fpr[best_idx]
+        logger.warning(
+            f"Cannot achieve FPR <= {max_fpr}, using FPR = {achieved_fpr:.4f}"
+        )
+
+    preds = (scores >= threshold).astype(int)
+
+    accuracy = f"{accuracy_score(labels, preds)* 100:.2f}%"
+    f1 = f"{f1_score(labels, preds)* 100:.2f}%"
+    precision = f"{precision_score(labels, preds) * 100:.2f}%"
+    recall = f"{recall_score(labels, preds) * 100:.2f}%"
+    achieved_fpr =  f"{achieved_fpr:.2f}%"
+
+    logger.info(f"Metrics for {model_name}.")
+    logger.info(f"Accuracy: {accuracy}")
+    logger.info(f"F1 Score: {f1}")
+    logger.info(f"Precision: {precision}")
+    logger.info(f"Recall: {recall}")
+    logger.info(f"False Positive Rate: {achieved_fpr}")
+
+    return (
+        {
+            "model": model_name,
+            "fone": f1,
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "fpr":achieved_fpr,
+        },
+        preds,
+    )
+
+
 def print_and_save_metrics(
     all_targets: list,
     all_predictions: list,
@@ -85,21 +136,16 @@ def print_and_save_metrics(
 # TODO recall / atk
 # TODO: FPR à 10-3 / 10-4
 def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
-    """ Display Recall score per technique from a dataframe with preds. """
-    techniques = (
-        df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
-    )
+    """Display Recall score per technique from a dataframe with preds."""
+    techniques = df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
     logger.info(f"Computing recall for model: {model_name}{suffix}")
     for i, technique in enumerate(techniques):
-        mask = (df["attack_technique"] == technique)
+        mask = df["attack_technique"] == technique
         preds = df.loc[mask, "preds"]
         labels = df.loc[mask, "label"]
-        srecall= (
-            f"{recall_score(labels, preds, average="binary")* 100:.2f}%"
-        )
+        srecall = f"{recall_score(labels, preds, average="binary")* 100:.2f}%"
         logger.info(f"Recall for technique {technique}: {srecall}")
 
-    
 
 def plot_tree_clf(model, project_paths, max_depth: int | None = None):
     n_leaves = model.clf.get_n_leaves()
@@ -239,7 +285,7 @@ def plot_pr_curves_plt(
         auprc = auc(recall, precision)
 
         # Plot the curve
-        # TODO: Enlever "AUC =" , Manual Features -> Li,et figure en plus grand. 
+        # TODO: Enlever "AUC =" , Manual Features -> Li,et figure en plus grand.
         ax.plot(recall, precision, label=f"{model_name} (AUC = {auprc:.4f})")
 
         # Also let's save the results:
@@ -264,6 +310,7 @@ def plot_pr_curves_plt(
 
     # plt.tight_layout()
     plt.savefig(f"{folder_name}auprc_curves{suffix}.png")
+
 
 def plot_roc_curves_plt(
     labels: list, l_preds: list, l_model_names: list, project_paths, suffix: str = ""
@@ -304,7 +351,7 @@ def plot_pr_curves_plt_from_scores(
 
     for scores, model_name in zip(l_scores, l_model_names):
         assert isinstance(scores, np.ndarray)
-        precision, recall, _ = precision_recall_curve(labels, scores,pos_label=1)
+        precision, recall, _ = precision_recall_curve(labels, scores, pos_label=1)
         auprc = auc(recall, precision)
 
         # Plot the curve
@@ -319,7 +366,7 @@ def plot_pr_curves_plt_from_scores(
     # y = prevalence
     x = [0, 1]
     y = [sum(labels) / len(labels)] * len(x)
-    ax.plot(x, y,  "k--", alpha=0.6, label=f"Random Classifier = {y[0]:.4f}")
+    ax.plot(x, y, "k--", alpha=0.6, label=f"Random Classifier = {y[0]:.4f}")
 
     # Customize plot
     ax.set_xlabel("Recall")
@@ -331,7 +378,6 @@ def plot_pr_curves_plt_from_scores(
 
     # plt.tight_layout()
     plt.savefig(f"{folder_name}auprc_curves{suffix}.png")
-
 
 
 def plot_roc_curves_plt_from_scores(
