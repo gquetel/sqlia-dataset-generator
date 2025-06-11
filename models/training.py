@@ -18,6 +18,7 @@ import pandas as pd
 import sys
 import logging
 import scipy
+from scipy import sparse
 import torch
 
 from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li
@@ -154,11 +155,21 @@ def compute_metrics(
             # Some models use scaler some does not. Because we want to keep column information
             # For some tests, we perform the scaling here after the original columns have been
             # removed.
-            if use_scaler:
-                df_pped_wout_og_cols = df_pped_wout_og_cols.to_numpy()
-                df_pped_wout_og_cols = model._scaler.transform(df_pped_wout_og_cols)
+            df_pped_wout_og_cols = df_pped_wout_og_cols.to_numpy()
 
-            dists = model.clf.decision_function(df_pped_wout_og_cols)
+            if use_scaler:
+                # TODO: better code to prevent back and forth conversions
+                if isinstance(model, (LOF_CV, OCSVM_CV)):
+                    # If CV -> Convert to sparse before transform
+                    f_matrix = sparse.csr_matrix(df_pped_wout_og_cols)
+                    f_matrix = model._scaler.transform(f_matrix)
+                    dists = model.clf.decision_function(f_matrix)
+                else:
+                    # Else, directly transform from numpy.
+                    df_pped_wout_og_cols = model._scaler.transform(df_pped_wout_og_cols)
+                    dists = model.clf.decision_function(df_pped_wout_og_cols)
+            else:
+                dists = model.clf.decision_function(df_pped_wout_og_cols)
 
             # dists are a distance to the separating hyperplane.
             # Negative distance is an outlier (attack)
@@ -617,7 +628,6 @@ def train_cpu_models(
     )
     models["Li and OCSVM"] = (labels, scores)
 
-    # TODO: This one is still behaving weirdly.
     labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and LOF "] = (labels, scores)
     labels, scores = train_lof_cv(
@@ -628,6 +638,10 @@ def train_cpu_models(
     # We keep this one without scaler, it has the best results.
     labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
@@ -709,10 +723,7 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    df = df.sample(int(len(df)/20))
-    # df = df.sample(100)
-    # df.to_csv("../dataset-small.csv", index=False)
-    # exit()
+    df = df.sample(int(len(df) / 10))
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
         _df_train,
