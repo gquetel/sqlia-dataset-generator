@@ -1,8 +1,8 @@
 import logging
 import pandas as pd
-from sklearn.discriminant_analysis import StandardScaler
+from sklearn.preprocessing import StandardScaler, MaxAbsScaler
 from sklearn.neighbors import LocalOutlierFactor
-from sklearn.preprocessing import MaxAbsScaler
+
 from sklearn.svm import OneClassSVM
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
@@ -65,8 +65,11 @@ class OCSVM_CV:
         self.feature_columns = self.vectorizer.get_feature_names_out()
 
         if self.use_scaler:
+            print("Using scaler for training, OCSVM CV")
+            print("Before:", f_matrix[0])
             f_matrix = self._scaler.fit_transform(f_matrix)
-
+            print("After:", f_matrix[0])
+        
         model.fit(f_matrix)
         self.clf = model
 
@@ -144,8 +147,6 @@ class LOF_CV:
         df_pped = df.copy()
         # Fit Vectorizer and transform queries at the same time.
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
-        if self.use_scaler:
-            pp_queries = self._scaler.fit_transform(pp_queries)
         return pp_queries
 
     def train_model(
@@ -160,6 +161,8 @@ class LOF_CV:
         model = LocalOutlierFactor(n_jobs=self.n_jobs, novelty=True)
 
         self.feature_columns = self.vectorizer.get_feature_names_out()
+        if self.use_scaler:
+            f_matrix = self._scaler.fit_transform(f_matrix)
         model.fit(f_matrix)
         self.clf = model
 
@@ -280,13 +283,10 @@ class AutoEncoder_CV:
             batch_queries = pp_queries[start_idx:end_idx].toarray()
 
             if self.use_scaler:
-                # print(f"Before scaling: {batch_queries[0]}")
                 batch_queries = self._scaler.transform(batch_queries)
-                # print(f"Before clip: {batch_queries[0]}")
                 batch_queries = np.clip(
                     batch_queries, self._scaler_min, self._scaler_max
                 )
-                # print(f"After clip: {batch_queries[0]}")
 
             batch_queries_df = pd.DataFrame(batch_queries)
             # And then retrieve original columns

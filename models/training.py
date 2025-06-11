@@ -129,9 +129,12 @@ def compute_metrics(
         # For some tests, we perform the scaling here after the original columns have been
         # removed.
         if use_scaler:
+            print(f"Test data before scaling:", df_pped_wout_og_cols[1])
             df_pped_wout_og_cols = model._scaler.transform(
                 df_pped_wout_og_cols.to_numpy()
             )
+            print(f"Test data after scaling:", df_pped_wout_og_cols[1])
+
 
         dists = model.clf.decision_function(df_pped_wout_og_cols)
 
@@ -292,7 +295,7 @@ def train_ocsvm_cv(
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+    return compute_metrics(model=model, df_test=df_test, model_name=model_name,use_scaler=use_scaler)
 
 
 def train_ocsvm_li(
@@ -345,7 +348,7 @@ def train_lof_cv(
         model_name=model_name,
         project_paths=project_paths,
     )
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name)
+    return compute_metrics(model=model, df_test=df_test, model_name=model_name,use_scaler=use_scaler)
 
 
 def train_lof_li(
@@ -445,15 +448,15 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     models = {}
 
-    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    models["Li and OCSVM"] = (labels, scores)
-    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    models["Li and OCSVM - scaler"] = (labels, scores)
+    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
+    # models["Li and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    # models["Li and OCSVM - scaler"] = (labels, scores)
 
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and OCSVM"] = (labels, scores)
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
     # labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
     # models["Li and LOF"] = (labels, scores)
@@ -537,6 +540,8 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
+    # df = df.sample(int(len(df)/1000))
+    df = df.sample(100)
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 

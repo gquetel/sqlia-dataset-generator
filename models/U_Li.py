@@ -402,7 +402,7 @@ class AutoEncoder_Li:
         self.GENERIC = GENERIC
         self.model_name = None
 
-        # Let's use MaxAbsScaler => 0 and 1
+        # Let's use MaxAbsScaler => -1 and 1
         self._scaler = MaxAbsScaler()
 
         self.learning_rate = learning_rate

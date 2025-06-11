@@ -76,7 +76,7 @@ class MyAutoEncoder(nn.Module):
 
         x = F.relu(self.fc3(encoded))
         # decoded = F.relu(self.fc4(x))
-        decoded = F.sigmoid(self.fc4(x))
+        decoded = F.tanh(self.fc4(x))
         return decoded
 
     def decision_function(
