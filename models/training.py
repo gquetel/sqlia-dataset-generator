@@ -2,6 +2,8 @@
 
 import os
 
+from sklearn.model_selection import train_test_split
+
 # We force device on which training happens.
 # device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
 # into account apparently...
@@ -31,7 +33,7 @@ from explain import (
     plot_roc_curves_plt_from_scores,
     plot_tree_clf,
     print_and_save_metrics,
-    print_and_save_metrics_for_max_fpr,
+    print_and_save_metrics_from_treshold,
 )
 
 # ------------ Global variables  ------------
@@ -51,6 +53,7 @@ logger = logging.getLogger(__name__)
 training_results = []
 
 n_jobs = min(64, int(os.cpu_count() * 0.8))
+
 
 def init_logging(args):
     lf = TimedRotatingFileHandler(
@@ -104,76 +107,107 @@ def init_args() -> argparse.Namespace:
 # ------------- MODELS TRAINING -------------
 
 
+def get_threshold_for_max_rate(s_val, max_rate=0.001):
+    """Compute threshold given a max allowed FPR.
+
+    Args:
+        s_val (_type_): _description_
+        max_rate (float, optional): _description_. Defaults to 0.001.
+
+    Returns:
+        _type_: _description_
+    """
+    s_val = np.array(s_val)
+    percentile = (1 - max_rate) * 100
+    return np.percentile(s_val, percentile)
+
+
 # @profile
 def compute_metrics(
     model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li,
     df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
     model_name: str,
     use_scaler: bool = False,
 ):
-    """Process test set in batches of 10k samples to manage memory usage."""
-    batch_size = 10000 # 20k is too much for my laptop
-    all_labels = []
-    all_scores = []
+    def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """Return scores and labels for given dataframes, they are computed in batches.
+        Args:
+            df (pd.DataFrame): _description_
+        """
+        batch_size = 10000  # 20k is too much for my laptop for CV
+        all_labels = []
+        all_scores = []
 
-    for start_idx in range(0, len(df_test), batch_size):
-        end_idx = min(start_idx + batch_size, len(df_test))
-        batch_df = df_test.iloc[start_idx:end_idx]
+        for start_idx in range(0, len(df), batch_size):
+            end_idx = min(start_idx + batch_size, len(df))
+            batch_df = df.iloc[start_idx:end_idx]
 
-        # 0 => pped + original columns
-        df_pped, labels = model.preprocess_for_preds(df=batch_df, drop_og_columns=False)
-
-        # 1 => Probas (ppeds only)
-        df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
-
-        # Some models use scaler some does not. Because we want to keep column information
-        # For some tests, we perform the scaling here after the original columns have been
-        # removed.
-        if use_scaler:
-            df_pped_wout_og_cols = df_pped_wout_og_cols.to_numpy()
-            # print(f"Test data before scaling:", df_pped_wout_og_cols[1])
-            df_pped_wout_og_cols = model._scaler.transform(
-                df_pped_wout_og_cols
+            # 0 => pped + original columns
+            df_pped, labels = model.preprocess_for_preds(
+                df=batch_df, drop_og_columns=False
             )
-            # print(f"Test data after scaling:", df_pped_wout_og_cols[1])
 
+            # 1 => Probas (ppeds only)
+            df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
 
-        dists = model.clf.decision_function(df_pped_wout_og_cols)
+            # Some models use scaler some does not. Because we want to keep column information
+            # For some tests, we perform the scaling here after the original columns have been
+            # removed.
+            if use_scaler:
+                df_pped_wout_og_cols = df_pped_wout_og_cols.to_numpy()
+                df_pped_wout_og_cols = model._scaler.transform(df_pped_wout_og_cols)
 
-        # dists are a distance to the separating hyperplane.
-        # Negative distance is an outlier (attack)
-        # Positive distance is an inlier (normal)
+            dists = model.clf.decision_function(df_pped_wout_og_cols)
 
-        # 2 => Process dists so that positive class is > 0 as asked by
-        # average_precision_score & roc_auc_score
-        scores = -dists
+            # dists are a distance to the separating hyperplane.
+            # Negative distance is an outlier (attack)
+            # Positive distance is an inlier (normal)
 
-        all_labels.extend(labels)
-        all_scores.extend(scores)
-        logger.debug(
-            f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
-        )
+            # 2 => Process dists so that positive class is > 0 as asked by
+            # average_precision_score & roc_auc_score
+            scores = -dists
 
-    # 3 => Print metrics
-    all_labels = np.array(all_labels)
-    all_scores = np.array(all_scores)
+            all_labels.extend(labels)
+            all_scores.extend(scores)
+            logger.debug(
+                f"Processed batch {start_idx//batch_size + 1}/{(len(df) + batch_size - 1)//batch_size}"
+            )
 
-    # This function display metrics for a given max fpr, also return preds.
-    # From which we can compute recall per technique
-    d_res, preds = print_and_save_metrics_for_max_fpr(
-        labels=all_labels,
-        scores=all_scores,
+        all_labels = np.array(all_labels)
+        all_scores = np.array(all_scores)
+
+        return all_labels, all_scores
+
+    # We compute all scores for test dataset.
+    l_test, s_test = _get_scores_in_batch(df=df_test)
+
+    # We compute all scores for val dataset
+    _, s_val = _get_scores_in_batch(df=df_val)
+
+    # We infer a treshold given a maximum FPR
+    threshold = get_threshold_for_max_rate(s_val=s_val, max_rate=0.001)
+    num_above_threshold = np.sum(s_val > threshold)
+    proportion = num_above_threshold / len(s_val)
+    logger.info(
+        f"Chosen threshold {threshold}, leads to {num_above_threshold} samples ({proportion:.1%}) above threshold"
+    )
+
+    # We compute metrics data from test scores, their labels and the treshold
+    d_res, preds = print_and_save_metrics_from_treshold(
+        labels=l_test,
+        scores=s_test,
         model_name=model_name,
-        max_fpr=0.001,
+        threshold=threshold,
         project_paths=project_paths,
     )
 
     # 4 => Compute recall per technique given preds, and add them to d_res
-    # We create an artificial dataframe with attack_techniques, labels and preds 
+    # We create an artificial dataframe with attack_techniques, labels and preds
     _df = pd.DataFrame(
         {
             "attack_technique": df_test["attack_technique"],
-            "label": all_labels,
+            "label": l_test,
             "preds": preds,
         }
     )
@@ -181,70 +215,86 @@ def compute_metrics(
     # Add keys of recall dict to d_res and save it.
     d_res.update(d_res_recall)
     training_results.append(d_res)
-    
-    return all_labels, all_scores
+
+    return l_test, s_test
 
 
 def compute_metrics_ae(
-    model: AutoEncoder_CV,
+    model: AutoEncoder_CV | AutoEncoder_Li,
+    df_val: pd.DataFrame,
     df_test: pd.DataFrame,
     model_name: str,
 ):
-    """Process test set in batches of 20k samples to manage memory usage."""
-    batch_size = 10000
-    all_labels = []
-    all_scores = []
+    def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """Process test set in batches of 20k samples to manage memory usage."""
+        batch_size = 10000
+        all_labels = []
+        all_scores = []
 
-    for start_idx in range(0, len(df_test), batch_size):
-        end_idx = min(start_idx + batch_size, len(df_test))
-        batch_df = df_test.iloc[start_idx:end_idx]
+        for start_idx in range(0, len(df), batch_size):
+            end_idx = min(start_idx + batch_size, len(df))
+            batch_df = df.iloc[start_idx:end_idx]
 
-        # 0 => pped + original columns
-        df_pped, labels = model.preprocess_for_preds(df=batch_df, drop_og_columns=False)
+            # 0 => pped + original columns
+            df_pped, labels = model.preprocess_for_preds(
+                df=batch_df, drop_og_columns=False
+            )
 
-        # 1 => Probas (ppeds only)
-        df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
+            # 1 => Probas (ppeds only)
+            df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
 
-        tensors = model._dataframe_to_tensor_batched(
-            df_pped_wout_og_cols, batch_size=4096
-        )
-        dists = model.clf.decision_function(tensors, is_tensor=True)
+            tensors = model._dataframe_to_tensor_batched(
+                df_pped_wout_og_cols, batch_size=4096
+            )
+            dists = model.clf.decision_function(tensors, is_tensor=True)
 
-        # dists are a distance to the separating hyperplane.
-        # Negative distance is an outlier (attack)
-        # Positive distance is an inlier (normal)
+            # dists are a distance to the separating hyperplane.
+            # Negative distance is an outlier (attack)
+            # Positive distance is an inlier (normal)
 
-        # 2 => Process dists so that positive class is > 0 as asked by
-        # average_precision_score & roc_auc_score
-        scores = -dists
+            # 2 => Process dists so that positive class is > 0 as asked by
+            # average_precision_score & roc_auc_score
+            scores = -dists
 
-        # Collect results from this batch
-        all_labels.extend(labels)
-        all_scores.extend(scores)
-        logger.debug(
-            f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
-        )
+            # Collect results from this batch
+            all_labels.extend(labels)
+            all_scores.extend(scores)
+            logger.debug(
+                f"Processed batch {start_idx//batch_size + 1}/{(len(df) + batch_size - 1)//batch_size}"
+            )
 
-    # 3 => Print metrics
-    all_labels = np.array(all_labels)
-    all_scores = np.array(all_scores)
+        # 3 => Print metrics
+        all_labels = np.array(all_labels)
+        all_scores = np.array(all_scores)
+        return all_labels, all_scores
 
-    # This function display metrics for a given max fpr, also return preds.
-    # From which we can compute recall per technique
-    d_res, preds = print_and_save_metrics_for_max_fpr(
-        labels=all_labels,
-        scores=all_scores,
+    # We compute all scores for test dataset.
+    l_test, s_test = _get_scores_in_batch(df=df_test)
+    # We compute all scores for val dataset
+    _, s_val = _get_scores_in_batch(df=df_val)
+    # We infer a treshold given a maximum FPR
+    threshold = get_threshold_for_max_rate(s_val=s_val, max_rate=0.001)
+    num_above_threshold = np.sum(s_val > threshold)
+    proportion = num_above_threshold / len(s_val)
+    logger.info(
+        f"Chosen threshold {threshold}, leads to {num_above_threshold} samples ({proportion:.1%}) above threshold"
+    )
+
+    # We compute metrics data from test scores, their labels and the treshold
+    d_res, preds = print_and_save_metrics_from_treshold(
+        labels=l_test,
+        scores=s_test,
         model_name=model_name,
-        max_fpr=0.001,
+        threshold=threshold,
         project_paths=project_paths,
     )
 
     # 4 => Compute recall per technique given preds, and add them to d_res
-    # We create an artificial dataframe with attack_techniques, labels and preds 
+    # We create an artificial dataframe with attack_techniques, labels and preds
     _df = pd.DataFrame(
         {
             "attack_technique": df_test["attack_technique"],
-            "label": all_labels,
+            "label": l_test,
             "preds": preds,
         }
     )
@@ -252,63 +302,77 @@ def compute_metrics_ae(
     # Add keys of recall dict to d_res and save it.
     d_res.update(d_res_recall)
     training_results.append(d_res)
-    
-    return all_labels, all_scores
+
+    return l_test, s_test
 
 
 def compute_metrics_sbert(
     model: OCSVM_SecureBERT | LOF_SecureBERT | AutoEncoder_SecureBERT,
     df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
     model_name: str,
 ):
-    """Process test set in batches of 20k samples to manage memory usage."""
-    batch_size = 10000
-    all_labels = []
-    all_scores = []
+    def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """Process test set in batches of 20k samples to manage memory usage."""
+        batch_size = 10000
+        all_labels = []
+        all_scores = []
 
-    for start_idx in range(0, len(df_test), batch_size):
-        end_idx = min(start_idx + batch_size, len(df_test))
-        batch_df = df_test.iloc[start_idx:end_idx]
+        for start_idx in range(0, len(df), batch_size):
+            end_idx = min(start_idx + batch_size, len(df))
+            batch_df = df.iloc[start_idx:end_idx]
 
-        # 0 => pped + original columns
-        df_pped = model.preprocess(df=batch_df)
-        labels = np.array(df_pped["label"].tolist())
+            # 0 => pped + original columns
+            df_pped = model.preprocess(df=batch_df)
+            labels = np.array(df_pped["label"].tolist())
 
-        # 1 => Probas (ppeds only)
-        labels_inf, dists = model.get_scores(df_pped)
+            # 1 => Probas (ppeds only)
+            labels_inf, dists = model.get_scores(df_pped)
 
-        # dists are a distance to the separating hyperplane.
-        # Negative distance is an outlier (attack)
-        # Positive distance is an inlier (normal)
-        scores = -dists
+            # dists are a distance to the separating hyperplane.
+            # Negative distance is an outlier (attack)
+            # Positive distance is an inlier (normal)
+            scores = -dists
 
-        all_labels.extend(labels)
-        all_scores.extend(scores)
+            all_labels.extend(labels)
+            all_scores.extend(scores)
 
-        logger.debug(
-            f"Processed batch {start_idx//batch_size + 1}/{(len(df_test) + batch_size - 1)//batch_size}"
-        )
+            logger.debug(
+                f"Processed batch {start_idx//batch_size + 1}/{(len(df) + batch_size - 1)//batch_size}"
+            )
 
-    # 3 => Print metrics
-    all_labels = np.array(all_labels)
-    all_scores = np.array(all_scores)
+        # 3 => Print metrics
+        all_labels = np.array(all_labels)
+        all_scores = np.array(all_scores)
+        return all_labels, all_scores
 
-    # This function display metrics for a given max fpr, also return preds.
-    # From which we can compute recall per technique
-    d_res, preds = print_and_save_metrics_for_max_fpr(
-        labels=all_labels,
-        scores=all_scores,
+    # We compute all scores for test dataset.
+    l_test, s_test = _get_scores_in_batch(df=df_test)
+    # We compute all scores for val dataset
+    _, s_val = _get_scores_in_batch(df=df_val)
+    # We infer a treshold given a maximum FPR
+    threshold = get_threshold_for_max_rate(s_val=s_val, max_rate=0.001)
+    num_above_threshold = np.sum(s_val > threshold)
+    proportion = num_above_threshold / len(s_val)
+    logger.info(
+        f"Chosen threshold {threshold}, leads to {num_above_threshold} samples ({proportion:.1%}) above threshold"
+    )
+
+    # We compute metrics data from test scores, their labels and the treshold
+    d_res, preds = print_and_save_metrics_from_treshold(
+        labels=l_test,
+        scores=s_test,
         model_name=model_name,
-        max_fpr=0.001,
+        threshold=threshold,
         project_paths=project_paths,
     )
 
     # 4 => Compute recall per technique given preds, and add them to d_res
-    # We create an artificial dataframe with attack_techniques, labels and preds 
+    # We create an artificial dataframe with attack_techniques, labels and preds
     _df = pd.DataFrame(
         {
             "attack_technique": df_test["attack_technique"],
-            "label": all_labels,
+            "label": l_test,
             "preds": preds,
         }
     )
@@ -317,11 +381,14 @@ def compute_metrics_sbert(
     d_res.update(d_res_recall)
     training_results.append(d_res)
 
-    return all_labels, all_scores
+    return l_test, s_test
 
 
 def train_ocsvm_cv(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
 ):
     model_name = "CountVectorizer and OCSVM"
     if use_scaler:
@@ -336,11 +403,20 @@ def train_ocsvm_cv(
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name,use_scaler=use_scaler)
+    return compute_metrics(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        use_scaler=use_scaler,
+    )
 
 
 def train_ocsvm_li(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
 ):
     model_name = "Li and OCSVM"
     if use_scaler:
@@ -361,20 +437,31 @@ def train_ocsvm_li(
         project_paths=project_paths,
     )
     return compute_metrics(
-        model=model, df_test=df_test, model_name=model_name, use_scaler=use_scaler
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        use_scaler=use_scaler,
     )
 
 
-def train_ocsvm_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_ocsvm_sbert(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
+):
     model_name = "SBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
     model = OCSVM_SecureBERT(device=init_device(), max_iter=1000)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics_sbert(model=model, df_test=df_test, model_name=model_name)
+    return compute_metrics_sbert(
+        model=model, df_val=df_val, df_test=df_test, model_name=model_name
+    )
 
 
 def train_lof_cv(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
 ):
     model_name = "CountVectorizer and LOF"
     if use_scaler:
@@ -382,18 +469,30 @@ def train_lof_cv(
     logger.info(f"Training model: {model_name}")
 
     model = LOF_CV(
-        GENERIC=GENERIC, n_jobs=n_jobs, vectorizer_max_features=None, use_scaler=use_scaler
+        GENERIC=GENERIC,
+        n_jobs=n_jobs,
+        vectorizer_max_features=None,
+        use_scaler=use_scaler,
     )
     model.train_model(
         df=df_train,
         model_name=model_name,
         project_paths=project_paths,
     )
-    return compute_metrics(model=model, df_test=df_test, model_name=model_name,use_scaler=use_scaler)
+    return compute_metrics(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        use_scaler=use_scaler,
+    )
 
 
 def train_lof_li(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
 ):
     model_name = "Li and LOF"
     if use_scaler:
@@ -406,20 +505,34 @@ def train_lof_li(
         project_paths=project_paths,
     )
     return compute_metrics(
-        model=model, df_test=df_test, model_name=model_name, use_scaler=use_scaler
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        use_scaler=use_scaler,
     )
 
 
-def train_lof_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_lof_sbert(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+):
     model_name = "SBERT and LOF"
     logger.info(f"Training model: {model_name}")
     model = LOF_SecureBERT(device=init_device(), n_jobs=n_jobs)
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
+    return compute_metrics_sbert(
+        model, df_test=df_test, df_val=df_val, model_name=model_name
+    )
+
 
 # -- Autoencoders --
 def train_ae_li(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
 ):
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
@@ -437,11 +550,16 @@ def train_ae_li(
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_ae(model, df_test=df_test, model_name=model_name)
+    return compute_metrics_ae(
+        model, df_test=df_test, df_val=df_val, model_name=model_name
+    )
 
 
 def train_ae_cv(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, use_scaler: bool = False
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
 ):
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
@@ -461,20 +579,26 @@ def train_ae_cv(
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_ae(model, df_test=df_test, model_name=model_name)
+    return compute_metrics_ae(
+        model, df_test=df_test, df_val=df_val, model_name=model_name
+    )
 
 
-def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame):
     model_name = "SBERT and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_SecureBERT(
         device=init_device(), learning_rate=0.001, epochs=100, batch_size=32
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
+    return compute_metrics_sbert(
+        model, df_test=df_test, df_val=df_val, model_name=model_name
+    )
 
 
-def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
+def train_cpu_models(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
+):
     logger.info(
         f"Training - number of attacks {len(df_train[df_train['label'] == 1])}"
         f" and number of normals {len(df_train[df_train['label'] == 0])}"
@@ -487,44 +611,48 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     models = {}
 
-    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    # models["Li and OCSVM"] = (labels, scores)
-    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["Li and OCSVM - scaler"] = (labels, scores)
+    # We keep this one with scaling, it behaves way better.
+    labels, scores = train_ocsvm_li(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["Li and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and OCSVM"] = (labels, scores)
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
+    # TODO: This one is still behaving weirdly.
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["CountVectorizer and LOF "] = (labels, scores)
+    labels, scores = train_lof_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
-    # models["Li and LOF"] = (labels, scores)
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["Li and LOF - scaler"] = (labels, scores)
+    # We keep this one without scaler, it has the best results.
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["CountVectorizer and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and LOF "] = (labels, scores)
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["CountVectorizer and LOF - scaler"] = (labels, scores)
+    # We keep this one without scaler, it has the best results.
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["Li and LOF"] = (labels, scores)
 
-    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
-    # models["Li and AE (relu)"] = (labels, scores)
-    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["Li and AE - scaler"] = (labels, scores)
+    # AE is behaving way better with scaling
+    labels, scores = train_ae_li(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["Li and AE"] = (labels, scores)
 
-    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and AE (relu)"] = (labels, scores)
-    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
+    # AE is behaving way better with scaling
+    labels, scores = train_ae_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and AE"] = (labels, scores)
 
-    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
-    models["SBERT and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and OCSVM"] = (labels, scores)
 
-    labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test)
-    models["SBERT and LOF"] = (labels, scores)
+    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and LOF"] = (labels, scores)
 
-    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test)
-    models["SBERT and AE"] = (labels, scores)
+    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and AE"] = (labels, scores)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
@@ -581,13 +709,16 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df)/2))
-    # df = df.sample(300)
+    df = df.sample(int(len(df)/20))
+    # df = df.sample(100)
     # df.to_csv("../dataset-small.csv", index=False)
     # exit()
-    df_train = df[df["split"] == "train"]
+    _df_train = df[df["split"] == "train"]
+    df_train, df_val = train_test_split(
+        _df_train,
+        test_size=0.1,
+        random_state=GENERIC.RANDOM_SEED,
+    )
     df_test = df[df["split"] == "test"]
 
-    df_train = df_train[df_train["label"] == 0]
-
-    train_cpu_models(df_train, df_test)
+    train_cpu_models(df_train, df_test, df_val)

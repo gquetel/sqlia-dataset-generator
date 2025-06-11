@@ -23,21 +23,13 @@ from sklearn.metrics import (
 logger = logging.getLogger(__name__)
 
 
-def print_and_save_metrics_for_max_fpr(
+def print_and_save_metrics_from_treshold(
     labels: np.ndarray,
     scores: np.ndarray,
     project_paths,
+    threshold: float,
     model_name: str = "",
-    max_fpr: float = 0.0001,
 ):
-    fpr, tpr, thresholds = roc_curve(labels, scores)
-    # First fetch all idx where fpr is under max value.
-    valid_indices = np.where(fpr <= max_fpr)[0]
-
-    # Then take the idx with the best TPR from those.
-    best_idx = valid_indices[np.argmax(tpr[valid_indices])]
-    threshold = thresholds[best_idx]
-    achieved_fpr = fpr[best_idx]
 
     preds = (scores >= threshold).astype(int)
 
@@ -45,8 +37,12 @@ def print_and_save_metrics_for_max_fpr(
     f1 = f"{f1_score(labels, preds)* 100:.2f}%"
     precision = f"{precision_score(labels, preds) * 100:.2f}%"
     recall = f"{recall_score(labels, preds) * 100:.2f}%"
-    achieved_fpr =  f"{achieved_fpr:.4f}%"
 
+    C = confusion_matrix(labels, preds, labels=[0, 1])
+    TN, FP, _, _ = C.ravel()
+    FPR = FP / (FP + TN)
+    achieved_fpr = f"{FPR* 100:.2f}%"
+    
     logger.info(f"Metrics for {model_name}.")
     logger.info(f"Accuracy: {accuracy}")
     logger.info(f"F1 Score: {f1}")
@@ -61,7 +57,7 @@ def print_and_save_metrics_for_max_fpr(
             "accuracy": accuracy,
             "precision": precision,
             "recall": recall,
-            "fpr":achieved_fpr,
+            "fpr": achieved_fpr,
         },
         preds,
     )
@@ -130,7 +126,7 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
     """Display Recall score per technique from a dataframe with preds."""
     techniques = df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
     logger.info(f"Computing recall for model: {model_name}{suffix}")
-    
+
     d_res = {}
 
     for i, technique in enumerate(techniques):
@@ -139,7 +135,7 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
         labels = df.loc[mask, "label"]
         srecall = f"{recall_score(labels, preds, average="binary")* 100:.2f}%"
         logger.info(f"Recall for technique {technique}: {srecall}")
-        d_res[f"recall{technique}"] = srecall  
+        d_res[f"recall{technique}"] = srecall
 
     return d_res
 
