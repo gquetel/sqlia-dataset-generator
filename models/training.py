@@ -111,8 +111,8 @@ def compute_metrics(
     model_name: str,
     use_scaler: bool = False,
 ):
-    """Process test set in batches of 20k samples to manage memory usage."""
-    batch_size = 20000
+    """Process test set in batches of 10k samples to manage memory usage."""
+    batch_size = 10000 # 20k is too much for my laptop
     all_labels = []
     all_scores = []
 
@@ -130,11 +130,12 @@ def compute_metrics(
         # For some tests, we perform the scaling here after the original columns have been
         # removed.
         if use_scaler:
-            print(f"Test data before scaling:", df_pped_wout_og_cols[1])
+            df_pped_wout_og_cols = df_pped_wout_og_cols.to_numpy()
+            # print(f"Test data before scaling:", df_pped_wout_og_cols[1])
             df_pped_wout_og_cols = model._scaler.transform(
-                df_pped_wout_og_cols.to_numpy()
+                df_pped_wout_og_cols
             )
-            print(f"Test data after scaling:", df_pped_wout_og_cols[1])
+            # print(f"Test data after scaling:", df_pped_wout_og_cols[1])
 
 
         dists = model.clf.decision_function(df_pped_wout_og_cols)
@@ -167,9 +168,20 @@ def compute_metrics(
         project_paths=project_paths,
     )
 
-    # TODO
     # 4 => Compute recall per technique given preds, and add them to d_res
+    # We create an artificial dataframe with attack_techniques, labels and preds 
+    _df = pd.DataFrame(
+        {
+            "attack_technique": df_test["attack_technique"],
+            "label": all_labels,
+            "preds": preds,
+        }
+    )
+    d_res_recall = get_recall_per_attack(df=_df, model_name=model_name)
+    # Add keys of recall dict to d_res and save it.
+    d_res.update(d_res_recall)
     training_results.append(d_res)
+    
     return all_labels, all_scores
 
 
@@ -448,35 +460,35 @@ def train_cpu_models(df_train: pd.DataFrame, df_test: pd.DataFrame):
     # Train models and get their output.
     models = {}
 
-    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
-    # models["Li and OCSVM"] = (labels, scores)
-    # labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["Li and OCSVM - scaler"] = (labels, scores)
+    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test)
+    models["Li and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["Li and OCSVM - scaler"] = (labels, scores)
 
     labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test)
     models["CountVectorizer and OCSVM"] = (labels, scores)
     labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, use_scaler=True)
     models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
-    # models["Li and LOF"] = (labels, scores)
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["Li and LOF - scaler"] = (labels, scores)
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test)
+    models["Li and LOF"] = (labels, scores)
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["Li and LOF - scaler"] = (labels, scores)
 
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and LOF "] = (labels, scores)
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["CountVectorizer and LOF - scaler"] = (labels, scores)
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and LOF "] = (labels, scores)
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
-    # models["Li and AE"] = (labels, scores)
-    # labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["Li and AE - scaler"] = (labels, scores)
+    labels, scores = train_ae_li(df_train=df_train, df_test=df_test)
+    models["Li and AE"] = (labels, scores)
+    labels, scores = train_ae_li(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["Li and AE - scaler"] = (labels, scores)
 
-    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
-    # models["CountVectorizer and AE (relu)"] = (labels, scores)
-    # labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
-    # models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
+    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test)
+    models["CountVectorizer and AE (relu)"] = (labels, scores)
+    labels, scores = train_ae_cv(df_train=df_train, df_test=df_test, use_scaler=True)
+    models["CountVectorizer and AE - scaled (sigmoid)"] = (labels, scores)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test)
     # models["SBERT and OCSVM"] = (labels, scores)
@@ -540,8 +552,10 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df)/1000))
-    df = df.sample(100)
+    # df = df.sample(int(len(df)/2))
+    # df = df.sample(1000)
+    # df.to_csv("../dataset-small.csv", index=False)
+    # exit()
     df_train = df[df["split"] == "train"]
     df_test = df[df["split"] == "test"]
 

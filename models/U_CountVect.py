@@ -65,10 +65,7 @@ class OCSVM_CV:
         self.feature_columns = self.vectorizer.get_feature_names_out()
 
         if self.use_scaler:
-            print("Using scaler for training, OCSVM CV")
-            print("Before:", f_matrix[0])
             f_matrix = self._scaler.fit_transform(f_matrix)
-            print("After:", f_matrix[0])
         
         model.fit(f_matrix)
         self.clf = model
