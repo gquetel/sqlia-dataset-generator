@@ -101,6 +101,12 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="Prints more details on about model training",
     )
+
+    parser.add_argument(
+        "--gpu",
+        action="store_true",
+        help="Declare the training of GPU models, change result filename.",
+    )
     args = parser.parse_args()
     return args
 
@@ -607,8 +613,11 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     )
 
 
-def train_cpu_models(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
+def train_models(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    args,
 ):
     logger.info(
         f"Training - number of attacks {len(df_train[df_train['label'] == 1])}"
@@ -623,50 +632,50 @@ def train_cpu_models(
     models = {}
 
     # We keep this one with scaling, it behaves way better.
-    labels, scores = train_ocsvm_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and OCSVM"] = (labels, scores)
 
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and LOF "] = (labels, scores)
-    labels, scores = train_lof_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["CountVectorizer and LOF - scaler"] = (labels, scores)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and LOF "] = (labels, scores)
+    # labels, scores = train_lof_cv(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
-    labels, scores = train_ocsvm_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["Li and LOF"] = (labels, scores)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["Li and LOF"] = (labels, scores)
 
-    # AE is behaving way better with scaling
-    labels, scores = train_ae_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and AE"] = (labels, scores)
+    # # AE is behaving way better with scaling
+    # labels, scores = train_ae_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and AE"] = (labels, scores)
 
-    # AE is behaving way better with scaling
-    labels, scores = train_ae_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["CountVectorizer and AE"] = (labels, scores)
+    # # AE is behaving way better with scaling
+    # labels, scores = train_ae_cv(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["CountVectorizer and AE"] = (labels, scores)
 
-    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["SBERT and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and LOF"] = (labels, scores)
+    labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["SBERT and LOF"] = (labels, scores)
 
-    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and AE"] = (labels, scores)
+    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["SBERT and AE"] = (labels, scores)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
@@ -694,7 +703,10 @@ def train_cpu_models(
 
     # Finally, save results to csv.
     dfres = pd.DataFrame(training_results)
-    dfres.to_csv("output/results.csv", index=False)
+    if args.gpu:
+        dfres.to_csv("output/results-gpu.csv", index=False)
+    else:
+        dfres.to_csv("output/results.csv", index=False)
 
 
 if __name__ == "__main__":
@@ -723,7 +735,7 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    df = df.sample(int(len(df) / 10))
+    # df = df.sample(int(len(df) / 10))
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
         _df_train,
@@ -732,4 +744,4 @@ if __name__ == "__main__":
     )
     df_test = df[df["split"] == "test"]
 
-    train_cpu_models(df_train, df_test, df_val)
+    train_models(df_train, df_test, df_val, args)
