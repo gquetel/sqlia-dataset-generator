@@ -229,6 +229,7 @@ class AutoEncoder_CV:
         self.vectorizer = CountVectorizer(max_features=vectorizer_max_features)
         self.use_scaler = use_scaler
 
+        # Preprocess with counter, MaxAbsScaler should return values between [0, 1]
         self._scaler = MaxAbsScaler()
         self._scaler_min = None
         self._scaler_max = None
@@ -299,6 +300,7 @@ class AutoEncoder_CV:
         df_pped = df.copy()
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
         self._scaler_min = pp_queries.min(axis=None)
+        assert(self._scaler_min >= 0)
         self._scaler_max = pp_queries.max(axis=None)
         return pp_queries
 

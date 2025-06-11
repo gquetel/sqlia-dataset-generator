@@ -28,23 +28,16 @@ def print_and_save_metrics_for_max_fpr(
     scores: np.ndarray,
     project_paths,
     model_name: str = "",
-    max_fpr: float = 0.001,
+    max_fpr: float = 0.0001,
 ):
     fpr, tpr, thresholds = roc_curve(labels, scores)
+    # First fetch all idx where fpr is under max value.
     valid_indices = np.where(fpr <= max_fpr)[0]
-    # From ROC tresholds we search for the best one
-    if len(valid_indices) > 0:
-        best_idx = valid_indices[np.argmax(tpr[valid_indices])]
-        threshold = thresholds[best_idx]
-        achieved_fpr = fpr[best_idx]
-    else:
-        # If we can't find one below max_fpr, we go to the next one.
-        best_idx = np.argmin(fpr)
-        threshold = thresholds[best_idx]
-        achieved_fpr = fpr[best_idx]
-        logger.warning(
-            f"Cannot achieve FPR <= {max_fpr}, using FPR = {achieved_fpr:.4f}"
-        )
+
+    # Then take the idx with the best TPR from those.
+    best_idx = valid_indices[np.argmax(tpr[valid_indices])]
+    threshold = thresholds[best_idx]
+    achieved_fpr = fpr[best_idx]
 
     preds = (scores >= threshold).astype(int)
 
@@ -52,7 +45,7 @@ def print_and_save_metrics_for_max_fpr(
     f1 = f"{f1_score(labels, preds)* 100:.2f}%"
     precision = f"{precision_score(labels, preds) * 100:.2f}%"
     recall = f"{recall_score(labels, preds) * 100:.2f}%"
-    achieved_fpr =  f"{achieved_fpr:.2f}%"
+    achieved_fpr =  f"{achieved_fpr:.4f}%"
 
     logger.info(f"Metrics for {model_name}.")
     logger.info(f"Accuracy: {accuracy}")

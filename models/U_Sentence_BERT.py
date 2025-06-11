@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from sklearn.neighbors import LocalOutlierFactor
-from constants import MyAutoEncoder
+from constants import MyAutoEncoder, MyAutoEncoderTanh
 import torch
 import transformers
 import pandas as pd
@@ -63,8 +63,6 @@ class OCSVM_SecureBERT:
                 outputs = self.rb_model(**inputs, output_hidden_states=True)
                 # Pooler_output represents the whole class.
                 
-                # TODO: Voir si valeur du vecteur sont entre -1 & 1 
-                # Sentence-BERT AE => remplacer sigmoide par tanh
                 embedding = outputs.pooler_output
                 embeddings.append(embedding.cpu().numpy().flatten())
 
@@ -274,9 +272,9 @@ class AutoEncoder_SecureBERT:
     
         # Init variables for training + model
         input_dim = len(embeddings[0])
-        print(input_dim)
-        
-        self.clf = MyAutoEncoder(
+        # Because embeddings have values between -1 and 1, we use an autoencoder with tanh
+
+        self.clf = MyAutoEncoderTanh(
             input_dim=input_dim,
         )
         criterion = nn.MSELoss()

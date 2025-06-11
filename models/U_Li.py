@@ -402,7 +402,7 @@ class AutoEncoder_Li:
         self.GENERIC = GENERIC
         self.model_name = None
 
-        # Let's use MaxAbsScaler => -1 and 1
+        # Let's use MaxAbsScaler => 0 and 1 because no value can be negative here.
         self._scaler = MaxAbsScaler()
 
         self.learning_rate = learning_rate
@@ -492,8 +492,12 @@ class AutoEncoder_Li:
 
         # Let's apply Scaler here and not in preprocess, as we want to keep
         # information about the columns
+        df_pped = np.array(df_pped)
+        assert(df_pped.min() >= 0)
+
+        # If scaling =>
         if self.use_scaler:
-            scaled_data = self._scaler.fit_transform(np.array(df_pped).tolist())
+            scaled_data = self._scaler.fit_transform(df_pped)
             self._scaler_min = scaled_data.min(axis=None)
             self._scaler_max = scaled_data.max(axis=None)
             train_data = torch.FloatTensor(scaled_data)
@@ -501,7 +505,7 @@ class AutoEncoder_Li:
                 input_dim=input_dim,
             )
         else:
-            train_data = torch.FloatTensor(np.array(df_pped).tolist())
+            train_data = torch.FloatTensor(df_pped)
             self.clf = MyAutoEncoderRelu(input_dim=input_dim)
 
         criterion = nn.MSELoss()
