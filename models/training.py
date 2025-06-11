@@ -50,6 +50,7 @@ project_paths = ProjectPaths(GENERIC.BASE_PATH)
 logger = logging.getLogger(__name__)
 training_results = []
 
+n_jobs = min(64, int(os.cpu_count() * 0.8))
 
 def init_logging(args):
     lf = TimedRotatingFileHandler(
@@ -341,7 +342,7 @@ def train_lof_cv(
     logger.info(f"Training model: {model_name}")
 
     model = LOF_CV(
-        GENERIC=GENERIC, n_jobs=-1, vectorizer_max_features=None, use_scaler=use_scaler
+        GENERIC=GENERIC, n_jobs=n_jobs, vectorizer_max_features=None, use_scaler=use_scaler
     )
     model.train_model(
         df=df_train,
@@ -358,7 +359,7 @@ def train_lof_li(
     if use_scaler:
         model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
-    model = LOF_Li(GENERIC=GENERIC, n_jobs=-1, use_scaler=use_scaler)
+    model = LOF_Li(GENERIC=GENERIC, n_jobs=n_jobs, use_scaler=use_scaler)
     model.train_model(
         df=df_train,
         model_name=model_name,
@@ -372,10 +373,9 @@ def train_lof_li(
 def train_lof_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame):
     model_name = "SBERT and LOF"
     logger.info(f"Training model: {model_name}")
-    model = LOF_SecureBERT(device=init_device(), n_jobs=-1)
+    model = LOF_SecureBERT(device=init_device(), n_jobs=n_jobs)
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(model, df_test=df_test, model_name=model_name)
-
 
 # -- Autoencoders --
 def train_ae_li(
