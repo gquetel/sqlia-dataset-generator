@@ -468,6 +468,7 @@ def train_ocsvm_li(
         max_iter=1000,
         use_scaler=use_scaler,
     )
+
     model.train_model(
         df=df_train,
         model_name=model_name,
@@ -656,29 +657,28 @@ def train_models(
         df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
     )
     models["Li and OCSVM"] = (labels, scores)
-
     labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and LOF "] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["CountVectorizer and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["CountVectorizer and OCSVM"] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
     models["Li and LOF"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    # labels, scores = train_ae_li(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["Li and AE"] = (labels, scores)
+    labels, scores = train_ae_li(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["Li and AE"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    # labels, scores = train_ae_cv(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["CountVectorizer and AE"] = (labels, scores)
+    labels, scores = train_ae_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and AE"] = (labels, scores)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
     # models["SBERT and OCSVM"] = (labels, scores)
@@ -756,7 +756,7 @@ if __name__ == "__main__":
     if args.on_user_inputs:
         preprocess_for_user_inputs_training(df=df)
 
-    df = df.sample(int(len(df) / 10))
+    df = df.sample(int(len(df) / 10), random_state=GENERIC.RANDOM_SEED)
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
         _df_train,
