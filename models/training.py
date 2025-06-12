@@ -103,6 +103,12 @@ def init_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--on-user-inputs",
+        action="store_true",
+        help="Train algorithm on user inputs rather than full query",
+    )
+
+    parser.add_argument(
         "--gpu",
         action="store_true",
         help="Declare the training of GPU models, change result filename.",
@@ -112,6 +118,20 @@ def init_args() -> argparse.Namespace:
 
 
 # ------------- MODELS TRAINING -------------
+
+
+def preprocess_for_user_inputs_training(df: pd.DataFrame):
+    """Preprocess DataFrame for model training on user inputs.
+    Args:
+        df (pd.DataFrame): _description_
+    """
+    # remove samples for which user_inputcolumn  is null.
+    c = len(df)
+    df.dropna(subset=["user_inputs"], inplace=True)
+    # Then replace full_query by user_input content
+    dropped_count = c - len(df)
+    logger.info(f"Dropped {dropped_count} samples with no user_input")
+    df["full_query"] = df["user_inputs"]
 
 
 def get_threshold_for_max_rate(s_val, max_rate=0.001):
@@ -467,7 +487,7 @@ def train_ocsvm_sbert(
 ):
     model_name = "SBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_SecureBERT(device=init_device(), max_iter=1000,batch_size=1024)
+    model = OCSVM_SecureBERT(device=init_device(), max_iter=1000, batch_size=1024)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(
         model=model, df_val=df_val, df_test=df_test, model_name=model_name
@@ -641,24 +661,24 @@ def train_models(
     models["CountVectorizer and LOF "] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
     models["Li and LOF"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    labels, scores = train_ae_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and AE"] = (labels, scores)
+    # labels, scores = train_ae_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and AE"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    labels, scores = train_ae_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["CountVectorizer and AE"] = (labels, scores)
+    # labels, scores = train_ae_cv(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["CountVectorizer and AE"] = (labels, scores)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
     # models["SBERT and OCSVM"] = (labels, scores)
@@ -695,10 +715,15 @@ def train_models(
 
     # Finally, save results to csv.
     dfres = pd.DataFrame(training_results)
+    filename = "output/results"
+
     if args.gpu:
-        dfres.to_csv("output/results-gpu.csv", index=False)
-    else:
-        dfres.to_csv("output/results.csv", index=False)
+        filename += "-gpu"
+    if args.on_user_inputs:
+        filename += "-on-user-inputs"
+
+    filename += ".csv"
+    dfres.to_csv(filename, index=False)
 
 
 if __name__ == "__main__":
@@ -727,6 +752,10 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
+
+    if args.on_user_inputs:
+        preprocess_for_user_inputs_training(df=df)
+
     df = df.sample(int(len(df) / 10))
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
