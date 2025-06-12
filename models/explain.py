@@ -38,6 +38,13 @@ def print_and_save_metrics_from_treshold(
     precision = f"{precision_score(labels, preds) * 100:.2f}%"
     recall = f"{recall_score(labels, preds) * 100:.2f}%"
 
+    p, r, _ = precision_recall_curve(labels, scores, pos_label=1)
+    auprc = auc(r, p)
+    
+    fpr, tpr, thresholds = roc_curve(labels, scores)
+    auroc = auc(fpr, tpr)
+    
+
     C = confusion_matrix(labels, preds, labels=[0, 1])
     TN, FP, _, _ = C.ravel()
     FPR = FP / (FP + TN)
@@ -49,7 +56,8 @@ def print_and_save_metrics_from_treshold(
     logger.info(f"Precision: {precision}")
     logger.info(f"Recall: {recall}")
     logger.info(f"False Positive Rate: {achieved_fpr}")
-
+    logger.info(f"AUPRC : {auprc:.4f}")
+    logger.info(f"ROC-AUC: {auroc:.4f}")
     return (
         {
             "model": model_name,
@@ -58,6 +66,8 @@ def print_and_save_metrics_from_treshold(
             "precision": precision,
             "recall": recall,
             "fpr": achieved_fpr,
+            "auprc": f"{auprc:.4f}",
+            "rocauc": f"{auroc:.4f}",
         },
         preds,
     )

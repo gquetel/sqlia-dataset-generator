@@ -467,7 +467,7 @@ def train_ocsvm_sbert(
 ):
     model_name = "SBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_SecureBERT(device=init_device(), max_iter=1000)
+    model = OCSVM_SecureBERT(device=init_device(), max_iter=1000,batch_size=1024)
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(
         model=model, df_val=df_val, df_test=df_test, model_name=model_name
@@ -537,7 +537,7 @@ def train_lof_sbert(
 ):
     model_name = "SBERT and LOF"
     logger.info(f"Training model: {model_name}")
-    model = LOF_SecureBERT(device=init_device(), n_jobs=n_jobs)
+    model = LOF_SecureBERT(device=init_device(), n_jobs=n_jobs, batch_size=1024)
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(
         model, df_test=df_test, df_val=df_val, model_name=model_name
@@ -563,7 +563,7 @@ def train_ae_li(
         GENERIC=GENERIC,
         learning_rate=0.005,
         epochs=100,
-        batch_size=1024,
+        batch_size=8192,
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
@@ -591,7 +591,7 @@ def train_ae_cv(
         GENERIC=GENERIC,
         learning_rate=0.001,
         epochs=20,
-        batch_size=1024,
+        batch_size=8192,
         vectorizer_max_features=None,
         use_scaler=use_scaler,
     )
@@ -605,7 +605,7 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     model_name = "SBERT and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_SecureBERT(
-        device=init_device(), learning_rate=0.001, epochs=100, batch_size=32
+        device=init_device(), learning_rate=0.001, epochs=100, batch_size=1024
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(
@@ -632,50 +632,50 @@ def train_models(
     models = {}
 
     # We keep this one with scaling, it behaves way better.
-    # labels, scores = train_ocsvm_li(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["Li and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_li(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["Li and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["CountVectorizer and LOF "] = (labels, scores)
-    # labels, scores = train_lof_cv(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["CountVectorizer and LOF - scaler"] = (labels, scores)
+    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["CountVectorizer and LOF "] = (labels, scores)
+    labels, scores = train_lof_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
-    # # We keep this one without scaler, it has the best results.
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["CountVectorizer and OCSVM"] = (labels, scores)
-    # labels, scores = train_ocsvm_cv(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
+    # We keep this one without scaler, it has the best results.
+    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["CountVectorizer and OCSVM"] = (labels, scores)
+    labels, scores = train_ocsvm_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
-    # # We keep this one without scaler, it has the best results.
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["Li and LOF"] = (labels, scores)
+    # We keep this one without scaler, it has the best results.
+    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["Li and LOF"] = (labels, scores)
 
-    # # AE is behaving way better with scaling
-    # labels, scores = train_ae_li(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["Li and AE"] = (labels, scores)
+    # AE is behaving way better with scaling
+    labels, scores = train_ae_li(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["Li and AE"] = (labels, scores)
 
-    # # AE is behaving way better with scaling
-    # labels, scores = train_ae_cv(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["CountVectorizer and AE"] = (labels, scores)
+    # AE is behaving way better with scaling
+    labels, scores = train_ae_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["CountVectorizer and AE"] = (labels, scores)
 
-    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and OCSVM"] = (labels, scores)
 
-    labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and LOF"] = (labels, scores)
+    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and LOF"] = (labels, scores)
 
-    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and AE"] = (labels, scores)
+    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and AE"] = (labels, scores)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
@@ -735,7 +735,7 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df) / 10))
+    # df = df.sample(int(len(df) / 100))
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
         _df_train,
