@@ -639,18 +639,10 @@ def train_models(
 
     labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and LOF "] = (labels, scores)
-    labels, scores = train_lof_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["CountVectorizer and LOF - scaler"] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and OCSVM"] = (labels, scores)
-    labels, scores = train_ocsvm_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["CountVectorizer and OCSVM - scaler"] = (labels, scores)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
@@ -735,7 +727,7 @@ if __name__ == "__main__":
             "template_split": str,
         },
     )
-    # df = df.sample(int(len(df) / 100))
+    df = df.sample(int(len(df) / 10))
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
         _df_train,
