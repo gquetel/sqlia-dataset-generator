@@ -392,6 +392,7 @@ class AutoEncoder_Li:
     def __init__(
         self,
         GENERIC,
+        device,
         learning_rate: float = 0.001,
         epochs: int = 100,
         batch_size: int = 32,
@@ -409,6 +410,7 @@ class AutoEncoder_Li:
         self.epochs = epochs
         self.batch_size = batch_size
         self.use_scaler = use_scaler
+        self.device = device
 
         self.feature_columns = None
 
@@ -463,7 +465,7 @@ class AutoEncoder_Li:
                 batch_dense = self._scaler.transform(batch_dense)
             tensors.append(torch.FloatTensor(batch_dense))
 
-        return torch.cat(tensors, dim=0)
+        return torch.cat(tensors, dim=0).to(self.device)
 
     def preprocess_for_train(
         self, df: pd.DataFrame, drop_og_columns: bool = True
@@ -507,8 +509,10 @@ class AutoEncoder_Li:
         else:
             train_data = torch.FloatTensor(df_pped)
             self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+        
+        self.clf.to(self.device)
 
-        criterion = nn.MSELoss()
+        criterion = nn.MSELoss().to(self.device)
         optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
 
         self.clf.train()
@@ -516,6 +520,7 @@ class AutoEncoder_Li:
             total_loss = 0
             for i in range(0, len(train_data), self.batch_size):
                 batch = train_data[i : i + self.batch_size]
+                batch = batch.to(self.device)
 
                 optimizer.zero_grad()
                 reconstructed = self.clf(batch)

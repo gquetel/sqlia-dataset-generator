@@ -216,6 +216,7 @@ class AutoEncoder_CV:
     def __init__(
         self,
         GENERIC,
+        device, 
         vectorizer_max_features: int | None = None,
         learning_rate: float = 0.001,
         epochs: int = 100,
@@ -228,6 +229,7 @@ class AutoEncoder_CV:
         self.model_name = None
         self.vectorizer = CountVectorizer(max_features=vectorizer_max_features)
         self.use_scaler = use_scaler
+        self.device = device
 
         # Preprocess with counter, MaxAbsScaler should return values between [0, 1]
         self._scaler = MaxAbsScaler()
@@ -324,7 +326,7 @@ class AutoEncoder_CV:
             batch_dense = df_batch.values
             tensors.append(torch.FloatTensor(batch_dense))
 
-        return torch.cat(tensors, dim=0)
+        return torch.cat(tensors, dim=0).to(self.device)
 
     def _sparse_to_tensor_batched(self, sparse_matrix, batch_size=4096):
         """
@@ -365,8 +367,9 @@ class AutoEncoder_CV:
             )
         else:
             self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+        self.clf = self.clf.to(self.device)
 
-        criterion = nn.MSELoss()
+        criterion = nn.MSELoss().to(self.device)
         optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
 
         if self.use_scaler:
@@ -380,7 +383,7 @@ class AutoEncoder_CV:
             total_loss = 0
             for i in range(0, len(train_data), self.batch_size):
                 batch = train_data[i : i + self.batch_size]
-
+                batch = batch.to(self.device)
                 optimizer.zero_grad()
                 reconstructed = self.clf(batch)
                 loss = criterion(reconstructed, batch)

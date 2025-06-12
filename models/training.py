@@ -283,6 +283,7 @@ def compute_metrics_ae(
             tensors = model._dataframe_to_tensor_batched(
                 df_pped_wout_og_cols, batch_size=4096
             )
+            tensors = tensors.to(model.device)
             dists = model.clf.decision_function(tensors, is_tensor=True)
 
             # dists are a distance to the separating hyperplane.
@@ -582,6 +583,7 @@ def train_ae_li(
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_Li(
         GENERIC=GENERIC,
+        device=init_device(),
         learning_rate=0.005,
         epochs=100,
         batch_size=8192,
@@ -609,10 +611,11 @@ def train_ae_cv(
 
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_CV(
+        device=init_device(),
         GENERIC=GENERIC,
         learning_rate=0.001,
-        epochs=20,
-        batch_size=8192,
+        epochs=100,
+        batch_size=1024,
         vectorizer_max_features=None,
         use_scaler=use_scaler,
     )
@@ -652,31 +655,31 @@ def train_models(
     # Train models and get their output.
     models = {}
 
-    # We keep this one with scaling, it behaves way better.
-    labels, scores = train_ocsvm_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and OCSVM"] = (labels, scores)
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and LOF "] = (labels, scores)
+    # # We keep this one with scaling, it behaves way better.
+    # labels, scores = train_ocsvm_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and OCSVM"] = (labels, scores)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and LOF "] = (labels, scores)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["Li and LOF"] = (labels, scores)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["Li and LOF"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    labels, scores = train_ae_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and AE"] = (labels, scores)
+    # labels, scores = train_ae_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and AE"] = (labels, scores)
 
     # AE is behaving way better with scaling
     labels, scores = train_ae_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
     )
     models["CountVectorizer and AE"] = (labels, scores)
 

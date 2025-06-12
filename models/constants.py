@@ -101,7 +101,7 @@ class MyAutoEncoder(nn.Module):
         with torch.no_grad():
             recon = self(test_data)
             mse_per_sample = F.mse_loss(recon, test_data, reduction="none").mean(dim=1)
-            recon_errors = mse_per_sample.numpy()
+            recon_errors = mse_per_sample.cpu().numpy()
         scores = -recon_errors
         return scores
 
@@ -158,7 +158,7 @@ class MyAutoEncoderRelu(nn.Module):
         with torch.no_grad():
             recon = self(test_data)
             mse_per_sample = F.mse_loss(recon, test_data, reduction="none").mean(dim=1)
-            recon_errors = mse_per_sample.numpy()
+            recon_errors = mse_per_sample.cpu().numpy()
         scores = -recon_errors
         return scores
     
@@ -216,6 +216,6 @@ class MyAutoEncoderTanh(nn.Module):
         with torch.no_grad():
             recon = self(test_data)
             mse_per_sample = F.mse_loss(recon, test_data, reduction="none").mean(dim=1)
-            recon_errors = mse_per_sample.numpy()
+            recon_errors = mse_per_sample.cpu().numpy()
         scores = -recon_errors
         return scores
