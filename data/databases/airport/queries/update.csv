@@ -8,4 +8,4 @@ template,ID,description,payload_type
 "UPDATE navaids SET name = ""{navaids_name}"" WHERE ident = ""{navaids_ident}"";",airport-U7,Updates the name of a navigation aid by its identifier.,string string
 "UPDATE countries SET keywords = ""{countries_keywords}"" WHERE code = ""{countries_code}"";",airport-U8,Updates the keywords field for a given country code.,string string
 "UPDATE regions SET keywords = ""{regions_keywords}"" WHERE iso_country = ""{regions_iso_country}"";",airport-U9,Updates keywords for all regions in a specified country.,string string
-"UPDATE airport_frequencies SET type = 'TWR' WHERE airport_ident IN ('{airports_ident}','{airports_ident}','{airports_ident}','{airports_ident}');",airport-U9,Updates keywords for all regions in a specified country.,string string string string
+"UPDATE airport_frequencies SET type = 'TWR' WHERE airport_ident IN ('{airports_ident}','{airports_ident}','{airports_ident}','{airports_ident}');",airport-U10,Updates keywords for all regions in a specified country.,string string string string

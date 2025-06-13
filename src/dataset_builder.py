@@ -236,7 +236,8 @@ class DatasetBuilder:
             (self.df["split"] == "test") & (self.df["label"] == 1)
         ].shape[0]
 
-        target_n_normal_test = int(n_attack_test_set / atk_ratio)
+        
+        target_n_normal_test = int(n_attack_test_set / atk_ratio) - n_attack_test_set
         
         # Here, we upsample from:
         # - all templates used to generate attacks (self.templates)
