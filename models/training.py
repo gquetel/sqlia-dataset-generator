@@ -437,7 +437,7 @@ def train_ocsvm_cv(
         nu=0.05,
         kernel="rbf",
         gamma="scale",
-        max_iter=1000,
+        max_iter=10000,
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
@@ -615,7 +615,7 @@ def train_ae_cv(
         GENERIC=GENERIC,
         learning_rate=0.001,
         epochs=100,
-        batch_size=1024,
+        batch_size=8192,
         vectorizer_max_features=None,
         use_scaler=use_scaler,
     )
