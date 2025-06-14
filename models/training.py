@@ -616,7 +616,8 @@ def train_ae_cv(
         learning_rate=0.001,
         epochs=100,
         batch_size=8192,
-        vectorizer_max_features=None,
+        # Because a too big AE does not fit GPU Memory we limit the input_dim:
+        vectorizer_max_features=100000,
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
