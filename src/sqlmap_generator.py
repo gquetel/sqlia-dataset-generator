@@ -512,8 +512,8 @@ class sqlmapGenerator:
             "boolean": "--technique=B --all ",
             "error": "--technique=E --all ",
             "union": "--technique=U --all  ",
-            "stacked": "--technique=S --all ",
-            "time": "--technique=T --current-user --databases",
+            "stacked": "--technique=S --users --banner ",
+            "time": "--technique=T --current-user",
             "inline": "--technique=Q --all ",
         }
 
