@@ -162,9 +162,6 @@ class DatasetBuilder:
                 f"Testing mode enabled, using {n_templates} templates and error technique"
             )
 
-            # TODO: remove after testing, force presence of S23
-            self.templates = pd.concat([self.templates, as23_template])
-
         # Samples templates for normal only generation:
         ratio_tno = 0.1  # TODO: add this in config
         n_tno = round(self.templates.shape[0] * ratio_tno)
@@ -236,9 +233,8 @@ class DatasetBuilder:
             (self.df["split"] == "test") & (self.df["label"] == 1)
         ].shape[0]
 
-        
         target_n_normal_test = int(n_attack_test_set / atk_ratio) - n_attack_test_set
-        
+
         # Here, we upsample from:
         # - all templates used to generate attacks (self.templates)
         # - Plus those sampled by  self.select_templates to be considered as normal
@@ -524,6 +520,23 @@ class DatasetBuilder:
             self.df["query_template_id"].isin(ids_challenging), "template_split"
         ] = "challenging"
 
+    def _remove_contradictions(self):
+        """Remove contradictory samples from the dataset."""
+        mask_atk = self.df["label"] == 1
+        mask_n = self.df["label"] == 0
+        df_a = self.df[mask_atk]
+        df_n = self.df[mask_n]
+        contradictions = set(df_a["full_query"]) & set(df_n["full_query"])
+
+        _init_len = len(self.df)
+        self.df = self.df[~self.df["full_query"].isin(contradictions)]
+        logger.info(f"Removed {_init_len - len(self.df)} generated contradictions.")
+
+    def _remove_user_input_admin(self):
+        admin_ids = list(self.df_tadmin["ID"].unique())
+        mask_admin_samples = self.df["query_template_id"].isin(admin_ids)
+        self.df.loc[mask_admin_samples, "user_inputs"] = ""
+
     def build(self, args):
         testing_mode = args.testing
         debug_mode = args.debug
@@ -551,6 +564,9 @@ class DatasetBuilder:
 
         self._augment_test_set_normal_queries(do_syn_check)
         self._add_template_split_info()
+
+        self._remove_contradictions()
+        self._remove_user_input_admin()
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
