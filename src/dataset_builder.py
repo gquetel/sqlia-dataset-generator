@@ -457,7 +457,6 @@ class DatasetBuilder:
                     "user_inputs": " ".join(user_inputs),
                     "attack_id": None,
                     "attack_technique": None,
-                    "attack_desc": None,
                     "attack_status": None,
                 }
             )
@@ -563,7 +562,7 @@ class DatasetBuilder:
         self._add_split_column()
 
         self._augment_test_set_normal_queries(do_syn_check)
-        self._add_template_split_info()
+        # self._add_template_split_info()
 
         self._remove_contradictions()
         self._remove_user_input_admin()

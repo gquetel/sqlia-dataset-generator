@@ -638,7 +638,7 @@ if __name__ == "__main__":
             "user_inputs": str,
             "attack_id": str,
             "attack_technique": str,
-            "attack_desc": str,
+            "": str,
             "split": str,
             "attack_status": str,
             "attack_stage": str,

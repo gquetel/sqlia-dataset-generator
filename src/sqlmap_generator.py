@@ -452,7 +452,6 @@ class sqlmapGenerator:
         # Variables independant of attack_status:
         atk_id = f"{name_tech}-{self._scenario_id}"
         template_id = template_info["ID"]
-        _df_recon["attack_desc"] = f"Recognition payload using technique {name_tech}"
 
         # If any recognition sqlmap attack succeeded, we can find at least a row where
         # `attack_status` is set to success in _df_recon.
@@ -472,10 +471,6 @@ class sqlmapGenerator:
                     f"perform_attack: An vulnerable endpoint was found"
                     f" but exploit failed."
                 )
-
-            _df_exploit["attack_desc"] = (
-                f"Exploitation payload using technique {name_tech}"
-            )
             _df = pd.concat([_df_recon, _df_exploit])
 
         else:

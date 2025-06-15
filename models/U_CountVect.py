@@ -227,6 +227,8 @@ class AutoEncoder_CV:
         self.clf = None
         self.GENERIC = GENERIC
         self.model_name = None
+
+
         self.vectorizer = CountVectorizer(max_features=vectorizer_max_features)
         self.use_scaler = use_scaler
         self.device = device
