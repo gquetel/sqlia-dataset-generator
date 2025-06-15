@@ -513,7 +513,7 @@ class sqlmapGenerator:
             "error": "--technique=E --all ",
             "union": "--technique=U --all  ",
             "stacked": "--technique=S --users --banner ",
-            "time": "--technique=T --current-user",
+            "time": "--technique=T --current-user ",
             "inline": "--technique=Q --all ",
         }
 
