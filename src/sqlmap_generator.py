@@ -211,7 +211,10 @@ class sqlmapGenerator:
                 ran_values = [random.randint(2, 5) for _ in range(10)]
             elif param_no_sx == "rand_string":
                 alphabet = string.ascii_letters + string.digits
-                ran_values = ["".join(secrets.choice(alphabet) for i in range(20)) for _ in range(10)]
+                ran_values = [
+                    "".join(secrets.choice(alphabet) for i in range(20))
+                    for _ in range(10)
+                ]
             else:
                 ran_values = random.choices(self.pdl[(schema_name, param_no_sx)], k=10)
 
@@ -327,7 +330,7 @@ class sqlmapGenerator:
                             "attack_stage": "recon",
                             "tamper_method": tamper_script,
                             "attack_status": attack_status,
-                            # "attacked_parameter": param, 
+                            # "attacked_parameter": param,
                         }
                     ),
                 ]
@@ -421,7 +424,7 @@ class sqlmapGenerator:
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
             param_no_sx = param.rstrip("123456789")
-            
+
             if param_no_sx == "rand_pos_number":
                 random_param_value = random.randint(0, 64000)
             elif param_no_sx == "rand_medium_pos_number":
@@ -430,10 +433,12 @@ class sqlmapGenerator:
                 random_param_value = random.randint(2, 5)
             elif param_no_sx == "rand_string":
                 alphabet = string.ascii_letters + string.digits
-                random_param_value = "".join(secrets.choice(alphabet) for i in range(20))
+                random_param_value = "".join(
+                    secrets.choice(alphabet) for i in range(20)
+                )
             else:
                 random_param_value = random.choice(self.pdl[(schema_name, param_no_sx)])
-            
+
             params[param] = random_param_value
 
         encoded_params = urllib.parse.urlencode(params)
@@ -465,17 +470,25 @@ class sqlmapGenerator:
                 template_info=template_info,
             )
 
+            _df = pd.concat([_df_recon, _df_exploit])
+
             # This is anormal:
             if _df_exploit.iloc[0]["attack_status"] == "failure":
                 logger.critical(
                     f"perform_attack: An vulnerable endpoint was found"
                     f" but exploit failed."
                 )
-            _df = pd.concat([_df_recon, _df_exploit])
+                # Set all to failure.
+                _df["attack_status"] = "failure"
+            else:
+                # Set all to success
+                _df["attack_status"] = "success"
 
         else:
             # No vulnerable endpoint has been found, do not launch exploit.
             _df = _df_recon
+
+            # Failure is already set to all samples of df.
 
         _df["statement_type"] = template_info["statement_type"]
         _df["query_template_id"] = template_id
@@ -499,8 +512,8 @@ class sqlmapGenerator:
             "boolean": "--technique=B --all ",
             "error": "--technique=E --all ",
             "union": "--technique=U --all  ",
-            "stacked": "--technique=S --users --banner ",
-            "time": "--technique=T --current-user ",
+            "stacked": "--technique=S --all ",
+            "time": "--technique=T --current-user --databases",
             "inline": "--technique=Q --all ",
         }
 
@@ -526,7 +539,7 @@ class sqlmapGenerator:
                     )
                     self._scenario_id += 1
                     continue
-                
+
                 self.perform_attack(i, template, debug_mode)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
