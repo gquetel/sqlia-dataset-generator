@@ -142,7 +142,7 @@ class DatasetBuilder:
         # Also, a special case for template airport-S23,
         # for which we do not generate attacks either.
         self.df_tno = pd.concat([self.df_tno, as23_template])
-        self.templates = self.templates.drop(self.df_tno)
+        self.templates = self.templates.drop(self.df_tno.index)
         
         # Sample templates for df_test: DEPRECATED, useless, but no time to 
         # properly remove stuff. 
@@ -481,9 +481,9 @@ class DatasetBuilder:
 
         # First, sample queries templates according to scenario.
         self.select_templates(testing_mode=testing_mode)
-        # self.generate_attack_queries_sqlmapapi(
-        #     testing_mode=testing_mode, debug_mode=debug_mode
-        # )
+        self.generate_attack_queries_sqlmapapi(
+            testing_mode=testing_mode, debug_mode=debug_mode
+        )
 
         # List of templates to create normal queries from. Corresponds to :
         # - all templates used to generate attacks (self.templates)
