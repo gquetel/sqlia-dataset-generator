@@ -264,7 +264,7 @@ def compute_metrics_ae(
 ):
     def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         """Process test set in batches of 20k samples to manage memory usage."""
-        batch_size = 10000
+        batch_size = 4096
         all_labels = []
         all_scores = []
 
@@ -615,9 +615,10 @@ def train_ae_cv(
         GENERIC=GENERIC,
         learning_rate=0.001,
         epochs=100,
-        batch_size=8192,
+        batch_size=4096,
         # Because a too big AE does not fit GPU Memory we limit the input_dim:
-        vectorizer_max_features=100000,
+        # We need enough size for both the model and the features 
+        vectorizer_max_features=20000,
         use_scaler=use_scaler,
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
@@ -630,7 +631,7 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     model_name = "SBERT and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_SecureBERT(
-        device=init_device(), learning_rate=0.001, epochs=100, batch_size=1024
+        device=init_device(), learning_rate=0.001, epochs=100, batch_size=2048
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(
@@ -657,20 +658,20 @@ def train_models(
     models = {}
 
     # # We keep this one with scaling, it behaves way better.
-    labels, scores = train_ocsvm_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and OCSVM"] = (labels, scores)
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and LOF "] = (labels, scores)
+    # labels, scores = train_ocsvm_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and OCSVM"] = (labels, scores)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and LOF "] = (labels, scores)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["Li and LOF"] = (labels, scores)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["Li and LOF"] = (labels, scores)
 
     # AE is behaving way better with scaling
     # labels, scores = train_ae_li(
@@ -687,11 +688,11 @@ def train_models(
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
     # models["SBERT and OCSVM"] = (labels, scores)
 
-    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and LOF"] = (labels, scores)
+    labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["SBERT and LOF"] = (labels, scores)
 
-    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and AE"] = (labels, scores)
+    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["SBERT and AE"] = (labels, scores)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
