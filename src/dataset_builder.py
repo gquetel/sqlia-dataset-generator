@@ -106,34 +106,6 @@ class DatasetBuilder:
         )
         return _all_templates
 
-    def change_split(self, args):
-        testing_mode = args.testing
-        do_syn_check = not args.no_syn_check
-        train_size = 0.7
-
-        # Load dataset
-        _df = pd.read_csv(self.outpath)
-
-        # Only keep attacks
-        self.df = _df[_df["label"] == 1]
-        self._n_attacks = len(self.df)
-
-        # Init templates
-        self.select_templates(testing_mode=testing_mode)
-
-        l_normal_templates = (
-            list(self.templates["ID"].unique())
-            + list(self.df_tno["ID"].unique())
-            + list(self.df_tadmin["ID"].unique())
-        )
-        self.populate_normal_templates(self._n_attacks, l_normal_templates)
-        self.generate_normal_queries(do_syn_check)
-
-        self._add_split_column_include(train_size=train_size)
-        self._augment_test_set_normal_queries(do_syn_check)
-
-        self._add_template_split_info()
-
     def select_templates(self, testing_mode: bool):
         """Modify self.templates according to the generation settings.
 
@@ -146,7 +118,7 @@ class DatasetBuilder:
             testing_mode (bool): _description_
         """
 
-        self.templates = self.get_all_templates()
+        self.templates = self.get_all_templates().reset_index(drop=True)
         as23_template = self.templates[self.templates["ID"] == "airport-S23"]
 
         # First, remove administrator statements to not mess with ratios computations
@@ -170,46 +142,12 @@ class DatasetBuilder:
         # Also, a special case for template airport-S23,
         # for which we do not generate attacks either.
         self.df_tno = pd.concat([self.df_tno, as23_template])
-        self.templates = self.templates.drop(self.df_tno.index)
+        self.templates = self.templates.drop(self.df_tno)
+        
+        # Sample templates for df_test: DEPRECATED, useless, but no time to 
+        # properly remove stuff. 
+        self.df_templates_test = self.templates.sample(n=0)
 
-        # Sample templates for df_test: DEPRECATED
-        # 0% of the templates will be kept for test split.
-        ratio_tt = 0.0
-        n_tt = round(self.templates.shape[0] * ratio_tt)
-        self.df_templates_test = self.templates.sample(n=n_tt)
-
-    def _add_split_column_exclude(self):
-        """Add a split column with test set templates being disjoinct from train set.
-
-        The split is made according to the already made list of test templates
-        self.df_templates_test.
-        """
-        ids_ttest = self.df_templates_test["ID"].to_list()
-        self.df.loc[self.df["query_template_id"].isin(ids_ttest), "split"] = "test"
-        self.df.loc[~self.df["query_template_id"].isin(ids_ttest), "split"] = "train"
-
-    def _add_split_column_include(self, train_size=0.7):
-        """Add a split column with test set including templates of train set.
-
-        The templates that should be considered for test are already sampled. Hence we
-        only need to randomly sample 1 - train_size * len(df) to be considered as test
-        set. Then we remove from the remainder all samples belonging to the train split.
-
-        Doing so allows to keep a distribution of queries where test_set only queries
-        are not more represented than the others (which would happen if we selected
-        all template_test queries for test set and then add some queries from other
-        templates to reach 1 - train_size * len(df))
-
-        Args:
-            train_size (float, optional): _description_. Defaults to 0.7.
-        """
-        ids_ttest = self.df_templates_test["ID"].to_list()
-        _df_train, _df_test = train_test_split(self.df, train_size=train_size)
-        _df_test["split"] = "test"
-        _df_train = _df_train[~_df_train["query_template_id"].isin(ids_ttest)]
-        _df_train["split"] = "train"
-
-        self.df = pd.concat([_df_test, _df_train])
 
     def _add_split_column(self):
         """Add a split column information for unsupervised dataset generation
@@ -543,9 +481,9 @@ class DatasetBuilder:
 
         # First, sample queries templates according to scenario.
         self.select_templates(testing_mode=testing_mode)
-        self.generate_attack_queries_sqlmapapi(
-            testing_mode=testing_mode, debug_mode=debug_mode
-        )
+        # self.generate_attack_queries_sqlmapapi(
+        #     testing_mode=testing_mode, debug_mode=debug_mode
+        # )
 
         # List of templates to create normal queries from. Corresponds to :
         # - all templates used to generate attacks (self.templates)
