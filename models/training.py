@@ -145,7 +145,7 @@ def get_threshold_for_max_rate(s_val, max_rate=0.001):
         _type_: _description_
     """
     s_val = np.array(s_val)
-    percentile = (1 - max_rate) * 100
+    percentile = 1 - max_rate
     return np.percentile(s_val, percentile)
 
 
