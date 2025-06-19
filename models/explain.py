@@ -48,7 +48,7 @@ def print_and_save_metrics_from_treshold(
     C = confusion_matrix(labels, preds, labels=[0, 1])
     TN, FP, _, _ = C.ravel()
     FPR = FP / (FP + TN)
-    achieved_fpr = f"{FPR* 100:.2f}%"
+    achieved_fpr = f"{FPR* 100:.5f}%"
     
     logger.info(f"Metrics for {model_name}.")
     logger.info(f"Accuracy: {accuracy}")

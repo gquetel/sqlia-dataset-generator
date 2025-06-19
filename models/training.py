@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 # We force device on which training happens.
 # device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
 # into account apparently...
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"
 
 import argparse
 from logging.handlers import TimedRotatingFileHandler
@@ -79,7 +79,7 @@ def init_device() -> torch.device:
         torch.device: device to use
     """
     USE_CUDA = torch.cuda.is_available()
-    device = torch.device("cuda:0" if USE_CUDA else "cpu")
+    device = torch.device("cuda:1" if USE_CUDA else "cpu")
     if USE_CUDA:
         logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
         torch.cuda.set_per_process_memory_fraction(0.99, 0)
@@ -134,18 +134,18 @@ def preprocess_for_user_inputs_training(df: pd.DataFrame):
     df["full_query"] = df["user_inputs"]
 
 
-def get_threshold_for_max_rate(s_val, max_rate=0.001):
+def get_threshold_for_max_rate(s_val, max_rate=0.00001):
     """Compute threshold given a max allowed FPR.
 
     Args:
         s_val (_type_): _description_
-        max_rate (float, optional): _description_. Defaults to 0.001.
+        max_rate (float, optional): _description_. Defaults to 0.00001.
 
     Returns:
         _type_: _description_
     """
     s_val = np.array(s_val)
-    percentile = 1 - max_rate
+    percentile = (1 - max_rate) * 100
     return np.percentile(s_val, percentile)
 
 
@@ -223,7 +223,7 @@ def compute_metrics(
     _, s_val = _get_scores_in_batch(df=df_val)
 
     # We infer a treshold given a maximum FPR
-    threshold = get_threshold_for_max_rate(s_val=s_val, max_rate=0.001)
+    threshold = get_threshold_for_max_rate(s_val=s_val)
     num_above_threshold = np.sum(s_val > threshold)
     proportion = num_above_threshold / len(s_val)
     logger.info(
@@ -311,7 +311,8 @@ def compute_metrics_ae(
     # We compute all scores for val dataset
     _, s_val = _get_scores_in_batch(df=df_val)
     # We infer a treshold given a maximum FPR
-    threshold = get_threshold_for_max_rate(s_val=s_val, max_rate=0.001)
+    threshold = get_threshold_for_max_rate(s_val=s_val)
+    
     num_above_threshold = np.sum(s_val > threshold)
     proportion = num_above_threshold / len(s_val)
     logger.info(
@@ -389,7 +390,8 @@ def compute_metrics_sbert(
     # We compute all scores for val dataset
     _, s_val = _get_scores_in_batch(df=df_val)
     # We infer a treshold given a maximum FPR
-    threshold = get_threshold_for_max_rate(s_val=s_val, max_rate=0.001)
+    threshold = get_threshold_for_max_rate(s_val=s_val)
+
     num_above_threshold = np.sum(s_val > threshold)
     proportion = num_above_threshold / len(s_val)
     logger.info(
@@ -670,29 +672,29 @@ def train_models(
     # models["CountVectorizer and OCSVM"] = (labels, scores)
 
     # # We keep this one without scaler, it has the best results.
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val)
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True)
     # models["Li and LOF"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    # labels, scores = train_ae_li(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["Li and AE"] = (labels, scores)
+    labels, scores = train_ae_li(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    )
+    models["Li and AE"] = (labels, scores)
 
     # AE is behaving way better with scaling
-    # labels, scores = train_ae_cv(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
-    # )
-    # models["CountVectorizer and AE"] = (labels, scores)
+    labels, scores = train_ae_cv(
+        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
+    )
+    models["CountVectorizer and AE"] = (labels, scores)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
     # models["SBERT and OCSVM"] = (labels, scores)
 
-    labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and LOF"] = (labels, scores)
+    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and LOF"] = (labels, scores)
 
-    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and AE"] = (labels, scores)
+    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and AE"] = (labels, scores)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
@@ -760,7 +762,7 @@ if __name__ == "__main__":
     if args.on_user_inputs:
         preprocess_for_user_inputs_training(df=df)
 
-    # df = df.sample(int(len(df) / 10), random_state=GENERIC.RANDOM_SEED)
+    df = df.sample(int(len(df) / 10), random_state=GENERIC.RANDOM_SEED)
     _df_train = df[df["split"] == "train"]
     df_train, df_val = train_test_split(
         _df_train,
