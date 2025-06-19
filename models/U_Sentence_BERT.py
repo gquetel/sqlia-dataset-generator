@@ -43,32 +43,36 @@ class OCSVM_SecureBERT:
         self.clf = None
         self.model_name = None
 
-    def preprocess(self, df: pd.DataFrame) -> np.ndarray:
-        """
-        Extract embeddings from the RoBERTa model.
-
-        Args:
-            queries: List of SQL queries to process
-
-        Returns:
-            numpy array of embeddings
-        """
+        
+def preprocess(self, df: pd.DataFrame) -> np.ndarray:
         embeddings = []
-        # Uses https://github.com/ehsanaghaei/SecureBERT?tab=readme-ov-file#how-to-use-securebert
         queries = df["full_query"].values
-        with torch.no_grad():
-            for query in queries:
-                inputs = self.tokenizer(query, return_tensors="pt", truncation=True)
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                outputs = self.rb_model(**inputs, output_hidden_states=True)
-                # Pooler_output represents the whole class.
-                
-                embedding = outputs.pooler_output
-                embeddings.append(embedding.cpu().numpy().flatten())
 
+        # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
+        # low batch size and this prevent the memory from being full (and potentially
+        # crash if someone is using the GPU).
+        _p_batch_size = 64
+        with torch.no_grad():
+            for i in range(0, len(queries), _p_batch_size):
+                batch_queries = queries[i:i + _p_batch_size]
+                
+                inputs = self.tokenizer(
+                    batch_queries.tolist(), 
+                    return_tensors="pt", 
+                    truncation=True, 
+                    padding=True,  
+                    max_length=512  
+                )
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                
+                outputs = self.rb_model(**inputs, output_hidden_states=True)
+                batch_embeddings = outputs.pooler_output.cpu().numpy()
+                embeddings.extend(batch_embeddings)
+        
         result_df = df.copy()
         result_df["embeddings"] = embeddings
         return result_df
+
 
     def train_model(
         self,
@@ -122,33 +126,35 @@ class LOF_SecureBERT:
         self.clf = None
         self.model_name = None
 
-    def preprocess(self, df: pd.DataFrame) -> np.ndarray:
-        """
-        Extract embeddings from the RoBERTa model.
-
-        Args:
-            queries: List of SQL queries to process
-            layer_idx: Which layer to extract embeddings from (-1 for pooler output)
-
-        Returns:
-            numpy array of embeddings
-        """
+def preprocess(self, df: pd.DataFrame) -> np.ndarray:
         embeddings = []
-        # Uses https://github.com/ehsanaghaei/SecureBERT?tab=readme-ov-file#how-to-use-securebert
         queries = df["full_query"].values
+
+        # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
+        # low batch size and this prevent the memory from being full (and potentially
+        # crash if someone is using the GPU).
+        _p_batch_size = 64
         with torch.no_grad():
-            for query in queries:
-                inputs = self.tokenizer(query, return_tensors="pt", truncation=True)
+            for i in range(0, len(queries), _p_batch_size):
+                batch_queries = queries[i:i + _p_batch_size]
+                
+                inputs = self.tokenizer(
+                    batch_queries.tolist(), 
+                    return_tensors="pt", 
+                    truncation=True, 
+                    padding=True,  
+                    max_length=512  
+                )
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                
                 outputs = self.rb_model(**inputs, output_hidden_states=True)
-
-                # Pooler_output represents the whole class.
-                embedding = outputs.pooler_output
-                embeddings.append(embedding.cpu().numpy().flatten())
-
+                batch_embeddings = outputs.pooler_output.cpu().numpy()
+                embeddings.extend(batch_embeddings)
+        
         result_df = df.copy()
         result_df["embeddings"] = embeddings
         return result_df
+
 
     def train_model(
         self,
@@ -204,33 +210,33 @@ class AutoEncoder_SecureBERT:
 
    
     def preprocess(self, df: pd.DataFrame) -> np.ndarray:
-        """
-        Extract embeddings from the RoBERTa model.
-
-        Args:
-            queries: List of SQL queries to process
-            layer_idx: Which layer to extract embeddings from (-1 for pooler output)
-
-        Returns:
-            numpy array of embeddings
-        """
         embeddings = []
-        # Uses https://github.com/ehsanaghaei/SecureBERT?tab=readme-ov-file#how-to-use-securebert
         queries = df["full_query"].values
+
+        # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
+        # low batch size and this prevent the memory from being full (and potentially
+        # crash if someone is using the GPU).
+        _p_batch_size = 64
         with torch.no_grad():
-            for query in queries:
-                inputs = self.tokenizer(query, return_tensors="pt", truncation=True)
+            for i in range(0, len(queries), _p_batch_size):
+                batch_queries = queries[i:i + _p_batch_size]
+                
+                inputs = self.tokenizer(
+                    batch_queries.tolist(), 
+                    return_tensors="pt", 
+                    truncation=True, 
+                    padding=True,  
+                    max_length=512  
+                )
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                
                 outputs = self.rb_model(**inputs, output_hidden_states=True)
-
-                # Pooler_output represents the whole class.
-                embedding = outputs.pooler_output
-                embeddings.append(embedding.cpu().numpy().flatten())
-
+                batch_embeddings = outputs.pooler_output.cpu().numpy()
+                embeddings.extend(batch_embeddings)
+        
         result_df = df.copy()
         result_df["embeddings"] = embeddings
         return result_df
-
 
     def train_model(
         self,
