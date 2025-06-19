@@ -44,34 +44,34 @@ class OCSVM_SecureBERT:
         self.model_name = None
 
         
-def preprocess(self, df: pd.DataFrame) -> np.ndarray:
-        embeddings = []
-        queries = df["full_query"].values
+    def preprocess(self, df: pd.DataFrame) -> np.ndarray:
+            embeddings = []
+            queries = df["full_query"].values
 
-        # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
-        # low batch size and this prevent the memory from being full (and potentially
-        # crash if someone is using the GPU).
-        _p_batch_size = 64
-        with torch.no_grad():
-            for i in range(0, len(queries), _p_batch_size):
-                batch_queries = queries[i:i + _p_batch_size]
-                
-                inputs = self.tokenizer(
-                    batch_queries.tolist(), 
-                    return_tensors="pt", 
-                    truncation=True, 
-                    padding=True,  
-                    max_length=512  
-                )
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                
-                outputs = self.rb_model(**inputs, output_hidden_states=True)
-                batch_embeddings = outputs.pooler_output.cpu().numpy()
-                embeddings.extend(batch_embeddings)
-        
-        result_df = df.copy()
-        result_df["embeddings"] = embeddings
-        return result_df
+            # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
+            # low batch size and this prevent the memory from being full (and potentially
+            # crash if someone is using the GPU).
+            _p_batch_size = 64
+            with torch.no_grad():
+                for i in range(0, len(queries), _p_batch_size):
+                    batch_queries = queries[i:i + _p_batch_size]
+                    
+                    inputs = self.tokenizer(
+                        batch_queries.tolist(), 
+                        return_tensors="pt", 
+                        truncation=True, 
+                        padding=True,  
+                        max_length=512  
+                    )
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                    
+                    outputs = self.rb_model(**inputs, output_hidden_states=True)
+                    batch_embeddings = outputs.pooler_output.cpu().numpy()
+                    embeddings.extend(batch_embeddings)
+            
+            result_df = df.copy()
+            result_df["embeddings"] = embeddings
+            return result_df
 
 
     def train_model(
@@ -126,34 +126,34 @@ class LOF_SecureBERT:
         self.clf = None
         self.model_name = None
 
-def preprocess(self, df: pd.DataFrame) -> np.ndarray:
-        embeddings = []
-        queries = df["full_query"].values
+    def preprocess(self, df: pd.DataFrame) -> np.ndarray:
+            embeddings = []
+            queries = df["full_query"].values
 
-        # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
-        # low batch size and this prevent the memory from being full (and potentially
-        # crash if someone is using the GPU).
-        _p_batch_size = 64
-        with torch.no_grad():
-            for i in range(0, len(queries), _p_batch_size):
-                batch_queries = queries[i:i + _p_batch_size]
-                
-                inputs = self.tokenizer(
-                    batch_queries.tolist(), 
-                    return_tensors="pt", 
-                    truncation=True, 
-                    padding=True,  
-                    max_length=512  
-                )
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                
-                outputs = self.rb_model(**inputs, output_hidden_states=True)
-                batch_embeddings = outputs.pooler_output.cpu().numpy()
-                embeddings.extend(batch_embeddings)
-        
-        result_df = df.copy()
-        result_df["embeddings"] = embeddings
-        return result_df
+            # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
+            # low batch size and this prevent the memory from being full (and potentially
+            # crash if someone is using the GPU).
+            _p_batch_size = 64
+            with torch.no_grad():
+                for i in range(0, len(queries), _p_batch_size):
+                    batch_queries = queries[i:i + _p_batch_size]
+                    
+                    inputs = self.tokenizer(
+                        batch_queries.tolist(), 
+                        return_tensors="pt", 
+                        truncation=True, 
+                        padding=True,  
+                        max_length=512  
+                    )
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                    
+                    outputs = self.rb_model(**inputs, output_hidden_states=True)
+                    batch_embeddings = outputs.pooler_output.cpu().numpy()
+                    embeddings.extend(batch_embeddings)
+            
+            result_df = df.copy()
+            result_df["embeddings"] = embeddings
+            return result_df
 
 
     def train_model(
