@@ -7,7 +7,54 @@ This repository contains the code used to generate the SuperviZ25-SQL Dataset. T
 
 ## Generating the dataset locally
 
-### Environment
-We provide an environment to generate a similar dataset (there is randomness in the generation of attacks) through the declaration of a shell environment in `shell.nix`. The environment contains: a MySQL server to validate normal queries to and execute attack ones (sqlmap requires interaction with a running DBMS to generate payloads), sqlmap and `percona-toolkit` from which the `pt-kill` command is used to make sure no lock on tables is present before the invocation of `sqlmap`.
+During the invocation of `sqlmap` we do not fix seeds as this would lead to payloads with a lack of diversity (for instance, the same random strings would appear in different attacks). Hence, while similar datasets would be created at each invocation of the generator, they will not exactly match SuperviZ25-SQL. We now detail the generation steps.
 
-The MySQL server (version 8.4) must be initialized using [init_db.sql](data/init_db.sql): unprivileged users from which queries are executed must be created, as well as the databases and tables to prevent errors on executing normal queries. SQLmap invocations should also be realistic and because non existent tables would lead to errors, even when the query is syntactically valid, sqlmap would never be able to finalize its attacks because errors would be thrown.
+### Environment
+We provide the environment to generate the dataset through a nix shell environment `shell.nix`. The environment contains: a MySQL server to validate normal queries to and execute attack ones (sqlmap requires interaction with a running DBMS to generate payloads), sqlmap and `percona-toolkit` from which the `pt-kill` command is used to make sure no lock on tables is present before the invocation of `sqlmap`. Finally, a python interpreter with packages dependencies (for both generation and training of models) is included.
+
+Alternatively, an equivalent environment can be manually created by using the following software versions: 
+- MySQL 8.4.5
+- sqlmap 1.9.4
+- pt-kill 3.2.0
+- python 3.12.10, the dependency packages versions used are further detailed in [requirements.txt](requirements.txt).
+
+#### MySQL Initialization
+
+We require that a MySQL server has been installed and initialized as depicted in the [documentation](https://dev.mysql.com/doc/refman/8.4/en/postinstallation.html). Then the server must be running and listening on a socket, specified in [ini.ini](ini.ini).
+
+For instance, a MySQL server can be initialized as follows:
+```
+$ mkdir /usr/local/mysqld_1/
+$ mysqld  --initialize-insecure --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/
+$ mysqld -basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --socket=/usr/local/mysqld_1/socket --daemonize 
+$ mysql -u root --skip-password
+> ALTER USER 'root'@'localhost' IDENTIFIED BY 'YourRootPassword';
+```
+
+Then, the content of the MySQL server must be initialized using [init_db.sql](data/init_db.sql): unprivileged user from which queries are executed must be created, as well as the database and tables to prevent errors on executing normal queries. The absence of the expected tables and database would also prevent `sqlmap` to finalize its attack. 
+
+```
+$ mysql --user=root  --socket=/usr/local/mysqld_1/socket < ./data/init_db.sql --password
+```
+
+### Generation
+
+A few settings in the dataset generation can be modified in the [ini.ini](ini.ini) file such as the ratio of attacks in the resulting dataset or the distribution of statement types in the normal workload. 
+
+To test that everything works as intended, the option `--testing` can be used. Where only 10 query templates will be considered to generate the dataset, and `sqlmap` is only invoked using the error-based technique which is relatively fast. The [launcher.py](launcher.py) script expect the path to the ini file as parameter as follows: 
+
+```
+python3 ./launcher.py  -ini ini.ini --testing
+```
+
+If everything works as intended, the full generation can be launched using:
+
+```
+python3 ./launcher.py -ini ini.ini 
+```
+
+Other options are available as follows: 
+- `--debug`: Output will produce more information about the generation process, and sqlmap will display generated payloads (verbosity level 3).
+- `--no-syn-check` The correct syntax of normal queries will not be verified, this speed up their generation.
+
+
