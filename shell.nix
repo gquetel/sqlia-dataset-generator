@@ -28,13 +28,15 @@ let
     (pkgs.python312.withPackages (
       ps:
       [
+        # Required for generation
+        ps.pandas
+        ps.numpy
+        ps.tqdm
+
+        # Used for training / evaluation
         ps.matplotlib
         ps.matplotlib-venn
-        ps.numpy
-        ps.pandas
-        ps.plotly
         ps.scikit-learn
-        ps.tqdm
         
         # Notebooks
         ps.ipykernel
@@ -58,6 +60,7 @@ pkgs.mkShell rec {
     pythonEnv
     pkgs.sqlmap
     pkgs.percona-toolkit
+    pkgs.mysql84
   ];
 
   allowUnfree = true;
