@@ -142,7 +142,7 @@ class DatasetBuilder:
         # Also, a special case for template airport-S23,
         # for which we do not generate attacks either.
         self.df_tno = pd.concat([self.df_tno, as23_template])
-        self.templates = self.templates.drop(self.df_tno.index)
+        self.templates = self.templates.drop(self.df_tno.index,errors="ignore")
         
         # Sample templates for df_test: DEPRECATED, useless, but no time to 
         # properly remove stuff. 
