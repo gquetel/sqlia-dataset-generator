@@ -1,0 +1,17 @@
+# Necessary for generation
+pandas==2.2.3
+numpy==2.2.5
+tqdm==4.67.1
+
+# Used for training / evaluation
+matplotlib==3.10.1
+jupyter==1.1.1
+accelerate==1.5.2
+
+# Used for notebooks
+matplotlib-venn==1.1.2
+scikit-learn==1.6.1
+ipykernel==6.29.5
+evaluate==0.4.3
+torch==2.6.0
+transformers==4.51.3
