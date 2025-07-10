@@ -23,7 +23,7 @@ For the time being, query templates only comprise a single database schema ([air
 
 ### Generating attack samples 
 
-Attack samples are generated from a random subset of query templates (mimicking an application where not all endpoints are rendered available to external entities). For each of them, we perform 6 campaigns of attacks. A campaign consist of invocations of `sqlmap` with a specific technique on an endpoint.  `sqlmap` is invoked multiple times: a reconnaissance step that aim to find a payload and the correct couple of prefix and suffix for each existing query parameter, and then an exploit step where data is exfiltrated using the cached identified payload. 
+Attack samples are generated from a random subset of query templates (mimicking an application where not all endpoints are rendered available to external entities). Simulators of HTTP endpoints are generated to allow the usage of `sqlmap` to generate attack payloads. For each endpoint we perform 6 campaigns of attacks. A campaign consist of invocations of `sqlmap` with a specific technique on an endpoint.  `sqlmap` is invoked multiple times: a reconnaissance step that aim to find a payload and the correct couple of prefix and suffix for each existing query parameter, and then an exploit step where data is exfiltrated using the cached identified payload. 
 
 For more diverse and realistic result we use 2 options provided by the `sqlmap`:
 - `--eval`: This option allows to specify code to execute before generating the payload, we use it to provide diverse values for HTTP query parameters. 
