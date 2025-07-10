@@ -8,23 +8,11 @@ This repository contains the code used to generate the SuperviZ25-SQL Dataset. T
   <img width="720" src="data/img/dataset-generation-process.png">
 </p>
 
-The dataset generation relies on templates of queries, filled by legitimate values for normal samples generation, and `sqlmap` generated payloads for malicious samples.
-
-Query templates aim to be similar to those that are used in web application to query databases given user input. These templates are to be manually defined by experts. Placeholders in templates must be declared by curly brackets as follows: 
+The dataset generation relies on templates of queries, filled by legitimate values for normal samples generation, and `sqlmap` generated payloads for malicious samples. The inputs required for generation are these templates and dictionaries of values used to generate legitimate queries. Templates are made of a fixed string, and a variable part: placeholders. Placeholders must be declared by curly brackets as follows: 
 
 ```
 SELECT * FROM airport WHERE icao_code = '{airports_icao_code}'
 ```
-
-
-### Generating normal samples
-
-TODO 
-
-### Generating attack samples 
-
-TODO
-
 
 For the time being, query templates only comprise a single database schema ([airport](data/databases/airport/queries), derived from the ourairports.com website). Ultimately, adding new database schemas should only consist of adding a folder under [databases](./databases/) containing 2 subfolders : 
 - `dicts`: Contains dictionary files. Each file's name must match a placeholder name used in query templates. 
@@ -32,9 +20,38 @@ For the time being, query templates only comprise a single database schema ([air
   - `template`: The SQL query template. Placeholders must be enclosed in curly braces ({}) and match a corresponding dictionary filename.
   - `ID`: A unique identifier for each template, ensuring traceability of generated samples.
 
+
+### Generating attack samples 
+
+Attack samples are generated from a random subset of query templates (mimicking an application where not all endpoints are rendered available to external entities). For each of them, we perform 6 campaigns of attacks. A campaign consist of invocations of `sqlmap` with a specific technique on an endpoint.  `sqlmap` is invoked multiple times: a reconnaissance step that aim to find a payload and the correct couple of prefix and suffix for each existing query parameter, and then an exploit step where data is exfiltrated using the cached identified payload. 
+
+For more diverse and realistic result we use 2 options provided by the `sqlmap`:
+- `--eval`: This option allows to specify code to execute before generating the payload, we use it to provide diverse values for HTTP query parameters. 
+- `--tamper`: This option allows to specify a tamper script: a payload mutation tool aimed at bypassing weak validation mechanisms.
+
+For instance, here is example of a `sqlmap` invocation for the reconnaissance step targeting the `countries_code` field for the template "airport-S22":
+
+```
+sqlmap -v 3  --skip-waf -D dataset --level=5 --risk=1 --batch --skip='user-agent,referer,host'  --eval="import random;rand_medium_pos_number=random.choice([1119, 2223, 4662, 4035, 1104, 1387, 1005, 2743, 1376, 3825]);"   -p 'countries_code'  -tamper="space2comment" --technique=Q -u "http://localhost:8080/airport-S22?rand_medium_pos_number=3702&countries_code=LA"
+```
+
+The exploit step only takes place if a working payload has been found during reconnaissance. All samples generated during these campaigns are collected and included in the test set.
+
+
+
+### Generating normal samples
+
+After generating malicious queries, normal samples are generated using dictionaries of legitimate values. The `attacks_ratio` defined in `ini.ini` will dictate how many normal samples will be included in the test set. For the training set, we generate roughly the same number of samples than generated attacks.
+
+For instance, with the above query template, the generator will load the [data/databases/airport/dicts/airports_icao_code](data/databases/airport/dicts/airports_icao_code) file, and randomly select a value to create a normal sample such as: 
+
+```
+SELECT * FROM airport WHERE icao_code = 'LFPN'
+```
+
 ## Generating the dataset locally
 
-To preserve diversity in generated payloads, we do not fix random seeds when invoking `sqlmap`. As a result, while each generated dataset is similar in structure, it may differ slightly from the original SuperviZ25-SQL dataset.
+To preserve diversity in generated payloads, we do not fix random seeds when invoking `sqlmap`. As a result, while each generated dataset is similar in structure, it may differ slightly from the provided SuperviZ25-SQL dataset.
 
 ### Environment with nix-shell
 We provide the environment to generate the dataset through a nix shell environment `shell.nix`. The environment contains: a MySQL server to validate normal queries to and execute attack ones (sqlmap requires interaction with a running DBMS to generate payloads), sqlmap and `percona-toolkit` from which the `pt-kill` command is used to make sure no lock on tables is present before the invocation of `sqlmap`. Finally, a python interpreter with packages dependencies (for both generation and training of models) is included.
