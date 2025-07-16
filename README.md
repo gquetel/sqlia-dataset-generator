@@ -108,11 +108,11 @@ Other options are available as follows:
 
 This repository also contains code to evaluate classical SQL Injection detection pipelines on the generated dataset. We implemented 9 different pipelines, based on the following feature extraction mechanisms: 
 - CountVectorizer: A word count based approach.
-- Manually Selected Features, specific to SQL Injection detection, derived from the paper "A SQL Injection Detection Method Based on Adaptive Deep Forest" (10.1109/ACCESS.2019.2944951)
-- Sentence-BERT: A pre-trained on cybersecurity data BERT model used to compute a fixed-size vector representation of the query.
+- Manually Selected Features, specific to SQL Injection detection, derived from the paper ["A SQL Injection Detection Method Based on Adaptive Deep Forest"](https://doi.org/10.1109/ACCESS.2019.2944951).
+- Sentence-BERT: A pre-trained on cybersecurity data BERT model used to compute a fixed-size vector representation of the query presented in ["SecureBERT: A Domain-Specific Language Model for Cybersecurity"](https://doi.org/10.1007/978-3-031-25538-0_3).
 
-Combined with the following novelty detectors: 
-- Autoencoder: Implemented using PyTorch
+Combined with one of the following novelty detectors: 
+- Autoencoder: Implemented using PyTorch.
 - Local Outlier Factor: Using the scikit-learn implementation.
 - One-Class Support Vector Machines: Using the scikit-learn implementation.
 
