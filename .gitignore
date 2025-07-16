@@ -4,6 +4,7 @@ logs/
 sessions
 cache
 cache-old
+result
 cache/**
 # Byte-compiled / optimized / DLL files
 __pycache__/
