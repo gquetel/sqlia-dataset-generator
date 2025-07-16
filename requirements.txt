@@ -3,7 +3,7 @@ pandas==2.2.3
 numpy==2.2.5
 tqdm==4.67.1
 
-# Used for training / evaluation
+# (Optional; used for training / evaluation)
 matplotlib==3.10.1
 jupyter==1.1.1
 accelerate==1.5.2

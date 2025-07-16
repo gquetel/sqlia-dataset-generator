@@ -38,7 +38,6 @@ sqlmap -v 3  --skip-waf -D dataset --level=5 --risk=1 --batch --skip='user-agent
 The exploit step only takes place if a working payload has been found during reconnaissance. All samples generated during these campaigns are collected and included in the test set.
 
 
-
 ### Generating normal samples
 
 After generating malicious queries, normal samples are generated using dictionaries of legitimate values. The `attacks_ratio` defined in `ini.ini` will dictate how many normal samples will be included in the test set. For the training set, we generate roughly the same number of samples than generated attacks.
@@ -51,12 +50,11 @@ SELECT * FROM airport WHERE icao_code = 'LFPN'
 
 ## Generating the dataset locally
 
-To preserve diversity in generated payloads, we do not fix random seeds when invoking `sqlmap`. As a result, while each generated dataset is similar in structure, it may differ slightly from the provided SuperviZ25-SQL dataset.
+We provide 2 mechanisms to obtain the developing environment required to generate the dataset. The most straightforward is to use the docker container, the alternative one is provided using a nix-shell environment.
 
-### Environment with nix-shell
-We provide the environment to generate the dataset through a nix shell environment `shell.nix`. The environment contains: a MySQL server to validate normal queries to and execute attack ones (sqlmap requires interaction with a running DBMS to generate payloads), sqlmap and `percona-toolkit` from which the `pt-kill` command is used to make sure no lock on tables is present before the invocation of `sqlmap`. Finally, a python interpreter with packages dependencies (for both generation and training of models) is included.
 
-### Manual environment
+### Setting up the environment using nix-shell 
+The generation environment is rendered available through the definition of nix shell environment in `shell.nix`. The environment contains: a MySQL server to validate normal queries to and execute attack ones (sqlmap requires interaction with a running DBMS to generate payloads), sqlmap and `percona-toolkit` from which the `pt-kill` command is used to make sure no lock on tables is present before the invocation of `sqlmap`. Finally, a python interpreter with packages dependencies (for both generation and training of models) is included.
 
 Alternatively, an equivalent environment can be manually created by using the following software versions: 
 - MySQL 8.4.5
@@ -64,7 +62,20 @@ Alternatively, an equivalent environment can be manually created by using the fo
 - pt-kill 3.2.0
 - python 3.12.10, the dependency packages versions used are further detailed in [requirements.txt](requirements.txt).
 
-#### MySQL Initialization
+### Setting up the environment docker container 
+
+The alternative environment is rendered available using a docker container. The image can be obtained using: 
+```
+docker pull ghcr.io/gquetel/sqlia-dataset:latest
+```
+
+And run using: 
+```
+docker run -it ghcr.io/gquetel/sqlia-dataset:latest
+```
+
+
+### MySQL Initialization
 
 We require that a MySQL server has been installed and initialized as depicted in the [documentation](https://dev.mysql.com/doc/refman/8.4/en/postinstallation.html). Then the server must be running and listening on a socket, specified in [ini.ini](ini.ini).
 
@@ -82,6 +93,8 @@ Then, the content of the MySQL server must be initialized using [init_db.sql](da
 ```
 $ mysql --user=root  --socket=/usr/local/mysqld_1/socket < ./data/init_db.sql --password
 ```
+
+A shell script (./setup-mysql.sh) is provided in the docker container to handle mysqld initialization, startup, and the setup of tables and users.
 
 ### Generation
 
@@ -103,6 +116,7 @@ Other options are available as follows:
 - `--debug`: Output will produce more information about the generation process, and sqlmap will display generated payloads (verbosity level 3).
 - `--no-syn-check` The correct syntax of normal queries will not be verified, this speed up their generation.
 
+Note: To preserve diversity in generated payloads, we do not fix random seeds when invoking `sqlmap`. As a result, while each generated dataset is similar in structure, it may differ slightly from the provided SuperviZ25-SQL dataset.
 
 ## Baseline Evaluation
 
