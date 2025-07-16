@@ -8,7 +8,6 @@ import string
 import re
 import shutil
 
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from .sqlmap_generator import sqlmapGenerator
 
