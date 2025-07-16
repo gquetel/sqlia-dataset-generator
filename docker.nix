@@ -46,21 +46,7 @@ let
         ps.pandas
         ps.numpy
         ps.tqdm
-
-        # Used for training / evaluation
-        ps.matplotlib
-        ps.matplotlib-venn
         ps.scikit-learn
-
-        # Notebooks
-        ps.ipykernel
-        ps.jupyter
-
-        # BERT model
-        ps.accelerate
-        ps.evaluate
-        ps.torch
-        ps.transformers
       ]
       ++ [ mysql-connector ]
     )).override
@@ -124,7 +110,7 @@ pkgs.dockerTools.buildImage {
           echo "      Generate the full dataset."
           echo ""
           echo "  docker cp <containerId>:/generator/dataset.csv ./dataset.csv"
-          echo "      Copy the generated dataset to the host machine."
+          echo "      (From the host) Copy the generated dataset to the host machine."
           echo ""
         '';
       })
