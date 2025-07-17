@@ -66,12 +66,12 @@ Alternatively, an equivalent environment can be manually created by using the fo
 
 The alternative environment is rendered available using a docker container. The image can be obtained using: 
 ```
-docker pull ghcr.io/gquetel/sqlia-dataset:latest
+docker pull ghcr.io/gquetel/sqlia-dataset:1.0.0
 ```
 
 And run using: 
 ```
-docker run -it ghcr.io/gquetel/sqlia-dataset:latest
+docker run -it ghcr.io/gquetel/sqlia-dataset:1.0.0
 ```
 
 
