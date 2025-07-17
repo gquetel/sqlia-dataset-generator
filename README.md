@@ -84,7 +84,7 @@ For instance, a MySQL server can be initialized as follows:
 $ mkdir /usr/local/mysqld_1/
 $ mysqld  --initialize-insecure --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/
 $ mysqld -basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --socket=/usr/local/mysqld_1/socket --daemonize 
-$ mysql -u root --skip-password
+$ mysql -u root --skip-password --socket=/usr/local/mysqld_1/socket
 > ALTER USER 'root'@'localhost' IDENTIFIED BY 'YourRootPassword';
 ```
 
