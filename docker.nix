@@ -9,10 +9,10 @@ let
     owner = "gquetel";
     repo = "sqlia-dataset-generator";
     # We do not use 'v1.0.0-anubis' which correspond to the code with which the dataset
-    # has been generated but a version that fixed --testing mode and changed the value
-    # of the ini.ini file.
-    rev = "2206498f2448bd030e0371d994085f7cc3dfa47d";
-    hash = "sha256-2AkJYi1Oc3En/dFh9Dm5m5AN9V5kXjHOalGz+VN9kZ4=";
+    # has been generated but a more recent version with bugfixes and features that do 
+    # not interfere with the generation code (see commit history).
+    rev = "f051fd3be8a8c952004fd2ece544112a6f316fb7";
+    hash = "sha256-4d3/N4tLkFuFAtpi3Fsnj9j3YK+BnlqdXTNFrEcO6mM=";
   };
 
   # Hack to have the code in /generator rather than directly to root.
@@ -73,9 +73,12 @@ pkgs.dockerTools.buildImage {
       pkgs.sqlmap
       pkgs.percona-toolkit
       pkgs.mysql84
+      pkgs.perl # required by percona-toolkit
+      
       # Generation code
       repo
       # Script rendered available to be run to start mysqld:
+      # The root password must match the 'root_password' option in ini.ini
       (pkgs.writeTextFile {
         name = "setup-mysql";
         text = ''
