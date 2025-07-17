@@ -6,8 +6,8 @@ def get_mysql_info(config: configparser.ConfigParser):
     user = config.get("MYSQL", "user")
     pwd = config.get("MYSQL", "password")
     socket_path = config.get("MYSQL", "socket_path")
-    return user, pwd, socket_path
-
+    root_password = config.get("MYSQL","root_password")
+    return user, pwd, socket_path,root_password
 
 def get_seed(config: configparser.ConfigParser):
     return int(config.get("GENERAL", "seed"))
