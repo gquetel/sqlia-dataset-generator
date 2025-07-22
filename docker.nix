@@ -28,8 +28,7 @@ let
       format = "wheel";
     in
     pkgs.python312.pkgs.buildPythonPackage {
-      # I am using  fetchurl as package is not updated in nixkpgs and i couldn't make
-      # fetchPypi use the correct wheel address.
+      # Have to use direct fetchurl as package is not updated in nixkpgs
       inherit pname version format;
       src = pkgs.fetchurl {
         url = "https://files.pythonhosted.org/packages/23/1d/8c2c6672094b538f4881f7714e5332fdcddd05a7e196cbc9eb4a9b5e9a45/mysql_connector_python-9.3.0-py2.py3-none-any.whl";
