@@ -17,7 +17,6 @@ import random
 import pandas as pd
 import sys
 import logging
-import scipy
 from scipy import sparse
 import torch
 
@@ -28,12 +27,8 @@ from constants import DotDict, ProjectPaths
 
 from explain import (
     get_recall_per_attack,
-    plot_confusion_matrices_by_technique,
-    plot_pca,
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
-    plot_tree_clf,
-    print_and_save_metrics,
     print_and_save_metrics_from_treshold,
 )
 

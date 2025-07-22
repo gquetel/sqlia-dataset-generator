@@ -1,7 +1,5 @@
-from pathlib import Path
-
 from sklearn.neighbors import LocalOutlierFactor
-from constants import MyAutoEncoder, MyAutoEncoderTanh
+from constants import MyAutoEncoderTanh
 import torch
 import transformers
 import pandas as pd

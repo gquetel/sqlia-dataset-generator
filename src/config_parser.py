@@ -12,7 +12,6 @@ def get_mysql_info(config: configparser.ConfigParser):
 def get_seed(config: configparser.ConfigParser):
     return int(config.get("GENERAL", "seed"))
 
-
 def get_attacks_ratio(config: configparser.ConfigParser):
     return float(Fraction(config.get("GENERAL", "attacks_ratio")))
 

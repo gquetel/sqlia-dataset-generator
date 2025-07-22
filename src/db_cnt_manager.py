@@ -2,12 +2,11 @@ import mysql.connector
 import configparser
 import mysql
 
-from .config_parser import get_mysql_info, get_used_databases
+from .config_parser import get_mysql_info
 
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
         user, pwd, socket_path, rpwd = get_mysql_info(config=config)
-        # self.db_name = get_used_databases(config=config)
         self.user = user
         self.pwd = pwd
         self.socket_path = socket_path
