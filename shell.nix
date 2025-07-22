@@ -10,6 +10,7 @@ let
     let
       pname = "mysql-connector-python";
       version = "9.3.0";
+      format = "wheel";
     in
     pkgs.python312.pkgs.buildPythonPackage {
       # Have to use direct fetchurl as package is not updated in nixkpgs
