@@ -147,7 +147,7 @@ Combined with one of the following novelty detectors:
 - Local Outlier Factor: Using the scikit-learn implementation.
 - One-Class Support Vector Machines: Using the scikit-learn implementation.
 
-The code is available in the [models](./models/) folder. Training and evaluation can be performed after generating a dataset using the following command: 
+The code is available in the [models](./models/) folder. Training and evaluation can be performed after generating a dataset using the following command (using the python environment provided in the nix-shell, or through generating an environment using the equivalent [requirements.txt](./requirements.txt) file).
 
 ```
 python3 ./training.py

@@ -192,7 +192,7 @@ Each sample is characterized by the following columns:
 
 1. **How will the dataset will be distributed (e.g., tarball  on website, API, GitHub)?** *(Does the dataset have a digital object identifier (DOI)?)*
     
-    The dataset is available in a CSV format on the [Zenodo](https://zenodo.org/records/15744477) platform.
+    The dataset is available in a CSV format on the [Zenodo](https://zenodo.org/15744477) platform.
 
 
 1. **When will the dataset be distributed?**
