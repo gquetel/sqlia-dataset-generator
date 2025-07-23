@@ -86,6 +86,7 @@ class OCSVM_CV:
         Returns:
             tuple[pd.DataFrame, np.ndarray]: _description_
         """
+        # TODO: remove batching here, is done in caller.
         labels = df["label"]
         pp_queries = self.vectorizer.transform(df["full_query"])
 
@@ -178,6 +179,7 @@ class LOF_CV:
         Returns:
             tuple[pd.DataFrame, np.ndarray]: _description_
         """
+        # TODO: remove batching here, is done in caller.
         labels = df["label"]
         pp_queries = self.vectorizer.transform(df["full_query"])
 
@@ -261,6 +263,8 @@ class AutoEncoder_CV:
         Returns:
             tuple[pd.DataFrame, np.ndarray]: _description_
         """
+        # TODO: remove batching here, is done in caller.
+
         labels = df["label"]
         pp_queries = self.vectorizer.transform(df["full_query"])
 
