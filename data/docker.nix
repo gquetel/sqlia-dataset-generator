@@ -46,6 +46,7 @@ let
         ps.numpy
         ps.tqdm
         ps.scikit-learn
+
       ]
       ++ [ mysql-connector ]
     )).override
