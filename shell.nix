@@ -33,12 +33,12 @@ let
 
         # Used for training / evaluation
         ps.matplotlib
-        ps.matplotlib-venn
         ps.scikit-learn
 
         # Notebooks
         ps.ipykernel
         ps.jupyter
+        ps.matplotlib-venn
 
         # BERT model
         ps.accelerate
