@@ -95,9 +95,7 @@ bash-5.2$
 
 ### MySQL Initialization
 
-We require that a MySQL server has been installed and initialized as depicted in the [documentation](https://dev.mysql.com/doc/refman/8.4/en/postinstallation.html). Then the server must be running and listening on a socket, specified in [ini.ini](ini.ini). A shell script (`./setup-mysql.sh`) is provided in the docker container to handle the MySQL server initialization, startup, and the setup of tables and users.
-
-Otherwise, the MySQL server can be initialized as follows:
+We require that a MySQL server has been installed and initialized as depicted in the [documentation](https://dev.mysql.com/doc/refman/8.4/en/postinstallation.html). Then the server must be running and listening on a socket, specified in [ini.ini](ini.ini). A shell script (`./setup-mysql.sh`) is provided in the docker container to handle the MySQL server initialization, startup, and the setup of tables and users. Otherwise, the MySQL server can be initialized as follows:
 ```
 $ mkdir /usr/local/mysqld_1/
 $ mysqld  --initialize-insecure --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/
@@ -117,7 +115,7 @@ $ mysql --user=root  --socket=/usr/local/mysqld_1/socket < ./data/init_db.sql --
 
 A few settings in the dataset generation can be modified in the [ini.ini](ini.ini) file such as the ratio of attacks in the resulting dataset or the distribution of statement types in the normal workload. 
 
-To test that everything works as intended, the option `--testing` can be used. Where only 10 query templates will be considered to generate the dataset, and `sqlmap` is only invoked using the error-based technique which is relatively fast. The [launcher.py](launcher.py) script expect the path to the ini file as parameter as follows: 
+To test that everything works as intended, the option `--testing` can be used where only 10 query templates will be considered to generate the dataset. Using this setting,`sqlmap` is only invoked using the error-based technique which is relatively fast. The [launcher.py](launcher.py) script expect the path to the ini file as parameter as follows: 
 
 ```
 python3 ./launcher.py  -ini ini.ini --testing
