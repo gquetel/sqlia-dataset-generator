@@ -39,6 +39,8 @@ let
         ps.ipykernel
         ps.jupyter
         ps.matplotlib-venn
+        ps.sqlglot
+        ps.sqlparse
 
         # BERT model
         ps.accelerate
