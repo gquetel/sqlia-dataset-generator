@@ -209,7 +209,7 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
             for i in glot_tree.find_all(sqlglot.exp.HexString):
                 i.set("this", "0")
 
-            print(repr(glot_tree))
+            # print(repr(glot_tree))
             canon_tree = glot_tree.sql(comments=False)
             if canon_tree not in pts:
                 pts[canon_tree] = 1
@@ -289,13 +289,12 @@ def get_diversity_wafamole():
 
 
 def main():
-    # anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v6/dataset.csv"
-    anubis_path = "../dataset-small.csv"
+    anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v6/dataset.csv"
+    # anubis_path = "../dataset-small.csv"
     # anubis_path = "../10percent-anubis.csv"
 
     get_diversity_anubis(anubis_path)
     # get_diversity_wafamole()
-
 
 if __name__ == "__main__":
     main()
