@@ -142,7 +142,7 @@ def distinct_n_sentence_level(sentence, n):
     :param n: int, ngram.
     :return: float, the metric value.
     """
-    if len(sentence) == 0:
+    if len(sentence) == 0 or len(sentence) < n:
         return 0.0  # Prevent a zero division
     distinct_ngrams = set(ngrams(sentence, n))
     return len(distinct_ngrams) / len(sentence)
@@ -267,6 +267,7 @@ def get_diversity_anubis(fp_dataset="../dataset.csv"):
 
 
 def get_diversity_wafamole():
+    # Paths to merged files as described in documentation.
     fp_sane = "../../orignal_wafamole_dataset/sane.sql"
     sane = open(fp_sane, "r").read()
     sanes = sqlparse.split(sane)
@@ -288,13 +289,38 @@ def get_diversity_wafamole():
     print_unique_pts(attacks, "attack", "WAFAMOLE")
 
 
+def get_diversity_kaggle(fp_kaggle: str):
+    # We used: https://www.kaggle.com/datasets/sajid576/sql-injection-dataset
+    # It does not require preprocessing as it is well formatted.
+    df_kaggle = pd.read_csv(fp_kaggle)
+
+    queries_kaggle_0 = df_kaggle[df_kaggle["Label"] == 0]["Query"].to_list()
+    queries_kaggle_1 = df_kaggle[df_kaggle["Label"] == 1]["Query"].to_list()
+
+    # Distinct-n
+    print_distinctn_diversity(queries_kaggle_0, "normal", "Kaggle")
+    print_distinctn_diversity(queries_kaggle_1, "attack", "Kaggle")
+
+    # Vocab size
+    print_vocab_size(queries_kaggle_0, "normal", "Kaggle")
+    print_vocab_size(queries_kaggle_1, "attack", "Kaggle")
+
+    # PTs
+    print_unique_pts(queries_kaggle_0, "normal", "Kaggle")
+    print_unique_pts(queries_kaggle_1, "attack", "Kaggle")
+
+
 def main():
     anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v6/dataset.csv"
     # anubis_path = "../dataset-small.csv"
     # anubis_path = "../10percent-anubis.csv"
 
-    get_diversity_anubis(anubis_path)
+    kaggle_path = "/home/gquetel/Downloads/Modified_SQL_Dataset.csv"
+
+    # get_diversity_anubis(anubis_path)
     # get_diversity_wafamole()
+    get_diversity_kaggle(kaggle_path)
+
 
 if __name__ == "__main__":
     main()
