@@ -10,8 +10,8 @@ let
     # We do not use 'v1.0.0-anubis' which correspond to the code with which the dataset
     # has been generated but a more recent version with bugfixes and features that do
     # not interfere with the generation code (see commit history).
-    rev = "f051fd3be8a8c952004fd2ece544112a6f316fb7";
-    hash = "sha256-4d3/N4tLkFuFAtpi3Fsnj9j3YK+BnlqdXTNFrEcO6mM=";
+    rev = "95019247e0e450138b321075a63e2f5720cea523";
+    hash = "sha256-kFHkz6Id+OFZQT2qTs1hTyTWAuSwU9L61nwMy20vWOg=";
   };
 
   # Hack to have the code in /generator rather than directly to root.
@@ -124,10 +124,10 @@ pkgs.dockerTools.buildImage {
           echo "  ./setup-mysql.sh"
           echo "      Initialize the MySQL server."
           echo ""
-          echo "  python3 ./launcher.py -ini ini.ini --testing"
+          echo "  python3 ./launcher.py --ini ini.ini --testing"
           echo "      Run the generator in test mode."
           echo ""
-          echo "  python3 ./launcher.py -ini ini.ini"
+          echo "  python3 ./launcher.py --ini ini.ini"
           echo "      Generate the full dataset."
           echo ""
           echo "  docker cp <containerId>:/generator/dataset.csv ./dataset.csv"
@@ -163,8 +163,8 @@ pkgs.dockerTools.buildImage {
     mkdir -p /usr/local/mysqld_1/
     chmod 777 /tmp
     chmod -R 755 /generator 
-    chown nobody:nobody /generator
-    chown nobody:nobody /usr/local/mysqld_1/
+    chown -R nobody:nobody /generator
+    chown -R nobody:nobody /usr/local/mysqld_1/
   '';
 
   # Container RunConfig Field Descriptions, available fields listed in [1]
