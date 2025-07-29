@@ -1,4 +1,4 @@
-# SuperviZ25-SQL
+# Superviz25-SQL
 
 By: 
 - Grégor Quétel, mail: gregor.quetel@telecom-paris.fr
@@ -9,12 +9,12 @@ By:
 
 Organisations: PEPR Superviz, Télécom Paris, INRIA, LAAS CNRS.
 
-SuperviZ25-SQL has been designed to evaluate unsupervised SQL Injection detection techniques. The dataset allows to evaluate the capability of mechanisms trained on the benign workload of a unique database schema to detect SQL Injection attack on this targeting this specific deployment. What follows below is the [datasheet](https://arxiv.org/abs/1803.09010) describing this data. 
+Superviz25-SQL has been designed to evaluate unsupervised SQL Injection detection techniques. The dataset allows to evaluate the capability of mechanisms trained on the benign workload of a unique database schema to detect SQL Injection attack on this targeting this specific deployment. What follows below is the [datasheet](https://arxiv.org/abs/1803.09010) describing this data. 
 
 ## Motivation
 
 1. **For what purpose was the dataset created?** *(Was there a specific task in mind? Was there a specific gap that needed to be filled? Please provide a description.)*  
-    SuperviZ25-SQL has been designed to provide a realist, diverse, properly documented dataset for unsupervised SQL Injection detection. 
+    Superviz25-SQL has been designed to provide a realist, diverse, properly documented dataset for unsupervised SQL Injection detection. 
 
 
 2. **Who created this dataset (e.g., which team, research group) and on behalf of which entity (e.g., company, institution, organization)?**  

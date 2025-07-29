@@ -1,6 +1,5 @@
 let
-  inputs = import ./npins;
-  shell-drv = import ./shell.nix;
+  inputs = import ../npins;
   pkgs = import inputs.nixpkgs {
     config.allowUnfree = true;
   };
@@ -46,6 +45,8 @@ let
         ps.numpy
         ps.tqdm
         ps.scikit-learn
+        ps.sqlglot
+        ps.sqlparse
 
       ]
       ++ [ mysql-connector ]
@@ -98,7 +99,7 @@ pkgs.dockerTools.buildImage {
         executable = false;
         text = ''
           echo ""
-          echo "Welcome to the SuperviZ-SQL25 Dataset Generator Container"
+          echo "Welcome to the Superviz-SQL25 Dataset Generator Container"
           echo "----------------------------------------------------------"
           echo ""
           echo "Available commands:"

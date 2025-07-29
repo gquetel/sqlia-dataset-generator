@@ -39,6 +39,7 @@ let
         ps.ipykernel
         ps.jupyter
         ps.matplotlib-venn
+        # Diversity metric + WAFAMOLE loading.
         ps.sqlglot
         ps.sqlparse
 
