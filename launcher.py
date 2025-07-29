@@ -30,7 +30,7 @@ def init_args() -> argparse.Namespace:
         description="Creates a dataset of SQL queries specific to a domain, containing both normal queries and queries with injections attacks."
     )
     parser.add_argument(
-        "-ini",
+        "--ini",
         type=str,
         dest="ini",
         required=True,

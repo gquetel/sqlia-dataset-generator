@@ -81,10 +81,10 @@ Available commands:
   ./setup-mysql.sh
       Initialize the MySQL server.
 
-  python3 ./launcher.py -ini ini.ini --testing
+  python3 ./launcher.py --ini ini.ini --testing
       Run the generator in test mode.
 
-  python3 ./launcher.py -ini ini.ini
+  python3 ./launcher.py --ini ini.ini
       Generate the full dataset.
 
   docker cp <containerId>:/generator/dataset.csv ./dataset.csv
@@ -118,13 +118,13 @@ A few settings in the dataset generation can be modified in the [ini.ini](ini.in
 To test that everything works as intended, the option `--testing` can be used where only 10 query templates will be considered to generate the dataset. Using this setting,`sqlmap` is only invoked using the error-based technique which is relatively fast. The [launcher.py](launcher.py) script expect the path to the ini file as parameter as follows: 
 
 ```
-python3 ./launcher.py  -ini ini.ini --testing
+python3 ./launcher.py  --ini ini.ini --testing
 ```
 
 If everything works as intended, the full generation can be launched using:
 
 ```
-python3 ./launcher.py -ini ini.ini 
+python3 ./launcher.py --ini ini.ini 
 ```
 
 Other options are available as follows: 
