@@ -477,12 +477,14 @@ class DatasetBuilder:
         testing_mode = args.testing
         debug_mode = args.debug
         do_syn_check = not args.no_syn_check
-
+        
+        # We don't generate any attacks here.
         # First, sample queries templates according to scenario.
         self.select_templates(testing_mode=testing_mode)
-        self.generate_attack_queries_sqlmapapi(
-            testing_mode=testing_mode, debug_mode=debug_mode
-        )
+        # self.generate_attack_queries_sqlmapapi(
+        #     testing_mode=testing_mode, debug_mode=debug_mode
+        # )
+        self.df = pd.DataFrame()
 
         # List of templates to create normal queries from. Corresponds to :
         # - all templates used to generate attacks (self.templates)
@@ -494,11 +496,14 @@ class DatasetBuilder:
             + list(self.df_tno["ID"].unique())
             + list(self.df_tadmin["ID"].unique())
         )
-        self.populate_normal_templates(self._n_attacks, l_normal_templates)
+        
+        # Number of normal  samples in initial dataset: 
+        n_s = 335192         
+        self.populate_normal_templates(n_s, l_normal_templates)
         self.generate_normal_queries(do_syn_check)
         self._add_split_column()
 
-        self._augment_test_set_normal_queries(do_syn_check)
+        # self._augment_test_set_normal_queries(do_syn_check)
         # self._add_template_split_info()
 
         self._remove_contradictions()
