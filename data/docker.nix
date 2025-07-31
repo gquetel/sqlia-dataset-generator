@@ -146,8 +146,8 @@ pkgs.dockerTools.buildImage {
     mkdir -p /usr/local/mysqld_1/
     chmod 777 /tmp
     chmod -R 755 /generator 
-    chown nobody:nobody /generator
-    chown nobody:nobody /usr/local/mysqld_1/
+    chown -R nobody:nobody /generator
+    chown -R nobody:nobody /usr/local/mysqld_1/
   '';
 
   # Container RunConfig Field Descriptions, available fields listed in [1]
