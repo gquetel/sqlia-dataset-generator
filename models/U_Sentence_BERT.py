@@ -96,8 +96,7 @@ class OCSVM_SecureBERT:
         Returns:
             _type_: _description_
         """
-        df_we = self.preprocess(df)
-        embeddings = np.array(df_we["embeddings"].tolist())
+        embeddings = np.array(df["embeddings"].tolist())
         dists = self.clf.decision_function(embeddings)
         return (df["label"].to_numpy(), dists)
 
@@ -176,8 +175,7 @@ class LOF_SecureBERT:
         Returns:
             _type_: _description_
         """
-        df_we = self.preprocess(df)
-        embeddings = np.array(df_we["embeddings"].tolist())
+        embeddings = np.array(df["embeddings"].tolist())
         dists = self.clf.decision_function(embeddings)
         return (df["label"].to_numpy(), dists)
 
@@ -258,8 +256,7 @@ class AutoEncoder_SecureBERT:
         Returns:
             _type_: _description_
         """
-        df_we = self.preprocess(df)
-        embeddings = np.array(df_we["embeddings"].tolist())
+        embeddings = np.array(df["embeddings"].tolist())
         dists = self.clf.decision_function(embeddings)
         return (df["label"].to_numpy(), dists)
     
