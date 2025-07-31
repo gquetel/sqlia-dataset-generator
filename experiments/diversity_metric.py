@@ -1,14 +1,20 @@
-import random
-from typing import Union
+import logging
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer
+import pickle
+import random
 import sqlglot
-import sqlparse
 import sqlglot.errors
-from tqdm import tqdm
-import logging
+import sqlparse
 import sys
+import torch
+
+from typing import Union
+from transformers import RobertaTokenizerFast, RobertaModel
+from tqdm import tqdm
+from sklearn.manifold import TSNE
+from sklearn.feature_extraction.text import CountVectorizer
 
 
 def print_vocab_size(queries, type: str, name: str):
@@ -75,6 +81,95 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
     print(f"Number of unique parse trees for {name} {type} queries: {len(pts)}")
 
 
+def save_tsne(queries: list, type: str, name: str):
+    # Load model
+    bert_model = "ehsanaghaei/SecureBERT"
+    tokenizer = RobertaTokenizerFast.from_pretrained(bert_model)
+    rb_model = RobertaModel.from_pretrained(bert_model)
+    rb_model.eval()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    # We compute embeddings by batches, they should not be too big because
+    # they might be bigger than memory.
+    embeddings = []
+    batch_size = 64
+    with torch.no_grad():
+        for i in tqdm(range(0, len(queries), batch_size)):
+            batch_queries = queries[i : i + batch_size]
+
+            inputs = tokenizer(
+                batch_queries,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt",
+            )
+
+            # Move inputs to device and get embeddings.
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            outputs = rb_model(**inputs)
+
+            # Move back to CPU and convert to numpy
+            outputs = rb_model(**inputs, output_hidden_states=True)
+            batch_embeddings = outputs.pooler_output.cpu().numpy()
+            embeddings.extend(batch_embeddings)
+
+    embeddings = np.array(embeddings)
+    # https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html
+    # Let's use default params as much as possible.
+    # We set perplexity to 50 as the doc states that higher dimensions requires
+    # higher values.
+    tsne = TSNE(
+        n_components=2,
+        random_state=42,
+        perplexity=min(50, len(queries) - 1),
+        verbose=1,
+        n_jobs=-1,
+    )
+    tsne_embeddings = tsne.fit_transform(embeddings)
+
+    # Save the results to allow to compute the figure with all datasets later.
+    results = {
+        "queries": queries,
+        "embeddings": embeddings,
+        "tsne_embeddings": tsne_embeddings,
+        "type": type,
+        "name": name,
+    }
+
+    print(f"t-SNE results saved to tsne-{name}-{type}.pkl")
+
+    with open(f"tsne-{name}-{type}.pkl", "wb") as f:
+        pickle.dump(results, f)
+
+    # Now plot individual results.
+    plt.figure(figsize=(12, 8))
+    scatter = plt.scatter(
+        tsne_embeddings[:, 0],
+        tsne_embeddings[:, 1],
+        alpha=0.6,
+        s=20,
+    )
+
+    plt.title(
+        f"t-SNE Visualization of {name} {type} \n"
+        f"Using SecureBERT Embeddings (n={len(queries)})"
+    )
+    plt.xlabel("t-SNE Component 1")
+    plt.ylabel("t-SNE Component 2")
+    plt.grid(True, alpha=0.3)
+
+    # Add color legend
+    legend_label = f"{type.capitalize()} Queries"
+    plt.legend([scatter], [legend_label])
+
+    plt.tight_layout()
+    plt.savefig(f"tsne-{name}-{type}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print(f"Visualization saved to tsne-{name}-{type}.png")
+
+
 def get_diversity_anubis(
     fp_dataset="../dataset.csv",
     samples_0: Union[int, None] = None,
@@ -106,12 +201,15 @@ def get_diversity_anubis(
         queries_anubis_1 = random.sample(queries_anubis_1, samples_1)
 
     # Vocab size
-    print_vocab_size(queries_anubis_0, "normal", "ANUBIS")
-    print_vocab_size(queries_anubis_1, "attack", "ANUBIS")
+    # print_vocab_size(queries_anubis_0, "normal", "ANUBIS")
+    # print_vocab_size(queries_anubis_1, "attack", "ANUBIS")
 
-    # PTs
-    print_unique_pts(queries_anubis_0, "normal", "ANUBIS")
-    print_unique_pts(queries_anubis_1, "attack", "ANUBIS")
+    # # PTs
+    # print_unique_pts(queries_anubis_0, "normal", "ANUBIS")
+    # print_unique_pts(queries_anubis_1, "attack", "ANUBIS")
+
+    # T-SNE
+    save_tsne(queries_anubis_0, "normal", "ANUBIS")
 
 
 def get_diversity_wafamole(
@@ -162,24 +260,34 @@ def get_diversity_kaggle(
     print_unique_pts(queries_kaggle_0, "normal", "Kaggle")
     print_unique_pts(queries_kaggle_1, "attack", "Kaggle")
 
+def build_tsne_figures_all_datasets():
+    # Using the saved pickles, build a TSNE figure with all datasets 
+    datasets = ["Kaggle", "ANUBIS", "WAFAMOLE"]
+
+    for dataset in datasets:
+        with open(f"tsne-{dataset}-normal.pkl", "rb") as f:
+            results = pickle.load(f)
+        tsne_embeddings = results["tsne_embeddings"]
+        
 
 def main():
     samples_0 = None
     samples_1 = None
     kaggle_path = "/home/gquetel/Downloads/Modified_SQL_Dataset.csv"
-    anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v6/dataset.csv"
+    # anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v6/dataset.csv"
 
     # anubis_path = "../dataset-small.csv"
-    # anubis_path = "../10percent-anubis.csv"
+    anubis_path = "../10percent-anubis.csv"
 
     # We want to observe the same metrics with datasets of similar size: we randomly
     # sample from WAFAMOLE and Superviz number of samples present in Kaggle.
-    # samples_0 = 19537
+    samples_0 = 64
     # samples_1 = 11382
 
     get_diversity_anubis(anubis_path, samples_0, samples_1)
     # get_diversity_wafamole(samples_0, samples_1)
     # get_diversity_kaggle(kaggle_path, samples_0, samples_1)
+    build_tsne_figures_all_datasets()
 
 
 if __name__ == "__main__":
