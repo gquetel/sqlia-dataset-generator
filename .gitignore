@@ -2,6 +2,7 @@
 *.txt
 models/output
 logs/
+output
 sessions
 cache
 cache-old
