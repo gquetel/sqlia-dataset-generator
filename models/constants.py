@@ -37,6 +37,12 @@ class ProjectPaths:
         return path
     
     @property
+    def embeddings_path(self) -> str:
+        path = f"{self.base_path}/cache/embeddings/"
+        Path(path).mkdir(exist_ok=True, parents=True)
+        return path
+    
+    @property
     def logs_path(self) -> str:
         path = f"{self.base_path}../logs/"
         Path(path).mkdir(exist_ok=True, parents=True)

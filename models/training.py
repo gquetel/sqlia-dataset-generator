@@ -357,7 +357,7 @@ def compute_metrics_sbert(
             batch_df = df.iloc[start_idx:end_idx]
 
             # 0 => pped + original columns
-            df_pped = model.preprocess(df=batch_df)
+            df_pped = model.preprocess(df=batch_df, project_paths=project_paths)
             labels = np.array(df_pped["label"].tolist())
 
             # 1 => Probas (ppeds only)

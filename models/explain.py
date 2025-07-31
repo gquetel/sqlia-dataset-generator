@@ -79,7 +79,7 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
         mask = df["attack_technique"] == technique
         preds = df.loc[mask, "preds"]
         labels = df.loc[mask, "label"]
-        srecall = f"{recall_score(labels, preds, average="binary")* 100:.2f}%"
+        srecall = f"{recall_score(labels, preds, average='binary')* 100:.2f}%"
         logger.info(f"Recall for technique {technique}: {srecall}")
         d_res[f"recall{technique}"] = srecall
 
