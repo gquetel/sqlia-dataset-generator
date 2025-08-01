@@ -103,7 +103,7 @@ def save_tsne(df: pd.DataFrame, type: str, name: str):
         rb_model = RobertaModel.from_pretrained(bert_model)
         rb_model.eval()
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+        rb_model.to(device)
         # We compute embeddings by batches, they should not be too big because
         # they might be bigger than memory.
         embeddings = []
@@ -239,13 +239,25 @@ def get_diversity_wafamole(
     fp_attacks: str,
     samples_0: Union[int, None] = None,
     samples_1: Union[int, None] = None,
-):
-    # Paths to merged files as described in documentation.
-    sane = open(fp_sane, "r").read()
-    sanes = sqlparse.split(sane)
+):  
+    # This is too long to parse each time, let's also save them as pickles. 
+    fp_patks = "../output/parsed-wafamole-attacks.pkl"
+    fp_psane = "../output/parsed-wafamole-sane.pkl"
 
-    attack = open(fp_attacks, "r").read()
-    attacks = sqlparse.split(attack)
+    if os.path.isfile(fp_patks):
+        attacks = pd.read_pickle(fp_patks)
+    else: 
+        attack = open(fp_attacks, "r").read()
+        attacks = sqlparse.split(attack)
+        pd.to_pickle(attacks, fp_patks)
+    
+    
+    if os.path.isfile(fp_psane):
+        sanes = pd.read_pickle(fp_psane)
+    else: 
+        sane = open(fp_sane, "r").read()
+        sanes = sqlparse.split(sane)
+        pd.to_pickle(sanes, fp_psane)
 
     if samples_0 and samples_1:
         attacks = random.sample(attacks, samples_0)
@@ -311,8 +323,8 @@ def get_diversity_kaggle(
 
 
 def main():
-    samples_0 = None
-    samples_1 = None
+    samples_0 = 64
+    samples_1 = 64
     Path("../output").mkdir(exist_ok=True, parents=True)
 
     wafamole_sane_path = "../../original_wafamole_dataset/sane.sql"
