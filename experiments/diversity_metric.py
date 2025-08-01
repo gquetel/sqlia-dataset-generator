@@ -266,13 +266,14 @@ def get_diversity_anubis(
     # print_unique_pts(queries_anubis_0, "normal", "ANUBIS")
     # print_unique_pts(queries_anubis_1, "attack", "ANUBIS")
 
-    # T-SNE
-    print_dataset_tsne(df_0, "normal", "ANUBIS", n_sampling=n_sampling_tsne)
-    print_dataset_tsne(df_1, "attack", "ANUBIS", n_sampling=n_sampling_tsne)
+    # #  T-SNE
+    # print_dataset_tsne(df_0, "normal", "ANUBIS", n_sampling=n_sampling_tsne)
+    # print_dataset_tsne(df_1, "attack", "ANUBIS", n_sampling=n_sampling_tsne)
 
-    # # Diversity Lai
-    # print_dataset_divlai(df_0, "normal", "ANUBIS")
-    # print_dataset_divlai(df_1, "attack", "ANUBIS")
+    # Diversity Lai
+    print_dataset_divlai(df_0, "normal", "ANUBIS")
+    print_dataset_divlai(df_1, "attack", "ANUBIS")
+    return df_0, df_1
 
 
 def get_diversity_wafamole(
@@ -304,6 +305,7 @@ def get_diversity_wafamole(
     if samples_0 and samples_1:
         attacks = random.sample(attacks, samples_0)
         sanes = random.sample(sanes, samples_1)
+
     # # Vocab size
     # print_vocab_size(sanes, "normal", "WAFAMOLE")
     # print_vocab_size(attacks, "attack", "WAFAMOLE")
@@ -316,12 +318,14 @@ def get_diversity_wafamole(
     df_0 = pd.DataFrame(sanes, columns=["full_query"])
 
     # T-SNE
-    print_dataset_tsne(df_0, "normal", "WAFAMOLE", n_sampling=n_sampling_tsne)
-    print_dataset_tsne(df_1, "attack", "WAFAMOLE", n_sampling=n_sampling_tsne)
-    
-    # # Diversity Lai
-    # print_dataset_divlai(df_0, "normal", "WAFAMOLE")
-    # print_dataset_divlai(df_1, "attack", "WAFAMOLE")
+    # print_dataset_tsne(df_0, "normal", "WAFAMOLE", n_sampling=n_sampling_tsne)
+    # print_dataset_tsne(df_1, "attack", "WAFAMOLE", n_sampling=n_sampling_tsne)
+
+    # Diversity Lai
+    print_dataset_divlai(df_0, "normal", "WAFAMOLE")
+    print_dataset_divlai(df_1, "attack", "WAFAMOLE")
+
+    return df_0, df_1
 
 
 def get_diversity_kaggle(
@@ -355,69 +359,87 @@ def get_diversity_kaggle(
     df_1.rename(columns={"Query": "full_query"}, inplace=True)
 
     # T-SNE
-    print_dataset_tsne(df_0, "normal", "Kaggle", n_sampling=n_sampling_tsne)
-    print_dataset_tsne(df_1, "attack", "Kaggle", n_sampling=n_sampling_tsne)
+    # print_dataset_tsne(df_0, "normal", "Kaggle", n_sampling=n_sampling_tsne)
+    # print_dataset_tsne(df_1, "attack", "Kaggle", n_sampling=n_sampling_tsne)
 
     # # Diversity Lai
-    # print_dataset_divlai(df_0, "normal", "Kaggle")
-    # print_dataset_divlai(df_1, "attack", "Kaggle")
+    print_dataset_divlai(df_0, "normal", "Kaggle")
+    print_dataset_divlai(df_1, "attack", "Kaggle")
+    return df_0, df_1
 
-def build_tsne_figures_all_datasets():
-    # Using the saved pickles, build a TSNE figure with all datasets
-    # Order matters bc ANUBIS will be plotted first.
-    datasets = ["ANUBIS", "WAFAMOLE", "Kaggle"]
+
+def build_tsne_figures_all_datasets(datasets: list, ldf: list, type: str):
+    """Compute T-SNE for different perplexity values.
+
+    Args:
+        datasets (list): List of dataset names
+        ldf (list): List of dataframes, used to retrived cached embeddings.
+        type (str): Attack or Normal.
+    """
     labels = []
     embeddings = []
 
-    for dataset in datasets:
-        with open(f"../output/tsne-{dataset}-normal.pkl", "rb") as f:
-            r = pickle.load(f)
-            _tembeddings = r["embeddings"]
-            embeddings.append(_tembeddings)
-            labels.extend([dataset] * _tembeddings.shape[0])
+    for dataset_name, df in zip(datasets, ldf):
+        _embeddings = compute_and_save_embeddings(df=df)
+        embeddings.append(_embeddings)
+        labels.extend([dataset_name] * _embeddings.shape[0])
 
     embeddings = np.vstack(embeddings)
     labels = np.array(labels)
 
-    # joint t-SNE
-    tsne = TSNE(
-        n_components=2,
-        random_state=42,
-        perplexity=min(50, len(labels) - 1),
-        verbose=1,
-        n_jobs=-1,
-    )
-    tsne_embeddings = tsne.fit_transform(embeddings)
-
-    plt.figure(figsize=(12, 8))
+    perplexities = [5, 10, 30, 50, 100]
     colors = {"Kaggle": "blue", "ANUBIS": "green", "WAFAMOLE": "red"}
 
-    for dataset in datasets:
-        idx = labels == dataset
-        plt.scatter(
-            tsne_embeddings[idx, 0],
-            tsne_embeddings[idx, 1],
-            label=dataset,
-            c=colors.get(dataset, "gray"),
-            alpha=0.7,
-            s=40,
-        )
+    fig, axes = plt.subplots(
+        1, len(perplexities) , figsize=(10 * len(perplexities), 10)
+    )
+    fig.subplots_adjust(hspace=0.4)
 
-    plt.title("t-SNE of Normal Embeddings from All Datasets")
-    plt.xlabel("t-SNE Component 1")
-    plt.ylabel("t-SNE Component 2")
-    plt.legend(title="Dataset")
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig("../output/tsne-all-datasets-normal.png", dpi=300)
+    for i, perp in enumerate(perplexities):
+        perp = min(perp, len(labels) - 1)
+        print(f"Computing t-SNE for perplexity={perp}")
+        tsne = TSNE(
+            n_components=2,
+            random_state=42,
+            perplexity=perp,
+            verbose=0,
+            n_jobs=-1,
+            max_iter=5000,
+        )
+        tsne_embeddings = tsne.fit_transform(embeddings)
+
+        ax = axes[i]
+        for dataset in datasets:
+            idx = labels == dataset
+            ax.scatter(
+                tsne_embeddings[idx, 0],
+                tsne_embeddings[idx, 1],
+                label=dataset,
+                c=colors.get(dataset, "gray"),
+                alpha=0.7,
+                s=40,
+            )
+
+        ax.set_title(f"t-SNE with Perplexity = {perp}", fontsize=12)
+        ax.set_xlabel("Component 1")
+        ax.set_ylabel("Component 2")
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", title="Dataset")
+
+    fig.suptitle(
+        f"t-SNE of {type.capitalize()} Embeddings Across Perplexities", fontsize=16
+    )
+    output_path = f"../output/tsne-all-datasets-{type}-all-perplexities.png"
+    plt.tight_layout(rect=[0, 0, 1, 0.97])  # Leave room for suptitle
+    plt.savefig(output_path, dpi=300)
     plt.close()
 
-    print("Saved to ../output/tsne-all-datasets-normal.png")
+    print(f"Saved combined figure to {output_path}")
 
 
 def main():
-    samples_0 = 20000
-    samples_1 = 20000
+    samples_0 = 1000
+    samples_1 = 1000
     Path("../output").mkdir(exist_ok=True, parents=True)
 
     wafamole_sane_path = "../../original_wafamole_dataset/sane.sql"
@@ -429,16 +451,37 @@ def main():
     # We want to observe the same metrics with datasets of similar size: we randomly
     # sample from WAFAMOLE and Superviz number of samples present in Kaggle.
 
-    get_diversity_anubis(anubis_path, samples_0, samples_1, n_sampling_tsne)
-    get_diversity_wafamole(
+    ldf_0 = []
+    ldf_1 = []
+    l_dname = []
+
+    df_a0, df_a1 = get_diversity_anubis(
+        anubis_path, samples_0, samples_1, n_sampling_tsne
+    )
+    l_dname.append("ANUBIS")
+    ldf_0.append(df_a0)
+    ldf_1.append(df_a1)
+
+    df_w0, df_w1 = get_diversity_wafamole(
         wafamole_sane_path,
         wafamole_attacks_path,
         samples_0,
         samples_1,
         n_sampling_tsne,
     )
-    get_diversity_kaggle(kaggle_path, samples_0, samples_1, n_sampling_tsne)
-    build_tsne_figures_all_datasets()
+    l_dname.append("WAFAMOLE")
+    ldf_0.append(df_w0)
+    ldf_1.append(df_w1)
+
+    df_k0, df_k1 = get_diversity_kaggle(
+        kaggle_path, samples_0, samples_1, n_sampling_tsne
+    )
+    l_dname.append("Kaggle")
+    ldf_0.append(df_k0)
+    ldf_1.append(df_k1)
+
+    build_tsne_figures_all_datasets(l_dname, ldf_0, "normal")
+    build_tsne_figures_all_datasets(l_dname, ldf_1, "attack")
 
 
 if __name__ == "__main__":
