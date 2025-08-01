@@ -12,6 +12,7 @@ import sqlglot.errors
 import sqlparse
 import sys
 import torch
+from scipy.stats import gmean
 
 from typing import Union
 from transformers import RobertaTokenizerFast, RobertaModel
@@ -84,7 +85,12 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
     print(f"Number of unique parse trees for {name} {type} queries: {len(pts)}")
 
 
-def save_tsne(df: pd.DataFrame, type: str, name: str):
+def compute_and_save_embeddings(df: pd.DataFrame):
+    """Compute embeddings of queries (column 'full_query') and cache them.
+
+    Args:
+        df (pd.DataFrame): _description_
+    """
     # Use caching mechanism.
     str_hash_df = hashlib.sha256(
         pd.util.hash_pandas_object(df, index=True).values
@@ -95,9 +101,8 @@ def save_tsne(df: pd.DataFrame, type: str, name: str):
 
     if os.path.isfile(fp_cache):
         print(f"Loaded already preprocessed embeddings located from {fp_cache}")
-        embeddings = pd.read_pickle(fp_cache)
+        return pd.read_pickle(fp_cache)
     else:
-        # Load model
         bert_model = "ehsanaghaei/SecureBERT"
         tokenizer = RobertaTokenizerFast.from_pretrained(bert_model)
         rb_model = RobertaModel.from_pretrained(bert_model)
@@ -131,7 +136,20 @@ def save_tsne(df: pd.DataFrame, type: str, name: str):
                 embeddings.extend(batch_embeddings)
 
         embeddings = np.array(embeddings)
+        print(f"Saved preprocessed embeddings at {fp_cache}")
         pd.to_pickle(embeddings, fp_cache)
+
+    return embeddings
+
+
+def print_dataset_tsne(
+    df: pd.DataFrame, type: str, name: str, n_sampling: None | int = None
+):
+    if n_sampling:
+        df = df.sample(n_sampling, random_state=42)
+
+    queries = df["full_query"].to_list()
+    embeddings = compute_and_save_embeddings(df)
 
     # https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html
     # Let's use default params as much as possible.
@@ -176,8 +194,6 @@ def save_tsne(df: pd.DataFrame, type: str, name: str):
     plt.xlabel("t-SNE Component 1")
     plt.ylabel("t-SNE Component 2")
     plt.grid(True, alpha=0.3)
-
-    # Add color legend
     legend_label = f"{type.capitalize()} Queries"
     plt.legend([scatter], [legend_label])
 
@@ -188,10 +204,31 @@ def save_tsne(df: pd.DataFrame, type: str, name: str):
     print(f"Visualization saved to ../output/tsne-{name}-{type}.png")
 
 
+def print_dataset_divlai(
+    df: pd.DataFrame, type: str, name: str, n_sampling: None | int = None
+):
+    """Diversity metric from: https://aclanthology.org/2020.lrec-1.215.pdf
+
+    Args:
+        df (pd.DataFrame): _description_
+        type (str): _description_
+        name (str): _description_
+        n_sampling (None | int, optional): _description_. Defaults to None.
+    """
+    if n_sampling:
+        df = df.sample(n_sampling, random_state=42)
+
+    embeddings = compute_and_save_embeddings(df)
+    stds = np.std(embeddings, axis=0)
+    diversity_score = gmean(stds)
+    print(f"Diversity (Lai) for {name} {type} queries: {diversity_score:.6f}")
+
+
 def get_diversity_anubis(
     fp_dataset="../dataset.csv",
     samples_0: Union[int, None] = None,
     samples_1: Union[int, None] = None,
+    n_sampling_tsne: Union[int, None] = None,
 ):
     df_anubis = pd.read_csv(
         fp_dataset,
@@ -230,8 +267,12 @@ def get_diversity_anubis(
     # print_unique_pts(queries_anubis_1, "attack", "ANUBIS")
 
     # T-SNE
-    save_tsne(df_0, "normal", "ANUBIS")
-    save_tsne(df_1, "attack", "ANUBIS")
+    print_dataset_tsne(df_0, "normal", "ANUBIS", n_sampling=n_sampling_tsne)
+    print_dataset_tsne(df_1, "attack", "ANUBIS", n_sampling=n_sampling_tsne)
+
+    # # Diversity Lai
+    # print_dataset_divlai(df_0, "normal", "ANUBIS")
+    # print_dataset_divlai(df_1, "attack", "ANUBIS")
 
 
 def get_diversity_wafamole(
@@ -239,26 +280,27 @@ def get_diversity_wafamole(
     fp_attacks: str,
     samples_0: Union[int, None] = None,
     samples_1: Union[int, None] = None,
-):  
-    # This is too long to parse each time, let's also save them as pickles. 
+    n_sampling_tsne: Union[int, None] = None,
+):
+    # This is too long to parse each time, let's also save them as pickles.
     fp_patks = "../output/parsed-wafamole-attacks.pkl"
     fp_psane = "../output/parsed-wafamole-sane.pkl"
 
     if os.path.isfile(fp_patks):
         attacks = pd.read_pickle(fp_patks)
-    else: 
+    else:
         attack = open(fp_attacks, "r").read()
         attacks = sqlparse.split(attack)
         pd.to_pickle(attacks, fp_patks)
-    
-    
+
     if os.path.isfile(fp_psane):
         sanes = pd.read_pickle(fp_psane)
-    else: 
+    else:
         sane = open(fp_sane, "r").read()
         sanes = sqlparse.split(sane)
         pd.to_pickle(sanes, fp_psane)
 
+    random.seed(42)
     if samples_0 and samples_1:
         attacks = random.sample(attacks, samples_0)
         sanes = random.sample(sanes, samples_1)
@@ -274,14 +316,19 @@ def get_diversity_wafamole(
     df_0 = pd.DataFrame(sanes, columns=["full_query"])
 
     # T-SNE
-    save_tsne(df_0, "normal", "WAFAMOLE")
-    save_tsne(df_1, "attack", "WAFAMOLE")
+    print_dataset_tsne(df_0, "normal", "WAFAMOLE", n_sampling=n_sampling_tsne)
+    print_dataset_tsne(df_1, "attack", "WAFAMOLE", n_sampling=n_sampling_tsne)
+    
+    # # Diversity Lai
+    # print_dataset_divlai(df_0, "normal", "WAFAMOLE")
+    # print_dataset_divlai(df_1, "attack", "WAFAMOLE")
 
 
 def get_diversity_kaggle(
     fp_kaggle: str,
     samples_0: Union[int, None] = None,
     samples_1: Union[int, None] = None,
+    n_sampling_tsne: Union[int, None] = None,
 ):  # We used: https://www.kaggle.com/datasets/sajid576/sql-injection-dataset
     # It does not require preprocessing as it is well formatted.
     df_kaggle = pd.read_csv(fp_kaggle)
@@ -304,27 +351,73 @@ def get_diversity_kaggle(
     # print_unique_pts(queries_kaggle_0, "normal", "Kaggle")
     # print_unique_pts(queries_kaggle_1, "attack", "Kaggle")
 
-    df_0.rename(columns={"Query": "full_query"},inplace=True)
-    df_1.rename(columns={"Query": "full_query"},inplace=True)
+    df_0.rename(columns={"Query": "full_query"}, inplace=True)
+    df_1.rename(columns={"Query": "full_query"}, inplace=True)
 
     # T-SNE
-    save_tsne(df_0, "normal", "Kaggle")
-    save_tsne(df_1, "attack", "Kaggle")
+    print_dataset_tsne(df_0, "normal", "Kaggle", n_sampling=n_sampling_tsne)
+    print_dataset_tsne(df_1, "attack", "Kaggle", n_sampling=n_sampling_tsne)
 
+    # # Diversity Lai
+    # print_dataset_divlai(df_0, "normal", "Kaggle")
+    # print_dataset_divlai(df_1, "attack", "Kaggle")
 
-# def build_tsne_figures_all_datasets():
-#     # Using the saved pickles, build a TSNE figure with all datasets
-#     datasets = ["Kaggle", "ANUBIS", "WAFAMOLE"]
+def build_tsne_figures_all_datasets():
+    # Using the saved pickles, build a TSNE figure with all datasets
+    # Order matters bc ANUBIS will be plotted first.
+    datasets = ["ANUBIS", "WAFAMOLE", "Kaggle"]
+    labels = []
+    embeddings = []
 
-#     for dataset in datasets:
-#         with open(f"../output/tsne-{dataset}-normal.pkl", "rb") as f:
-#             results = pickle.load(f)
-#         # tsne_embeddings = results["tsne_embeddings"]
+    for dataset in datasets:
+        with open(f"../output/tsne-{dataset}-normal.pkl", "rb") as f:
+            r = pickle.load(f)
+            _tembeddings = r["embeddings"]
+            embeddings.append(_tembeddings)
+            labels.extend([dataset] * _tembeddings.shape[0])
+
+    embeddings = np.vstack(embeddings)
+    labels = np.array(labels)
+
+    # joint t-SNE
+    tsne = TSNE(
+        n_components=2,
+        random_state=42,
+        perplexity=min(50, len(labels) - 1),
+        verbose=1,
+        n_jobs=-1,
+    )
+    tsne_embeddings = tsne.fit_transform(embeddings)
+
+    plt.figure(figsize=(12, 8))
+    colors = {"Kaggle": "blue", "ANUBIS": "green", "WAFAMOLE": "red"}
+
+    for dataset in datasets:
+        idx = labels == dataset
+        plt.scatter(
+            tsne_embeddings[idx, 0],
+            tsne_embeddings[idx, 1],
+            label=dataset,
+            c=colors.get(dataset, "gray"),
+            alpha=0.7,
+            s=40,
+        )
+
+    plt.title("t-SNE of Normal Embeddings from All Datasets")
+    plt.xlabel("t-SNE Component 1")
+    plt.ylabel("t-SNE Component 2")
+    plt.legend(title="Dataset")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("../output/tsne-all-datasets-normal.png", dpi=300)
+    plt.close()
+
+    print("Saved to ../output/tsne-all-datasets-normal.png")
 
 
 def main():
-    samples_0 = 64
-    samples_1 = 64
+    samples_0 = 20000
+    samples_1 = 20000
     Path("../output").mkdir(exist_ok=True, parents=True)
 
     wafamole_sane_path = "../../original_wafamole_dataset/sane.sql"
@@ -332,17 +425,20 @@ def main():
     kaggle_path = "../Modified_SQL_Dataset.csv"
 
     anubis_path = "../dataset.csv"
-
+    n_sampling_tsne = None
     # We want to observe the same metrics with datasets of similar size: we randomly
     # sample from WAFAMOLE and Superviz number of samples present in Kaggle.
 
-
-    get_diversity_anubis(anubis_path, samples_0, samples_1)
+    get_diversity_anubis(anubis_path, samples_0, samples_1, n_sampling_tsne)
     get_diversity_wafamole(
-        wafamole_sane_path, wafamole_attacks_path, samples_0, samples_1
+        wafamole_sane_path,
+        wafamole_attacks_path,
+        samples_0,
+        samples_1,
+        n_sampling_tsne,
     )
-    get_diversity_kaggle(kaggle_path, samples_0, samples_1)
-    # build_tsne_figures_all_datasets()
+    get_diversity_kaggle(kaggle_path, samples_0, samples_1, n_sampling_tsne)
+    build_tsne_figures_all_datasets()
 
 
 if __name__ == "__main__":
