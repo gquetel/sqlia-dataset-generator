@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 import matplotlib.pyplot as plt
+from sklearn.metrics import pairwise_distances
 import numpy as np
 import pandas as pd
 import pickle
@@ -13,6 +14,7 @@ import sqlparse
 import sys
 import torch
 from scipy.stats import gmean
+from scipy.spatial.distance import pdist
 
 from typing import Union
 from transformers import RobertaTokenizerFast, RobertaModel
@@ -391,7 +393,7 @@ def build_tsne_figures_all_datasets(datasets: list, ldf: list, type: str):
     colors = {"Kaggle": "blue", "ANUBIS": "green", "WAFAMOLE": "red"}
 
     fig, axes = plt.subplots(
-        1, len(perplexities) , figsize=(10 * len(perplexities), 10)
+        1, len(perplexities), figsize=(10 * len(perplexities), 10)
     )
     fig.subplots_adjust(hspace=0.4)
 
@@ -437,9 +439,21 @@ def build_tsne_figures_all_datasets(datasets: list, ldf: list, type: str):
     print(f"Saved combined figure to {output_path}")
 
 
+def get_Div_sem(datasets: list, ldf: list, type: str):
+    # From: https://aclanthology.org/2024.findings-naacl.228.pdf
+    for dataset_name, df in zip(datasets, ldf):
+        _embeddings = compute_and_save_embeddings(df=df)
+        pairwise_distances = pdist(_embeddings, metric="cosine")
+        div_sem = np.mean(pairwise_distances)
+
+        print(
+            f"Semantic Diversity of {type} for dataset {dataset_name} using cosing distance: {div_sem}"
+        )
+
+
 def main():
-    samples_0 = 1000
-    samples_1 = 1000
+    samples_0 = 5000
+    samples_1 = 5000
     Path("../output").mkdir(exist_ok=True, parents=True)
 
     wafamole_sane_path = "../../original_wafamole_dataset/sane.sql"
@@ -480,9 +494,13 @@ def main():
     ldf_0.append(df_k0)
     ldf_1.append(df_k1)
 
-    build_tsne_figures_all_datasets(l_dname, ldf_0, "normal")
-    build_tsne_figures_all_datasets(l_dname, ldf_1, "attack")
 
+
+    # build_tsne_figures_all_datasets(l_dname, ldf_0, "normal")
+    # build_tsne_figures_all_datasets(l_dname, ldf_1, "attack")
+    
+    get_Div_sem(l_dname, ldf_0, "normal")
+    get_Div_sem(l_dname, ldf_1, "attack")
 
 if __name__ == "__main__":
     main()
