@@ -3,7 +3,6 @@ import logging
 import os
 from pathlib import Path
 import matplotlib.pyplot as plt
-from sklearn.metrics import pairwise_distances
 import numpy as np
 import pandas as pd
 import pickle
@@ -343,8 +342,15 @@ def get_diversity_kaggle(
     df_1 = df_kaggle[df_kaggle["Label"] == 1]
 
     if samples_0 and samples_1:
-        df_0 = df_0.sample(n=samples_0, random_state=42)
-        df_1 = df_1.sample(n=samples_1, random_state=42)
+        if samples_0 > df_0.shape[0]:
+            print(f"Too big sample value to sample from, used all samples instead")
+        else:
+            df_0 = df_0.sample(n=samples_0, random_state=42)
+
+        if samples_1 > df_1.shape[0]:
+            print(f"Too big sample value to sample from, used all samples instead")
+        else:
+            df_1 = df_1.sample(n=samples_1, random_state=42)
 
     queries_kaggle_0 = df_0["Query"].to_list()
     queries_kaggle_1 = df_1["Query"].to_list()
@@ -494,13 +500,12 @@ def main():
     ldf_0.append(df_k0)
     ldf_1.append(df_k1)
 
-
-
     # build_tsne_figures_all_datasets(l_dname, ldf_0, "normal")
     # build_tsne_figures_all_datasets(l_dname, ldf_1, "attack")
-    
+
     get_Div_sem(l_dname, ldf_0, "normal")
     get_Div_sem(l_dname, ldf_1, "attack")
+
 
 if __name__ == "__main__":
     main()
