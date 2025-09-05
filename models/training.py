@@ -336,7 +336,7 @@ def compute_metrics_ae(
     # Add keys of recall dict to d_res and save it.
     d_res.update(d_res_recall)
     training_results.append(d_res)
-
+    
     return l_test, s_test
 
 
@@ -635,6 +635,17 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
         model, df_test=df_test, df_val=df_val, model_name=model_name
     )
 
+def save_results(args):
+    dfres = pd.DataFrame(training_results)
+    filename = "output/results"
+
+    if args.gpu:
+        filename += "-gpu"
+    if args.on_user_inputs:
+        filename += "-on-user-inputs"
+
+    filename += ".csv"
+    dfres.to_csv(filename, index=False)
 
 def train_models(
     df_train: pd.DataFrame,
@@ -659,37 +670,47 @@ def train_models(
         df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
     )
     models["Li and OCSVM"] = (labels, scores)
+    save_results(args=args)
+
     labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and LOF "] = (labels, scores)
+    save_results(args=args)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
     models["CountVectorizer and OCSVM"] = (labels, scores)
+    save_results(args=args)
 
     # We keep this one without scaler, it has the best results.
     labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True)
     models["Li and LOF"] = (labels, scores)
+    save_results(args=args)
 
     # AE is behaving way better with scaling
     labels, scores = train_ae_li(
         df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
     )
     models["Li and AE"] = (labels, scores)
+    save_results(args=args)
 
     # AE is behaving way better with scaling
     labels, scores = train_ae_cv(
         df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
     )
     models["CountVectorizer and AE"] = (labels, scores)
+    save_results(args=args)
 
-    labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and OCSVM"] = (labels, scores)
+    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and OCSVM"] = (labels, scores)
+    # save_results(args=args)
 
-    labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and LOF"] = (labels, scores)
+    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and LOF"] = (labels, scores)
+    # save_results(args=args)
 
-    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and AE"] = (labels, scores)
+    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["SBERT and AE"] = (labels, scores)
+    # save_results(args=args)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
@@ -714,18 +735,6 @@ def train_models(
         l_model_names=names_list,
         project_paths=project_paths,
     )
-
-    # Finally, save results to csv.
-    dfres = pd.DataFrame(training_results)
-    filename = "output/results"
-
-    if args.gpu:
-        filename += "-gpu"
-    if args.on_user_inputs:
-        filename += "-on-user-inputs"
-
-    filename += ".csv"
-    dfres.to_csv(filename, index=False)
 
 
 if __name__ == "__main__":
