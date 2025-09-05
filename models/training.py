@@ -636,16 +636,17 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     )
 
 def save_results(args):
-    dfres = pd.DataFrame(training_results)
-    filename = "output/results"
+    dfres = pd.DataFrame(training_results)   
+    resdir = project_paths.output_path
+    filepath = f"{resdir}/results"
 
     if args.gpu:
-        filename += "-gpu"
+        filepath += "-gpu"
     if args.on_user_inputs:
-        filename += "-on-user-inputs"
+        filepath += "-on-user-inputs"
 
-    filename += ".csv"
-    dfres.to_csv(filename, index=False)
+    filepath += ".csv"
+    dfres.to_csv(filepath, index=False)
 
 def train_models(
     df_train: pd.DataFrame,

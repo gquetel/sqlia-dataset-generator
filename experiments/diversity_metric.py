@@ -72,6 +72,8 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
             cnt_prserr += 1
         except sqlglot.errors.TokenError as e:
             cnt_prserr += 1
+        except KeyError as e: 
+            cnt_prserr+=1
 
     logging.disable(logging.NOTSET)
 
