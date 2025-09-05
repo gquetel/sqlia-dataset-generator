@@ -6,6 +6,14 @@ let
     # config.cudaSupport = true;
   };
 
+   sqlmap = pkgs.python3Packages.sqlmap.overridePythonAttrs (oldAttrs: {
+    propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
+      pkgs.python3Packages.sqlalchemy 
+      pkgs.python3Packages.pymysql 
+    ];
+  });
+
+
   mysql-connector =
     let
       pname = "mysql-connector-python";
@@ -59,9 +67,10 @@ in
 pkgs.mkShell rec {
   packages = [
     pythonEnv
-    pkgs.sqlmap
     pkgs.percona-toolkit
     pkgs.mysql84
+    pkgs.metasploit
+    sqlmap
   ];
 
   allowUnfree = true;

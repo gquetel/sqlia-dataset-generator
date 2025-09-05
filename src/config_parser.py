@@ -5,12 +5,16 @@ from fractions import Fraction
 def get_mysql_info(config: configparser.ConfigParser):
     user = config.get("MYSQL", "user")
     pwd = config.get("MYSQL", "password")
-    socket_path = config.get("MYSQL", "socket_path")
-    root_password = config.get("MYSQL","root_password")
-    return user, pwd, socket_path,root_password
+    host = config.get("MYSQL", "host")
+    port = config.get("MYSQL", "port")
+    priv_user = config.get("MYSQL", "priv_user")
+    priv_pwd = config.get("MYSQL", "priv_pwd")
+    return user, pwd, host, port, priv_user, priv_pwd
+
 
 def get_seed(config: configparser.ConfigParser):
     return int(config.get("GENERAL", "seed"))
+
 
 def get_attacks_ratio(config: configparser.ConfigParser):
     return float(Fraction(config.get("GENERAL", "attacks_ratio")))

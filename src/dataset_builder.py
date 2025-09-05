@@ -9,7 +9,9 @@ import re
 import shutil
 
 from tqdm import tqdm
-from .sqlmap_generator import sqlmapGenerator
+
+from .ithreat_generator import iThreatGenerator
+from .sqlia_generator import sqlmapGenerator
 
 from .sql_query_server import TemplatedSQLServer
 from .db_cnt_manager import SQLConnector
@@ -86,7 +88,9 @@ class DatasetBuilder:
     def get_all_templates(self) -> pd.DataFrame:
         """Return all statements templates from generation settings."""
         used_databases = config_parser.get_used_databases(self.config)
-        statements_type = config_parser.get_statement_types_and_proportions(self.config)
+        statements_type = config_parser.get_statement_types_and_proportions(
+            self.config
+        )
         _all_templates = pd.DataFrame()
 
         for db in used_databases:
@@ -141,12 +145,11 @@ class DatasetBuilder:
         # Also, a special case for template airport-S23,
         # for which we do not generate attacks either.
         self.df_tno = pd.concat([self.df_tno, as23_template])
-        self.templates = self.templates.drop(self.df_tno.index,errors="ignore")
-        
-        # Sample templates for df_test: DEPRECATED, useless, but no time to 
-        # properly remove stuff. 
-        self.df_templates_test = self.templates.sample(n=0)
+        self.templates = self.templates.drop(self.df_tno.index, errors="ignore")
 
+        # Sample templates for df_test: DEPRECATED, useless, but no time to
+        # properly remove stuff.
+        self.df_templates_test = self.templates.sample(n=0)
 
     def _add_split_column(self):
         """Add a split column information for unsupervised dataset generation
@@ -208,7 +211,8 @@ class DatasetBuilder:
 
         type_counts = _dft.groupby("statement_type").size()
         _dft["normalized_weight"] = _dft.apply(
-            lambda row: row["proportion"] / type_counts[row["statement_type"]], axis=1
+            lambda row: row["proportion"] / type_counts[row["statement_type"]],
+            axis=1,
         )
         self._df_templates_n = _dft.sample(
             n=n_n, replace=True, weights="normalized_weight"
@@ -436,7 +440,6 @@ class DatasetBuilder:
             port=server_port,
         )
         generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
-        # input()
         server.stop_server()
 
         self._n_attacks = len(generated_attack_queries)
@@ -473,6 +476,20 @@ class DatasetBuilder:
         mask_admin_samples = self.df["query_template_id"].isin(admin_ids)
         self.df.loc[mask_admin_samples, "user_inputs"] = ""
 
+    def build_ithreat(self, args):
+        self.df = self.generate_ithreat(args)
+
+    def generate_ithreat(self, args):
+        if self.sqlc == None:
+            self.sqlc = SQLConnector(self.config)
+
+        itg = iThreatGenerator(self.config, self.sqlc)
+
+        # df_metasploit = itg.perform_internal_attack_metasploit()
+        df_sqlmap = itg.perform_internal_attack_sqlmap()
+
+        return pd.concat([df_sqlmap])
+
     def build(self, args):
         testing_mode = args.testing
         debug_mode = args.debug
@@ -503,7 +520,9 @@ class DatasetBuilder:
 
         self._remove_contradictions()
         self._remove_user_input_admin()
+        df_ithreat = self.generate_ithreat(args)
+        self.df = pd.concat([self.df, df_ithreat])
 
     def save(self):
         self.df.to_csv(self.outpath, index=False)
-        # self._clean_cache_folder()
+        self._clean_cache_folder()

@@ -61,8 +61,8 @@ class sqlmapGenerator:
 
     def _run_pt_kill(self):
         ptkill_command = (
-            f"pt-kill --kill-query --user=root --password={self.sqlc.rpwd} --interval 1"
-            f" --socket={self.sqlc.socket_path} --database "
+            f"pt-kill --kill-query --user=root --password={self.sqlc.priv_pwd} --interval 1"
+            f" --host={self.sqlc.host} --port={self.sqlc.port} --database "
             f"{self.sqlc.database} --busy-time 5s --run-time 10s --print"
         )
         logger.debug(f"{ptkill_command}")
@@ -216,7 +216,9 @@ class sqlmapGenerator:
                     for _ in range(10)
                 ]
             else:
-                ran_values = random.choices(self.pdl[(schema_name, param_no_sx)], k=10)
+                ran_values = random.choices(
+                    self.pdl[(schema_name, param_no_sx)], k=10
+                )
 
             values_str = str(ran_values).replace('"', '\\"')
             e_str += f"{param}=random.choice({values_str});"
@@ -400,7 +402,9 @@ class sqlmapGenerator:
         )
         return _df
 
-    def perform_attack(self, technique: tuple, template_info: dict, debug_mode: bool):
+    def perform_attack(
+        self, technique: tuple, template_info: dict, debug_mode: bool
+    ):
         """Orchestrates a full SQLI attack for a given technique and query template.
 
         This function runs both reconnaissance and exploitation phases of an SQL
@@ -437,7 +441,9 @@ class sqlmapGenerator:
                     secrets.choice(alphabet) for i in range(20)
                 )
             else:
-                random_param_value = random.choice(self.pdl[(schema_name, param_no_sx)])
+                random_param_value = random.choice(
+                    self.pdl[(schema_name, param_no_sx)]
+                )
 
             params[param] = random_param_value
 

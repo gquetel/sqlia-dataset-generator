@@ -4,13 +4,16 @@ import mysql
 
 from .config_parser import get_mysql_info
 
+
 class SQLConnector:
     def __init__(self, config: configparser.ConfigParser):
-        user, pwd, socket_path, rpwd = get_mysql_info(config=config)
+        user, pwd, host, port, priv_user, priv_pwd = get_mysql_info(config=config)
         self.user = user
         self.pwd = pwd
-        self.socket_path = socket_path
-        self.rpwd = rpwd
+        self.host = host
+        self.port = port
+        self.priv_user = priv_user
+        self.priv_pwd = priv_pwd
         self.database = "dataset"
         self.init_new_cnx()
 
@@ -21,7 +24,8 @@ class SQLConnector:
         self.cnx = mysql.connector.connect(
             user=self.user,
             password=self.pwd,
-            unix_socket=self.socket_path,
+            host=self.host,
+            port=self.port,
             database=self.database,
             read_timeout=10,
         )
@@ -41,6 +45,25 @@ class SQLConnector:
         with self.cnx.cursor(buffered=True) as cur:
             # Set maximum execution time of 10 sec (only applies to SELECT statements).
             cur.execute("SET SESSION MAX_EXECUTION_TIME=10000")
+            cur.execute(query)
+            for _, result_set in cur.fetchsets():
+                results.append(result_set)
+        return results
+
+    def execute_priv_query(self, query):
+        # Initialize a privileged connection.
+        cnx = mysql.connector.connect(
+            user=self.priv_user,
+            password=self.priv_pwd,
+            host=self.host,
+            port=self.port,
+            database=self.database,
+            read_timeout=10,
+        )
+
+        results = []
+        self.sent_queries.append(query)
+        with cnx.cursor(buffered=True) as cur:
             cur.execute(query)
             for _, result_set in cur.fetchsets():
                 results.append(result_set)

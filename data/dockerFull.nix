@@ -45,7 +45,7 @@ let
         ps.numpy
         ps.tqdm
         ps.scikit-learn
-        
+
         # Used for training / evaluation
         ps.matplotlib
         ps.matplotlib-venn
@@ -54,8 +54,8 @@ let
         # Notebooks
         ps.ipykernel
         ps.jupyter
-        
-        # Diversity metric + 
+
+        # Diversity metric +
         ps.sqlglot
         ps.sqlparse
 
@@ -99,12 +99,13 @@ pkgs.dockerTools.buildImage {
       # The root password must match the 'root_password' option in ini.ini
       (pkgs.writeTextFile {
         name = "setup-mysql";
+        # TODO: Remove socket usage, use port.
         text = ''
           #!${pkgs.runtimeShell}
           mysqld --initialize-insecure --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/
-          mysqld --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --socket=/usr/local/mysqld_1/socket --daemonize
-          mysql -u root --skip-password --socket=/usr/local/mysqld_1/socket -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'verysecurepwd'";
-          mysql --user=root  --socket=/usr/local/mysqld_1/socket < ./data/init_db.sql --password="verysecurepwd"
+          mysqld --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --port=61337 --daemonize
+          mysql -u root --skip-password --host=localhost --port=61337 -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'";
+          mysql --user=root --password=root --host=localhost --port=61337 < ./data/init_db.sql
         '';
         destination = "/generator/setup-mysql.sh";
         executable = true;
@@ -160,11 +161,14 @@ pkgs.dockerTools.buildImage {
     ${pkgs.dockerTools.shadowSetup}
     groupadd -r nobody
     useradd -r -g nobody nobody
+    mkdir -p /run/mysqld
     mkdir -p /usr/local/mysqld_1/
+
     chmod 777 /tmp
     chmod -R 755 /generator 
     chown -R nobody:nobody /generator
     chown -R nobody:nobody /usr/local/mysqld_1/
+    chown -R nobody:nobody /run/mysqld
   '';
 
   # Container RunConfig Field Descriptions, available fields listed in [1]

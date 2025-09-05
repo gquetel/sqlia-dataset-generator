@@ -54,6 +54,12 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="The correct syntax of normal queries will not be verified, this speed up their generation.",
     )
+        
+    parser.add_argument(
+        "--ithreat-only",
+        action="store_true",
+        help="Only generate internal threat queries.",
+    )
 
 
     return parser.parse_args()
@@ -71,9 +77,12 @@ def main():
     args = init_args()
     init_logging(args.debug)
     config = init_config(args)
-    
     db = DatasetBuilder(config)
-    db.build(args)
+
+    if args.ithreat_only: 
+        db.build_ithreat(args)
+    else:
+        db.build(args)
     
     db.save()
     

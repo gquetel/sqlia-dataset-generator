@@ -94,6 +94,7 @@ bash-5.2$
 ```
 
 ### MySQL Initialization
+TODO: Update documentation to remove socket usage. 
 
 We require that a MySQL server has been installed and initialized as depicted in the [documentation](https://dev.mysql.com/doc/refman/8.4/en/postinstallation.html). Then the server must be running and listening on a socket, specified in [ini.ini](ini.ini). A shell script (`./setup-mysql.sh`) is provided in the docker container to handle the MySQL server initialization, startup, and the setup of tables and users. Otherwise, the MySQL server can be initialized as follows:
 ```

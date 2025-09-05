@@ -8,10 +8,10 @@ let
     owner = "gquetel";
     repo = "sqlia-dataset-generator";
     # We do not use 'v1.0.0-anubis' which correspond to the code with which the dataset
-    # has been generated but a more recent version with bugfixes and features that do 
+    # has been generated but a more recent version with bugfixes and features that do
     # not interfere with the generation code.
-    rev = "95019247e0e450138b321075a63e2f5720cea523";
-    hash = "sha256-kFHkz6Id+OFZQT2qTs1hTyTWAuSwU9L61nwMy20vWOg=";
+    rev = "7511b33d5f855af8be3672dbd40412cf5a2e9d5f";
+    hash = "sha256-uyEMVNC1KvqKaF1HvmFKhpntEEk020FlS5AzqRhiplc=";
   };
 
   # Hack to have the code in /generator rather than directly to root.
@@ -47,7 +47,6 @@ let
         ps.scikit-learn
         ps.sqlglot
         ps.sqlparse
-
       ]
       ++ [ mysql-connector ]
     )).override
@@ -55,6 +54,13 @@ let
         ignoreCollisions = true;
       })
   );
+
+  sqlmap = pkgs.python3Packages.sqlmap.overridePythonAttrs (oldAttrs: {
+    propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
+      pkgs.python3Packages.sqlalchemy 
+      pkgs.python3Packages.pymysql 
+    ];
+  });
 
 in
 
@@ -71,11 +77,13 @@ pkgs.dockerTools.buildImage {
       # Generation dependencies
       pythonEnv
       mysql-connector
-      pkgs.sqlmap
+
+      sqlmap
       pkgs.percona-toolkit
       pkgs.mysql84
       pkgs.perl # required by percona-toolkit
-      
+      pkgs.metasploit
+
       # Generation code
       repo
       # Script rendered available to be run to start mysqld:
@@ -85,9 +93,9 @@ pkgs.dockerTools.buildImage {
         text = ''
           #!${pkgs.runtimeShell}
           mysqld --initialize-insecure --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/
-          mysqld --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --socket=/usr/local/mysqld_1/socket --daemonize
-          mysql -u root --skip-password --socket=/usr/local/mysqld_1/socket -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'verysecurepwd'";
-          mysql --user=root  --socket=/usr/local/mysqld_1/socket < ./data/init_db.sql --password="verysecurepwd"
+          mysqld --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --port=61337 --daemonize
+          mysql -u root --skip-password --host=localhost --port=61337 -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'";
+          mysql --user=root --password=root --host=localhost --port=61337 < ./data/init_db.sql 
         '';
         destination = "/generator/setup-mysql.sh";
         executable = true;
@@ -143,11 +151,15 @@ pkgs.dockerTools.buildImage {
     ${pkgs.dockerTools.shadowSetup}
     groupadd -r nobody
     useradd -r -g nobody nobody
+    mkdir -p /run/mysqld
     mkdir -p /usr/local/mysqld_1/
+
     chmod 777 /tmp
     chmod -R 755 /generator 
     chown -R nobody:nobody /generator
     chown -R nobody:nobody /usr/local/mysqld_1/
+    chown -R nobody:nobody /run/mysqld
+
   '';
 
   # Container RunConfig Field Descriptions, available fields listed in [1]
