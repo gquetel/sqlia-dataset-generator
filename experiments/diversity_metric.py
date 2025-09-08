@@ -301,14 +301,15 @@ def main():
     # From: https://www.kaggle.com/datasets/sajid576/sql-injection-dataset
     kaggle_path = "../Modified_SQL_Dataset.csv"
 
-    # From: https://zenodo.org/records/15744477
-    anubis_path = "../dataset.csv"
+    # From: 
+    anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v7/dataset.csv"
 
     # Diversity metrics to measure:
     compute_vocab = True
     compute_parse_trees = True
     compute_div_sem = True
 
+    
     df_anubis = pd.read_csv(
         anubis_path,
         # dtype is specified to prevent a DtypeWarning
@@ -329,11 +330,11 @@ def main():
     process_dataset(
         df=df_anubis,
         name="ANUBIS",
-        samples_0=samples_0,
-        samples_1=samples_1,
+        # samples_0=samples_0,
+        # samples_1=samples_1,
         vocab=compute_vocab,
         parse_trees=compute_parse_trees,
-        div_sem=compute_div_sem,
+        # div_sem=compute_div_sem,
     )
 
     df_kaggle = pd.read_csv(kaggle_path)
@@ -342,11 +343,11 @@ def main():
         name="Kaggle",
         query_column="Query",
         label_column="Label",
-        samples_0=samples_0,
-        samples_1=samples_1,
+        # samples_0=samples_0,
+        # samples_1=samples_1,
         vocab=compute_vocab,
         parse_trees=compute_parse_trees,
-        div_sem=compute_div_sem,
+        # div_sem=compute_div_sem,
     )
 
     df_wafamole = load_wafamole_samples(
@@ -355,11 +356,11 @@ def main():
     process_dataset(
         df=df_wafamole,
         name="WAFAMOLE",
-        samples_0=samples_0,
-        samples_1=samples_1,
+        # samples_0=samples_0,
+        # samples_1=samples_1,
         vocab=compute_vocab,
         parse_trees=compute_parse_trees,
-        div_sem=compute_div_sem,
+        # div_sem=compute_div_sem,
     )
 
 
