@@ -58,7 +58,7 @@ def init_args() -> argparse.Namespace:
     parser.add_argument(
         "--ithreat-only",
         action="store_true",
-        help="Only generate internal threat queries.",
+        help="Only generate insider threat queries.",
     )
 
 

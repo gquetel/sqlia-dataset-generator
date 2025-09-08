@@ -52,7 +52,7 @@ class iThreatGenerator:
         # SELECT command_type,argument FROM mysql.general_log
         return queries[:-3]
 
-    def perform_internal_attack_sqlmap(self):
+    def perform_insider_attack_sqlmap(self):
         self.enable_query_logging()
 
         _, _, host, port, priv_user, priv_pwd = get_mysql_info(config=self.config)
@@ -98,12 +98,15 @@ class iThreatGenerator:
                     "label": 1,
                     "user_inputs": "",
                     "attack_stage": "",
-                    "attack_status": "",
+                    # TODO, we could find a way to check whethe exploitation has been 
+                    # performed correctly. For now, there is no errors from the sqlmap
+                    # logs so we hard code their status to "success"...
+                    "attack_status": "success",
                     "tamper_method": "",
-                    "statement_type": "",
+                    "statement_type": "insider",
                     "query_template_id": "",
                     "attack_id": f"ithreat-sqlmap-{cnt_obj}",
-                    "attack_technique": "direct-access",
+                    "attack_technique": "insider",
                     "split" : "test"
                 }
             )
@@ -114,7 +117,7 @@ class iThreatGenerator:
         self.disable_query_logging()
         return df_res
 
-    def perform_internal_attack_metasploit(self):
+    def perform_insider_attack_metasploit(self):
         if shutil.which("msfconsole") is None:
             logger.warning(
                 "msfconsole command not found, skipping metasploit generation"
@@ -144,7 +147,7 @@ class iThreatGenerator:
             f'exit"'
         )
 
-        # Other scenarios does not fit with internal threats: scanning.
+        # Other scenarios does not fit with insider threats
         scenarios = [sc_schemadump, sc_userdump]
         # Quiet, command mode
         base_command = "msfconsole -q -x "
@@ -177,12 +180,12 @@ class iThreatGenerator:
                     "label": 1,
                     "user_inputs": "",
                     "attack_stage": "",
-                    "attack_status": "",
+                    "attack_status": "success",
                     "tamper_method": "",
-                    "statement_type": "internal",
+                    "statement_type": "insider",
                     "query_template_id": "",
                     "attack_id": f"ithreat-msf-{cnt_obj}",
-                    "attack_technique": "direct-access",
+                    "attack_technique": "insider",
                 }
             )
             cnt_obj += 1

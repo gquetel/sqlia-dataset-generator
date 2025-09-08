@@ -485,8 +485,8 @@ class DatasetBuilder:
 
         itg = iThreatGenerator(self.config, self.sqlc)
 
-        # df_metasploit = itg.perform_internal_attack_metasploit()
-        df_sqlmap = itg.perform_internal_attack_sqlmap()
+        # df_metasploit = itg.perform_insider_attack_metasploit()
+        df_sqlmap = itg.perform_insider_attack_sqlmap()
 
         return pd.concat([df_sqlmap])
 

@@ -419,7 +419,7 @@ class sqlmapGenerator:
                 including ID, placeholders, and statement type.
 
         Returns:
-            None: Updates the internal generated_attacks DataFrame with the attack
+            None: Updates the insider generated_attacks DataFrame with the attack
                 results.
         """
         # Load all information to build the sqlmap command.
