@@ -97,7 +97,7 @@ class iThreatGenerator:
                     "full_query": queries,
                     "label": 1,
                     "user_inputs": "",
-                    "attack_stage": "",
+                    "attack_stage": "exploit",
                     # TODO, we could find a way to check whethe exploitation has been 
                     # performed correctly. For now, there is no errors from the sqlmap
                     # logs so we hard code their status to "success"...
@@ -179,7 +179,7 @@ class iThreatGenerator:
                     "full_query": queries,
                     "label": 1,
                     "user_inputs": "",
-                    "attack_stage": "",
+                    "attack_stage": "exploit",
                     "attack_status": "success",
                     "tamper_method": "",
                     "statement_type": "insider",
