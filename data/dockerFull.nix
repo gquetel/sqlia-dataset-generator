@@ -7,11 +7,8 @@ let
   rawRepo = pkgs.fetchFromGitHub {
     owner = "gquetel";
     repo = "sqlia-dataset-generator";
-    # We do not use 'v1.0.0-anubis' which correspond to the code with which the dataset
-    # has been generated but a more recent version with bugfixes and features that do
-    # not interfere with the generation code (see commit history).
-    rev = "95019247e0e450138b321075a63e2f5720cea523";
-    hash = "sha256-kFHkz6Id+OFZQT2qTs1hTyTWAuSwU9L61nwMy20vWOg=";
+    rev = "847b121a836de7cbafe0cddef078c8ca40838eb9";
+    hash = "sha256-Q6PYeJyImQPK9PNW/q/zpp3scw4J9UIpidMUXg+rgqc=";
   };
 
   # Hack to have the code in /generator rather than directly to root.
@@ -64,7 +61,6 @@ let
         ps.evaluate
         ps.torch
         ps.transformers
-
       ]
       ++ [ mysql-connector ]
     )).override
@@ -72,6 +68,13 @@ let
         ignoreCollisions = true;
       })
   );
+
+  sqlmap = pkgs.python3Packages.sqlmap.overridePythonAttrs (oldAttrs: {
+    propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
+      pkgs.python3Packages.sqlalchemy
+      pkgs.python3Packages.pymysql
+    ];
+  });
 
 in
 
@@ -88,10 +91,12 @@ pkgs.dockerTools.buildImage {
       # Generation dependencies
       pythonEnv
       mysql-connector
-      pkgs.sqlmap
+
+      sqlmap
       pkgs.percona-toolkit
       pkgs.mysql84
       pkgs.perl # required by percona-toolkit
+      # Not used: pkgs.metasploit
 
       # Generation code
       repo
@@ -99,13 +104,12 @@ pkgs.dockerTools.buildImage {
       # The root password must match the 'root_password' option in ini.ini
       (pkgs.writeTextFile {
         name = "setup-mysql";
-        # TODO: Remove socket usage, use port.
         text = ''
           #!${pkgs.runtimeShell}
           mysqld --initialize-insecure --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/
           mysqld --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ --port=61337 --daemonize
           mysql -u root --skip-password --host=localhost --port=61337 -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'";
-          mysql --user=root --password=root --host=localhost --port=61337 < ./data/init_db.sql
+          mysql --user=root --password=root --host=localhost --port=61337 < ./data/init_db.sql 
         '';
         destination = "/generator/setup-mysql.sh";
         executable = true;
@@ -169,6 +173,7 @@ pkgs.dockerTools.buildImage {
     chown -R nobody:nobody /generator
     chown -R nobody:nobody /usr/local/mysqld_1/
     chown -R nobody:nobody /run/mysqld
+
   '';
 
   # Container RunConfig Field Descriptions, available fields listed in [1]

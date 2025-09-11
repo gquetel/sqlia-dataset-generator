@@ -4,7 +4,7 @@ This repository contains the code used to generate SQL Injection Detection Datas
 
 ## Superviz25-SQL
 
-This code has been used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037). More details on the resulting dataset are available in the paper available at (TODO) and in the [DATASHEET](./DATASHEET.md).
+This code has been used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037). More details on the resulting dataset are available in the paper available at (TODO).
 
 
 ## Dataset Generation Strategy

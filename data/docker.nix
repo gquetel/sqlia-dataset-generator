@@ -7,11 +7,8 @@ let
   rawRepo = pkgs.fetchFromGitHub {
     owner = "gquetel";
     repo = "sqlia-dataset-generator";
-    # We do not use 'v1.0.0-anubis' which correspond to the code with which the dataset
-    # has been generated but a more recent version with bugfixes and features that do
-    # not interfere with the generation code.
-    rev = "7511b33d5f855af8be3672dbd40412cf5a2e9d5f";
-    hash = "sha256-uyEMVNC1KvqKaF1HvmFKhpntEEk020FlS5AzqRhiplc=";
+    rev = "847b121a836de7cbafe0cddef078c8ca40838eb9";
+    hash = "sha256-Q6PYeJyImQPK9PNW/q/zpp3scw4J9UIpidMUXg+rgqc=";
   };
 
   # Hack to have the code in /generator rather than directly to root.
@@ -82,7 +79,7 @@ pkgs.dockerTools.buildImage {
       pkgs.percona-toolkit
       pkgs.mysql84
       pkgs.perl # required by percona-toolkit
-      pkgs.metasploit
+      # Not used: pkgs.metasploit
 
       # Generation code
       repo
