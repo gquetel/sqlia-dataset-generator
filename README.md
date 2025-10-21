@@ -4,7 +4,24 @@ This repository contains the code used to generate SQL Injection Detection Datas
 
 ## Superviz25-SQL
 
-This code has been used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037). More details on the resulting dataset are available in the paper available at (TODO).
+This code has been used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037). More details on the resulting dataset are available in the paper [Superviz25-SQL: High-Quality Dataset to Empower Unsupervised SQL Injection Detection Systems](https://hal.science/hal-05314211).  If you used the dataset or the code for your research, please cite our paper:
+
+```
+@inproceedings{quetel:hal-05314211,
+  TITLE = {{Superviz25-SQL: High-Quality Dataset to Empower Unsupervised SQL Injection Detection Systems}},
+  AUTHOR = {Quetel, Gregor and Alata, Eric and Gimenez, Pierre-Francois and Robert, Thomas and Pautet, Laurent},
+  URL = {https://hal.science/hal-05314211},
+  BOOKTITLE = {{ANUBIS 2025 - 1st International Workshop on Assessment with New methodologies, Unified Benchmarks, and environments, of Intrusion detection and response Systems}},
+  ADDRESS = {Toulouse, France},
+  PAGES = {1-20},
+  YEAR = {2025},
+  MONTH = Sep,
+  PDF = {https://hal.science/hal-05314211v1/file/anubis.pdf},
+  HAL_ID = {hal-05314211},
+  HAL_VERSION = {v1},
+}
+```
+
 
 
 ## Dataset Generation Strategy
