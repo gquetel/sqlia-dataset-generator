@@ -25,7 +25,11 @@ class ProjectPaths:
         base_path: str,
     ):
         self.base_path = base_path
+        self.subfolder = None 
 
+    def set_subfolder_output_path(self, subfolder : str): 
+        self.subfolder = subfolder
+        
     @property
     def dataset_path(self) -> str:
         return f"{self.base_path}/../dataset.csv"
@@ -33,6 +37,10 @@ class ProjectPaths:
     @property
     def output_path(self) -> str:
         path = f"{self.base_path}/output/"
+        
+        if self.subfolder: 
+            path += f"{self.subfolder}/"
+
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
     

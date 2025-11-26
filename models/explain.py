@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import logging
+import math
 
 from sklearn.metrics import (
     accuracy_score,
@@ -18,6 +19,20 @@ from sklearn.metrics import (
 
 logger = logging.getLogger(__name__)
 
+def get_ci(score, n):
+    """ 
+    From: https://machinelearningmastery.com/confidence-intervals-for-machine-learning/
+    
+    Args:
+        score (_type_): _description_
+        n (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    z = 1.96  # 95%
+    interval = z * math.sqrt((score * (1 - score)) / n)
+    return interval
 
 def print_and_save_metrics_from_treshold(
     labels: np.ndarray,
@@ -36,24 +51,28 @@ def print_and_save_metrics_from_treshold(
 
     p, r, _ = precision_recall_curve(labels, scores, pos_label=1)
     auprc = auc(r, p)
-    
-    fpr, tpr, thresholds = roc_curve(labels, scores)
+
+    fpr, tpr, _ = roc_curve(labels, scores)
     auroc = auc(fpr, tpr)
-    
 
     C = confusion_matrix(labels, preds, labels=[0, 1])
     TN, FP, _, _ = C.ravel()
     FPR = FP / (FP + TN)
     achieved_fpr = f"{FPR* 100:.5f}%"
-    
+
+    auroc_ci = get_ci(auroc, len(scores))
+    auprc_ci = get_ci(auprc, len(scores))
+
     logger.info(f"Metrics for {model_name}.")
     logger.info(f"Accuracy: {accuracy}")
     logger.info(f"F1 Score: {f1}")
     logger.info(f"Precision: {precision}")
     logger.info(f"Recall: {recall}")
     logger.info(f"False Positive Rate: {achieved_fpr}")
-    logger.info(f"AUPRC : {auprc:.4f}")
-    logger.info(f"ROC-AUC: {auroc:.4f}")
+
+    logger.info(f"ROC-AUC: {auroc:.4f}, CI {auroc_ci:.4f}")
+    logger.info(f"AUPRC: {auprc:.4f}, CI {auprc_ci:.4f}")
+
     return (
         {
             "model": model_name,
@@ -64,6 +83,8 @@ def print_and_save_metrics_from_treshold(
             "fpr": achieved_fpr,
             "auprc": f"{auprc:.4f}",
             "rocauc": f"{auroc:.4f}",
+            "auroc_ci": f"{auroc_ci:.4f}",
+            "auprc_ci": f"{auprc_ci:.4f}",
         },
         preds,
     )

@@ -92,6 +92,14 @@ def init_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
+        "--dataset",
+        type=str,
+        dest="dataset",
+        required=True,
+        help="Filepath to the dataset.",
+    )
+
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Prints more details on about model training",
@@ -102,15 +110,38 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="Train algorithm on user inputs rather than full query",
     )
+    
+    # TODO
+    parser.add_argument(
+        "--capture-insider",
+        action="store_true",
+        help="Treat insider attacks as observable (otherwise, they are treated as false negatives)",
+    )
+
 
     parser.add_argument(
-        "--gpu",
-        action="store_true",
-        help="Declare the training of GPU models, change result filename.",
+        "--subfolder",
+        dest="subfolder",
+        help="Save results in output subfolder. Used when computing on multiple nodes to prevent results overwrite.",
     )
+    
+    parser.add_argument(
+        "--testing",
+        action="store_true",
+        help="Reduce dataset size to test correct code execution",
+    )
+
     args = parser.parse_args()
     return args
 
+def set_global_seed():
+    seed = GENERIC.RANDOM_SEED
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 # ------------- MODELS TRAINING -------------
 
@@ -214,6 +245,14 @@ def compute_metrics(
     # We compute all scores for test dataset.
     l_test, s_test = _get_scores_in_batch(df=df_test)
 
+    insider_mask = df_test["attack_technique"].eq("insider")
+    if insider_mask.any():
+        min_score = np.min(s_test)
+        s_test[insider_mask.values] = min_score
+        logger.info(
+            f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
+            "to be treated as false negatives."
+        )
     # We compute all scores for val dataset
     _, s_val = _get_scores_in_batch(df=df_val)
 
@@ -303,6 +342,15 @@ def compute_metrics_ae(
 
     # We compute all scores for test dataset.
     l_test, s_test = _get_scores_in_batch(df=df_test)
+
+    insider_mask = df_test["attack_technique"].eq("insider")
+    if insider_mask.any():
+        min_score = np.min(s_test)
+        s_test[insider_mask.values] = min_score
+        logger.info(
+            f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
+            "to be treated as false negatives."
+        )
     # We compute all scores for val dataset
     _, s_val = _get_scores_in_batch(df=df_val)
     # We infer a treshold given a maximum FPR
@@ -382,6 +430,15 @@ def compute_metrics_sbert(
 
     # We compute all scores for test dataset.
     l_test, s_test = _get_scores_in_batch(df=df_test)
+
+    insider_mask = df_test["attack_technique"].eq("insider")
+    if insider_mask.any():
+        min_score = np.min(s_test)
+        s_test[insider_mask.values] = min_score
+        logger.info(
+            f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
+            "to be treated as false negatives."
+        )
     # We compute all scores for val dataset
     _, s_val = _get_scores_in_batch(df=df_val)
     # We infer a treshold given a maximum FPR
@@ -425,6 +482,7 @@ def train_ocsvm_cv(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    set_global_seed()
     model_name = "CountVectorizer and OCSVM"
     if use_scaler:
         model_name += "-scaler"
@@ -453,6 +511,7 @@ def train_ocsvm_li(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    set_global_seed()
     model_name = "Li and OCSVM"
     if use_scaler:
         model_name += "-scaler"
@@ -467,8 +526,11 @@ def train_ocsvm_li(
         use_scaler=use_scaler,
     )
 
+    df_li_train = df_train.query('attack_technique != "insider"').copy()
+
+
     model.train_model(
-        df=df_train,
+        df=df_li_train,
         model_name=model_name,
         project_paths=project_paths,
     )
@@ -484,10 +546,13 @@ def train_ocsvm_li(
 def train_ocsvm_sbert(
     df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
 ):
+    set_global_seed()
     model_name = "SBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
     model = OCSVM_SecureBERT(device=init_device(), max_iter=10000, batch_size=1024)
-    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
+    df_sbert_train = df_train.query('attack_technique != "insider"').copy()
+
+    model.train_model(df=df_sbert_train, model_name=model_name, project_paths=project_paths)
     return compute_metrics_sbert(
         model=model, df_val=df_val, df_test=df_test, model_name=model_name
     )
@@ -499,6 +564,7 @@ def train_lof_cv(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    set_global_seed()
     model_name = "CountVectorizer and LOF"
     if use_scaler:
         model_name += "-scaler"
@@ -530,6 +596,7 @@ def train_lof_li(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    set_global_seed()
     model_name = "Li and LOF"
     if use_scaler:
         model_name += "-scaler"
@@ -554,6 +621,7 @@ def train_lof_sbert(
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
 ):
+    set_global_seed()
     model_name = "SBERT and LOF"
     logger.info(f"Training model: {model_name}")
     model = LOF_SecureBERT(device=init_device(), n_jobs=n_jobs, batch_size=1024)
@@ -570,6 +638,7 @@ def train_ae_li(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    set_global_seed()
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
     torch.manual_seed(GENERIC.RANDOM_SEED)
@@ -586,7 +655,9 @@ def train_ae_li(
         batch_size=8192,
         use_scaler=use_scaler,
     )
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
+    df_li_train = df_train.query('attack_technique != "insider"').copy()
+
+    model.train_model(df=df_li_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_ae(
         model, df_test=df_test, df_val=df_val, model_name=model_name
     )
@@ -598,6 +669,7 @@ def train_ae_cv(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    set_global_seed()
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
     torch.manual_seed(GENERIC.RANDOM_SEED)
@@ -625,12 +697,15 @@ def train_ae_cv(
 
 
 def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame):
+    set_global_seed()
     model_name = "SBERT and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_SecureBERT(
         device=init_device(), learning_rate=0.001, epochs=100, batch_size=512
     )
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
+    df_sbert_train = df_train.query('attack_technique != "insider"').copy()
+
+    model.train_model(df=df_sbert_train, project_paths=project_paths, model_name=model_name)
     return compute_metrics_sbert(
         model, df_test=df_test, df_val=df_val, model_name=model_name
     )
@@ -640,8 +715,6 @@ def save_results(args):
     resdir = project_paths.output_path
     filepath = f"{resdir}/results"
 
-    if args.gpu:
-        filepath += "-gpu"
     if args.on_user_inputs:
         filepath += "-on-user-inputs"
 
@@ -666,26 +739,26 @@ def train_models(
     # Train models and get their output.
     models = {}
 
-    # We keep this one with scaling, it behaves way better.
-    labels, scores = train_ocsvm_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and OCSVM"] = (labels, scores)
-    save_results(args=args)
+    # # We keep this one with scaling, it behaves way better.
+    # labels, scores = train_ocsvm_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and OCSVM"] = (labels, scores)
+    # save_results(args=args)
 
-    labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and LOF "] = (labels, scores)
-    save_results(args=args)
+    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and LOF "] = (labels, scores)
+    # save_results(args=args)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["CountVectorizer and OCSVM"] = (labels, scores)
-    save_results(args=args)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
+    # models["CountVectorizer and OCSVM"] = (labels, scores)
+    # save_results(args=args)
 
-    # We keep this one without scaler, it has the best results.
-    labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True)
-    models["Li and LOF"] = (labels, scores)
-    save_results(args=args)
+    # # We keep this one without scaler, it has the best results.
+    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True)
+    # models["Li and LOF"] = (labels, scores)
+    # save_results(args=args)
 
     # AE is behaving way better with scaling
     labels, scores = train_ae_li(
@@ -694,12 +767,12 @@ def train_models(
     models["Li and AE"] = (labels, scores)
     save_results(args=args)
 
-    # AE is behaving way better with scaling
-    labels, scores = train_ae_cv(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
-    )
-    models["CountVectorizer and AE"] = (labels, scores)
-    save_results(args=args)
+    # # AE is behaving way better with scaling
+    # labels, scores = train_ae_cv(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
+    # )
+    # models["CountVectorizer and AE"] = (labels, scores)
+    # save_results(args=args)
 
     # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
     # models["SBERT and OCSVM"] = (labels, scores)
@@ -739,13 +812,12 @@ def train_models(
 
 
 if __name__ == "__main__":
-    np.random.seed(GENERIC.RANDOM_SEED)
-    random.seed(GENERIC.RANDOM_SEED)
+    set_global_seed()
     args = init_args()
     init_logging(args)
 
     df = pd.read_csv(
-        project_paths.dataset_path,
+        args.dataset,
         dtype={
             "full_query": str,
             "label": int,
@@ -760,6 +832,11 @@ if __name__ == "__main__":
             "split": str,
         },
     )
+    if args.testing: 
+        df = df.sample(500)
+    
+    if args.subfolder: 
+        project_paths.set_subfolder_output_path(args.subfolder)
 
     if args.on_user_inputs:
         preprocess_for_user_inputs_training(df=df)

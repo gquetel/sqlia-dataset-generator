@@ -8,6 +8,7 @@ cache
 cache-old
 result
 cache/**
+venv-3.12.3
 
 diff.py
 merge.py
