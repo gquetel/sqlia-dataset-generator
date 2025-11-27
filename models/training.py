@@ -1,6 +1,7 @@
 """Definition of ML models configuration."""
 
 import os
+from typing import Any, Callable
 
 from sklearn.model_selection import train_test_split
 
@@ -19,17 +20,29 @@ import sys
 import logging
 from scipy import sparse
 import torch
+from tqdm import tqdm
 
-from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li
-from U_CountVect import LOF_CV, OCSVM_CV, AutoEncoder_CV
-from U_Sentence_BERT import AutoEncoder_SecureBERT, LOF_SecureBERT, OCSVM_SecureBERT
+
+from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li, preprocess_li
+from U_CountVect import (
+    LOF_CV,
+    OCSVM_CV,
+    AutoEncoder_CV,
+    preprocessing_cv,
+)
+from U_Sentence_BERT import (
+    AutoEncoder_SecureBERT,
+    LOF_SecureBERT,
+    OCSVM_SecureBERT,
+    preprocessing_sbert,
+)
 from constants import DotDict, ProjectPaths
 
 from explain import (
+    get_metrics_treshold,
     get_recall_per_attack,
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
-    print_and_save_metrics_from_treshold,
 )
 
 # ------------ Global variables  ------------
@@ -76,7 +89,9 @@ def init_device() -> torch.device:
     USE_CUDA = torch.cuda.is_available()
     device = torch.device("cuda:0" if USE_CUDA else "cpu")
     if USE_CUDA:
-        logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
+        logger.info(
+            "Using device: %s for experiments.", torch.cuda.get_device_name()
+        )
         torch.cuda.set_per_process_memory_fraction(0.99, 0)
     else:
         logger.critical("Using CPU for experiments.")
@@ -110,7 +125,7 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="Train algorithm on user inputs rather than full query",
     )
-    
+
     # TODO
     parser.add_argument(
         "--capture-insider",
@@ -118,13 +133,12 @@ def init_args() -> argparse.Namespace:
         help="Treat insider attacks as observable (otherwise, they are treated as false negatives)",
     )
 
-
     parser.add_argument(
         "--subfolder",
         dest="subfolder",
         help="Save results in output subfolder. Used when computing on multiple nodes to prevent results overwrite.",
     )
-    
+
     parser.add_argument(
         "--testing",
         action="store_true",
@@ -134,6 +148,7 @@ def init_args() -> argparse.Namespace:
     args = parser.parse_args()
     return args
 
+
 def set_global_seed():
     seed = GENERIC.RANDOM_SEED
     random.seed(seed)
@@ -142,6 +157,7 @@ def set_global_seed():
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
 
 # ------------- MODELS TRAINING -------------
 
@@ -175,292 +191,164 @@ def get_threshold_for_max_rate(s_val, max_rate=0.001):
     return np.percentile(s_val, percentile)
 
 
-# @profile
-def compute_metrics(
-    model: OCSVM_Li | OCSVM_CV | LOF_CV | LOF_Li,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    model_name: str,
+# --------------- Generic Evaluation Functions ---------------
+def decision_score_generic(
+    model: OCSVM_Li | LOF_Li | OCSVM_CV | LOF_CV, X: np.ndarray
+):
+    # dists are a distance to the separating hyperplane.
+    # Negative distance is an outlier (attack)
+    # Positive distance is an inlier (normal)
+    dists = model.clf.decision_function(X)
+
+    # Process dists so that positive class is > 0 as asked by
+    # average_precision_score & roc_auc_score
+    return -dists
+
+
+def decision_score_ae(model: AutoEncoder_CV | AutoEncoder_Li, X: np.ndarray):
+    # dists are a distance to the separating hyperplane.
+    # Negative distance is an outlier (attack)
+    # Positive distance is an inlier (normal)
+    dists = model.clf.decision_function(X, is_tensor=True)
+
+    # Process dists so that positive class is > 0 as asked by
+    # average_precision_score & roc_auc_score
+    return -dists
+
+
+def preprocessing_generic_ae(
+    model: AutoEncoder_CV | AutoEncoder_Li | AutoEncoder_SecureBERT,
+    df: pd.DataFrame,
     use_scaler: bool = False,
-):
-    def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        """Return scores and labels for given dataframes, they are computed in batches.
-        Args:
-            df (pd.DataFrame): _description_
-        """
-        batch_size = 10000  # 20k is too much for my laptop for CV
-        all_labels = []
-        all_scores = []
+) -> tuple[torch.Tensor, np.ndarray]:
+    """Preprocess queries from pandas DataFrame, returns tensors and associated labels.
 
-        for start_idx in range(0, len(df), batch_size):
+    Args:
+        model (AutoEncoder_CV | AutoEncoder_Li | AutoEncoder_SecureBERT ): _description_
+        df (pd.DataFrame): _description_
+        use_scaler (bool, optional): Ignored, kept for API compatibilty.. Defaults to False.
+
+    Returns:
+        tuple[torch.Tensor, np.ndarray]: _description_
+    """
+    X, labels = model.preprocess_for_preds(df=df)
+    # The scaling is dealt with internally in `X_to_tensor`.
+    # use_scaler is only kept to fit with how the function is called.
+    X_tensors = model.X_to_tensor(X)
+    return X_tensors, labels
+
+
+def get_scores_generic(
+    df: pd.DataFrame,
+    model,
+    preprocess_fn: Callable[[Any, pd.DataFrame], tuple[np.ndarray, np.ndarray]],
+    score_fn: Callable[[Any, np.ndarray], np.ndarray],
+    batch_size: int | None = None,
+    use_scaler: bool = False,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generic scoring loop."""
+    all_labels, all_scores = [], []
+
+    if batch_size:
+        for start_idx in tqdm(range(0, len(df), batch_size), desc="Scoring batches"):
             end_idx = min(start_idx + batch_size, len(df))
             batch_df = df.iloc[start_idx:end_idx]
-
-            # 0 => pped + original columns
-            df_pped, labels = model.preprocess_for_preds(
-                df=batch_df, drop_og_columns=False
-            )
-
-            # 1 => Probas (ppeds only)
-            df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
-
-            # Some models use scaler some does not. Because we want to keep column information
-            # For some tests, we perform the scaling here after the original columns have been
-            # removed.
-            df_pped_wout_og_cols = df_pped_wout_og_cols.to_numpy()
-
-            if use_scaler:
-                # TODO: better code to prevent back and forth conversions
-                if isinstance(model, (LOF_CV, OCSVM_CV)):
-                    # If CV -> Convert to sparse before transform
-                    f_matrix = sparse.csr_matrix(df_pped_wout_og_cols)
-                    f_matrix = model._scaler.transform(f_matrix)
-                    dists = model.clf.decision_function(f_matrix)
-                else:
-                    # Else, directly transform from numpy.
-                    df_pped_wout_og_cols = model._scaler.transform(df_pped_wout_og_cols)
-                    dists = model.clf.decision_function(df_pped_wout_og_cols)
-            else:
-                dists = model.clf.decision_function(df_pped_wout_og_cols)
-
-            # dists are a distance to the separating hyperplane.
-            # Negative distance is an outlier (attack)
-            # Positive distance is an inlier (normal)
-
-            # 2 => Process dists so that positive class is > 0 as asked by
-            # average_precision_score & roc_auc_score
-            scores = -dists
+            X, labels = preprocess_fn(model, batch_df, use_scaler=use_scaler)
+            scores = score_fn(model, X)
 
             all_labels.extend(labels)
             all_scores.extend(scores)
-            logger.debug(
-                f"Processed batch {start_idx//batch_size + 1}/{(len(df) + batch_size - 1)//batch_size}"
-            )
 
-        all_labels = np.array(all_labels)
-        all_scores = np.array(all_scores)
+    else:
+        X, all_labels = preprocess_fn(model, df, use_scaler=use_scaler)
+        all_scores = score_fn(model, X)
 
-        return all_labels, all_scores
-
-    # We compute all scores for test dataset.
-    l_test, s_test = _get_scores_in_batch(df=df_test)
-
-    insider_mask = df_test["attack_technique"].eq("insider")
-    if insider_mask.any():
-        min_score = np.min(s_test)
-        s_test[insider_mask.values] = min_score
-        logger.info(
-            f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
-            "to be treated as false negatives."
-        )
-    # We compute all scores for val dataset
-    _, s_val = _get_scores_in_batch(df=df_val)
-
-    # We infer a treshold given a maximum FPR
-    threshold = get_threshold_for_max_rate(s_val=s_val)
-    num_above_threshold = np.sum(s_val > threshold)
-    proportion = num_above_threshold / len(s_val)
-    logger.info(
-        f"Chosen threshold {threshold}, leads to {num_above_threshold} samples ({proportion:.1%}) above threshold"
-    )
-
-    # We compute metrics data from test scores, their labels and the treshold
-    d_res, preds = print_and_save_metrics_from_treshold(
-        labels=l_test,
-        scores=s_test,
-        model_name=model_name,
-        threshold=threshold,
-        project_paths=project_paths,
-    )
-
-    # 4 => Compute recall per technique given preds, and add them to d_res
-    # We create an artificial dataframe with attack_techniques, labels and preds
-    _df = pd.DataFrame(
-        {
-            "attack_technique": df_test["attack_technique"],
-            "label": l_test,
-            "preds": preds,
-        }
-    )
-    d_res_recall = get_recall_per_attack(df=_df, model_name=model_name)
-    # Add keys of recall dict to d_res and save it.
-    d_res.update(d_res_recall)
-    training_results.append(d_res)
-
-    return l_test, s_test
+    return np.array(all_labels), np.array(all_scores)
 
 
-def compute_metrics_ae(
-    model: AutoEncoder_CV | AutoEncoder_Li,
-    df_val: pd.DataFrame,
-    df_test: pd.DataFrame,
-    model_name: str,
-):
-    def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        """Process test set in batches of 20k samples to manage memory usage."""
-        batch_size = 4096
-        all_labels = []
-        all_scores = []
-
-        for start_idx in range(0, len(df), batch_size):
-            end_idx = min(start_idx + batch_size, len(df))
-            batch_df = df.iloc[start_idx:end_idx]
-
-            # 0 => pped + original columns
-            df_pped, labels = model.preprocess_for_preds(
-                df=batch_df, drop_og_columns=False
-            )
-
-            # 1 => Probas (ppeds only)
-            df_pped_wout_og_cols = df_pped.drop(batch_df.columns.to_list(), axis=1)
-
-            tensors = model._dataframe_to_tensor_batched(
-                df_pped_wout_og_cols, batch_size=4096
-            )
-            tensors = tensors.to(model.device)
-            dists = model.clf.decision_function(tensors, is_tensor=True)
-
-            # dists are a distance to the separating hyperplane.
-            # Negative distance is an outlier (attack)
-            # Positive distance is an inlier (normal)
-
-            # 2 => Process dists so that positive class is > 0 as asked by
-            # average_precision_score & roc_auc_score
-            scores = -dists
-
-            # Collect results from this batch
-            all_labels.extend(labels)
-            all_scores.extend(scores)
-            logger.debug(
-                f"Processed batch {start_idx//batch_size + 1}/{(len(df) + batch_size - 1)//batch_size}"
-            )
-
-        # 3 => Print metrics
-        all_labels = np.array(all_labels)
-        all_scores = np.array(all_scores)
-        return all_labels, all_scores
-
-    # We compute all scores for test dataset.
-    l_test, s_test = _get_scores_in_batch(df=df_test)
-
-    insider_mask = df_test["attack_technique"].eq("insider")
-    if insider_mask.any():
-        min_score = np.min(s_test)
-        s_test[insider_mask.values] = min_score
-        logger.info(
-            f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
-            "to be treated as false negatives."
-        )
-    # We compute all scores for val dataset
-    _, s_val = _get_scores_in_batch(df=df_val)
-    # We infer a treshold given a maximum FPR
-    threshold = get_threshold_for_max_rate(s_val=s_val)
-    
-    num_above_threshold = np.sum(s_val > threshold)
-    proportion = num_above_threshold / len(s_val)
-    logger.info(
-        f"Chosen threshold {threshold}, leads to {num_above_threshold} samples ({proportion:.1%}) above threshold"
-    )
-
-    # We compute metrics data from test scores, their labels and the treshold
-    d_res, preds = print_and_save_metrics_from_treshold(
-        labels=l_test,
-        scores=s_test,
-        model_name=model_name,
-        threshold=threshold,
-        project_paths=project_paths,
-    )
-
-    # 4 => Compute recall per technique given preds, and add them to d_res
-    # We create an artificial dataframe with attack_techniques, labels and preds
-    _df = pd.DataFrame(
-        {
-            "attack_technique": df_test["attack_technique"],
-            "label": l_test,
-            "preds": preds,
-        }
-    )
-    d_res_recall = get_recall_per_attack(df=_df, model_name=model_name)
-    # Add keys of recall dict to d_res and save it.
-    d_res.update(d_res_recall)
-    training_results.append(d_res)
-    
-    return l_test, s_test
-
-
-def compute_metrics_sbert(
-    model: OCSVM_SecureBERT | LOF_SecureBERT | AutoEncoder_SecureBERT,
+def compute_metrics_generic(
+    model,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
     model_name: str,
-):
-    def _get_scores_in_batch(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        """Process test set in batches of 20k samples to manage memory usage."""
-        batch_size = 10000
-        all_labels = []
-        all_scores = []
+    preprocess_fn: Callable,
+    get_decision_scores_fn: Callable,
+    use_scaler: bool,
+    insider_as_fn: bool = False,
+    use_batches: bool = False,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Generic function to evaluate an anomaly detection model by computing prediction scores,
+    selecting a decision threshold, and logging evaluation metrics.
 
-        for start_idx in range(0, len(df), batch_size):
-            end_idx = min(start_idx + batch_size, len(df))
-            batch_df = df.iloc[start_idx:end_idx]
+    Args:
+        model: Trained anomaly detection model.
+        df_test (pd.DataFrame): Test dataset containing samples and true labels.
+        df_val (pd.DataFrame): Validation dataset used to compute the decision threshold.
+        model_name (str): Identifier used for logging and result tracking.
+        preprocess_fn (Callable): Function that takes (model, batch_df) and returns
+            a tuple (X, labels), where X can be passed to the model for scoring.
+        get_decision_scores_fn (Callable): Function that takes (model, X) and returns
+            anomaly scores (e.g., negative distances to decision boundary).
+        use_scaler (bool): Whether scaling should be used for the features.
+        insider_as_fn (bool): False by default. If set to True, the queries with the
+            attack_technique "insider" will be considered as False Negative: the data
+            collector is not able to collect information for this attack.
 
-            # 0 => pped + original columns
-            df_pped = model.preprocess(df=batch_df, project_paths=project_paths)
-            labels = np.array(df_pped["label"].tolist())
+    Returns:
+        tuple[np.ndarray, np.ndarray]: A tuple containing:
+            - Ground truth labels from the test set.
+            - Computed anomaly scores for the test set.
+    """
+    # Get test and val scores
+    batch = 4096 if use_batches else None
+    l_test, s_test = get_scores_generic(
+        df=df_test,
+        batch_size=batch,
+        model=model,
+        preprocess_fn=preprocess_fn,
+        score_fn=get_decision_scores_fn,
+        use_scaler=use_scaler,
+    )
 
-            # 1 => Probas (ppeds only)
-            labels_inf, dists = model.get_scores(df_pped)
+    _, s_val = get_scores_generic(
+        df=df_val,
+        batch_size=4096,
+        model=model,
+        use_scaler=use_scaler,
+        preprocess_fn=preprocess_fn,
+        score_fn=get_decision_scores_fn,
+    )
 
-            # dists are a distance to the separating hyperplane.
-            # Negative distance is an outlier (attack)
-            # Positive distance is an inlier (normal)
-            scores = -dists
-
-            all_labels.extend(labels)
-            all_scores.extend(scores)
-
-            logger.debug(
-                f"Processed batch {start_idx//batch_size + 1}/{(len(df) + batch_size - 1)//batch_size}"
-            )
-
-        # 3 => Print metrics
-        all_labels = np.array(all_labels)
-        all_scores = np.array(all_scores)
-        return all_labels, all_scores
-
-    # We compute all scores for test dataset.
-    l_test, s_test = _get_scores_in_batch(df=df_test)
-
-    insider_mask = df_test["attack_technique"].eq("insider")
-    if insider_mask.any():
-        min_score = np.min(s_test)
-        s_test[insider_mask.values] = min_score
-        logger.info(
-            f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
-            "to be treated as false negatives."
-        )
-    # We compute all scores for val dataset
-    _, s_val = _get_scores_in_batch(df=df_val)
-    # We infer a treshold given a maximum FPR
+    # Threshold selection
     threshold = get_threshold_for_max_rate(s_val=s_val)
-
     num_above_threshold = np.sum(s_val > threshold)
     proportion = num_above_threshold / len(s_val)
     logger.info(
-        f"Chosen threshold {threshold}, leads to {num_above_threshold} samples ({proportion:.1%}) above threshold"
+        f"Chosen threshold {threshold}, leads to {num_above_threshold} "
+        f"samples ({proportion:.1%}) above threshold"
     )
 
-    # We compute metrics data from test scores, their labels and the treshold
-    d_res, preds = print_and_save_metrics_from_treshold(
+    # Here, set preds where attack_technique = "insider" to min(scores) ->
+    # It should be classifier as normal to be a false negative.
+    if insider_as_fn:
+        insider_mask = df_test["attack_technique"].eq("insider")
+        if insider_mask.any():
+            min_score = np.min(s_test)
+            s_test[insider_mask.values] = min_score
+            logger.info(
+                f"Set {insider_mask.sum()} 'insider' samples to min score ({min_score}) "
+                "to be treated as false negatives."
+            )
+
+    d_res, preds = get_metrics_treshold(
         labels=l_test,
         scores=s_test,
         model_name=model_name,
         threshold=threshold,
-        project_paths=project_paths,
     )
 
-    # 4 => Compute recall per technique given preds, and add them to d_res
-    # We create an artificial dataframe with attack_techniques, labels and preds
+    # Recall per attack
     _df = pd.DataFrame(
         {
             "attack_technique": df_test["attack_technique"],
@@ -468,9 +356,7 @@ def compute_metrics_sbert(
             "preds": preds,
         }
     )
-    d_res_recall = get_recall_per_attack(df=_df, model_name=model_name)
-    # Add keys of recall dict to d_res and save it.
-    d_res.update(d_res_recall)
+    d_res.update(get_recall_per_attack(df=_df, model_name=model_name))
     training_results.append(d_res)
 
     return l_test, s_test
@@ -484,8 +370,10 @@ def train_ocsvm_cv(
 ):
     set_global_seed()
     model_name = "CountVectorizer and OCSVM"
+
     if use_scaler:
         model_name += "-scaler"
+
     logger.info(f"Training model: {model_name}")
     model = OCSVM_CV(
         GENERIC=GENERIC,
@@ -495,13 +383,20 @@ def train_ocsvm_cv(
         max_iter=10000,
         use_scaler=use_scaler,
     )
-    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics(
+    model.train_model(
+        df=df_train, model_name=model_name, project_paths=project_paths
+    )
+
+    return compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
         model_name=model_name,
+        preprocess_fn=preprocessing_cv,
+        get_decision_scores_fn=decision_score_generic,
         use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -526,20 +421,22 @@ def train_ocsvm_li(
         use_scaler=use_scaler,
     )
 
-    df_li_train = df_train.query('attack_technique != "insider"').copy()
-
-
     model.train_model(
-        df=df_li_train,
+        df=df_train,
         model_name=model_name,
         project_paths=project_paths,
     )
-    return compute_metrics(
+
+    return compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
         model_name=model_name,
+        preprocess_fn=preprocess_li,
+        get_decision_scores_fn=decision_score_generic,
         use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -547,14 +444,27 @@ def train_ocsvm_sbert(
     df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
 ):
     set_global_seed()
-    model_name = "SBERT and OCSVM"
+    model_name = "SecureBERT and OCSVM"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_SecureBERT(device=init_device(), max_iter=10000, batch_size=1024)
-    df_sbert_train = df_train.query('attack_technique != "insider"').copy()
+    model = OCSVM_SecureBERT(
+        device=init_device(),
+        project_paths=project_paths,
+        max_iter=10000,
+        batch_size=1024,
+    )
 
-    model.train_model(df=df_sbert_train, model_name=model_name, project_paths=project_paths)
-    return compute_metrics_sbert(
-        model=model, df_val=df_val, df_test=df_test, model_name=model_name
+    model.train_model(df=df_train, model_name=model_name)
+
+    return compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_sbert,
+        get_decision_scores_fn=decision_score_generic,
+        use_scaler=False,  # We never use scaler for SecureBERT based models.
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -581,12 +491,17 @@ def train_lof_cv(
         model_name=model_name,
         project_paths=project_paths,
     )
-    return compute_metrics(
+
+    return compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
         model_name=model_name,
+        preprocess_fn=preprocessing_cv,
+        get_decision_scores_fn=decision_score_generic,
         use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -607,12 +522,17 @@ def train_lof_li(
         model_name=model_name,
         project_paths=project_paths,
     )
-    return compute_metrics(
+
+    return compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
         model_name=model_name,
+        preprocess_fn=preprocess_li,
+        get_decision_scores_fn=decision_score_generic,
         use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -624,10 +544,23 @@ def train_lof_sbert(
     set_global_seed()
     model_name = "SBERT and LOF"
     logger.info(f"Training model: {model_name}")
-    model = LOF_SecureBERT(device=init_device(), n_jobs=n_jobs, batch_size=1024)
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_sbert(
-        model, df_test=df_test, df_val=df_val, model_name=model_name
+    model = LOF_SecureBERT(
+        device=init_device(),
+        project_paths=project_paths,
+        n_jobs=n_jobs,
+        batch_size=1024,
+    )
+    model.train_model(df=df_train, model_name=model_name)
+    return compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_sbert,
+        get_decision_scores_fn=decision_score_generic,
+        use_scaler=False,  # We never use scaler for SecureBERT based models.
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -655,11 +588,21 @@ def train_ae_li(
         batch_size=8192,
         use_scaler=use_scaler,
     )
-    df_li_train = df_train.query('attack_technique != "insider"').copy()
 
-    model.train_model(df=df_li_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_ae(
-        model, df_test=df_test, df_val=df_val, model_name=model_name
+    model.train_model(
+        df=df_train, project_paths=project_paths, model_name=model_name
+    )
+
+    return compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_generic_ae,
+        get_decision_scores_fn=decision_score_ae,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
@@ -686,32 +629,59 @@ def train_ae_cv(
         epochs=100,
         batch_size=4096,
         # Because a too big AE does not fit GPU Memory we limit the input_dim:
-        # We need enough size for both the model and the features 
+        # We need enough size for both the model and the features
         vectorizer_max_features=20000,
         use_scaler=use_scaler,
     )
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_ae(
-        model, df_test=df_test, df_val=df_val, model_name=model_name
+    model.train_model(
+        df=df_train, project_paths=project_paths, model_name=model_name
+    )
+
+    return compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_generic_ae,
+        get_decision_scores_fn=decision_score_ae,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
     )
 
 
-def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame):
+def train_ae_sbert(
+    df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
+):
     set_global_seed()
-    model_name = "SBERT and AE"
+    model_name = "SecureBERT and AE"
     logger.info(f"Training model: {model_name}")
     model = AutoEncoder_SecureBERT(
-        device=init_device(), learning_rate=0.001, epochs=100, batch_size=512
+        device=init_device(),
+        project_paths=project_paths,
+        learning_rate=0.001,
+        epochs=100,
+        batch_size=512,
     )
-    df_sbert_train = df_train.query('attack_technique != "insider"').copy()
 
-    model.train_model(df=df_sbert_train, project_paths=project_paths, model_name=model_name)
-    return compute_metrics_sbert(
-        model, df_test=df_test, df_val=df_val, model_name=model_name
+    model.train_model(
+        df=df_train, model_name=model_name
     )
+    return compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_generic_ae,
+        get_decision_scores_fn=decision_score_ae,
+        use_scaler=False,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+
 
 def save_results(args):
-    dfres = pd.DataFrame(training_results)   
+    dfres = pd.DataFrame(training_results)
     resdir = project_paths.output_path
     filepath = f"{resdir}/results"
 
@@ -721,12 +691,14 @@ def save_results(args):
     filepath += ".csv"
     dfres.to_csv(filepath, index=False)
 
+
 def train_models(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
     args,
 ):
+    # TODO: Check in all codebase if drop_og_columns should ever be set to False.
     logger.info(
         f"Training - number of attacks {len(df_train[df_train['label'] == 1])}"
         f" and number of normals {len(df_train[df_train['label'] == 0])}"
@@ -760,12 +732,12 @@ def train_models(
     # models["Li and LOF"] = (labels, scores)
     # save_results(args=args)
 
-    # AE is behaving way better with scaling
-    labels, scores = train_ae_li(
-        df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    )
-    models["Li and AE"] = (labels, scores)
-    save_results(args=args)
+    # # AE is behaving way better with scaling
+    # labels, scores = train_ae_li(
+    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+    # )
+    # models["Li and AE"] = (labels, scores)
+    # save_results(args=args)
 
     # # AE is behaving way better with scaling
     # labels, scores = train_ae_cv(
@@ -774,17 +746,21 @@ def train_models(
     # models["CountVectorizer and AE"] = (labels, scores)
     # save_results(args=args)
 
-    # labels, scores = train_ocsvm_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and OCSVM"] = (labels, scores)
-    # save_results(args=args)
+    labels, scores = train_ocsvm_sbert(
+        df_train=df_train, df_test=df_test, df_val=df_val
+    )
+    models["SBERT and OCSVM"] = (labels, scores)
+    save_results(args=args)
 
-    # labels, scores = train_lof_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and LOF"] = (labels, scores)
-    # save_results(args=args)
+    labels, scores = train_lof_sbert(
+        df_train=df_train, df_test=df_test, df_val=df_val
+    )
+    models["SBERT and LOF"] = (labels, scores)
+    save_results(args=args)
 
-    # labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["SBERT and AE"] = (labels, scores)
-    # save_results(args=args)
+    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
+    models["SBERT and AE"] = (labels, scores)
+    save_results(args=args)
 
     labels_list = [labels for labels, _ in models.values()]
     scores_list = [scores for _, scores in models.values()]
@@ -832,10 +808,10 @@ if __name__ == "__main__":
             "split": str,
         },
     )
-    if args.testing: 
+    if args.testing:
         df = df.sample(500)
-    
-    if args.subfolder: 
+
+    if args.subfolder:
         project_paths.set_subfolder_output_path(args.subfolder)
 
     if args.on_user_inputs:

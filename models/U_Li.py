@@ -202,16 +202,12 @@ def get_char_kinds_number(query: str) -> dict:
 
 def _get_ocsvm_li_features_from_query(s: pd.Series) -> pd.Series:
     d_features = extract_li_features(s["full_query"])
-    return pd.Series({**s, **d_features})
+    return pd.Series(d_features)
 
 
 def pre_process_for_li(df: pd.DataFrame) -> pd.DataFrame:
-    # input df has 2 columns: full_query, label
-    # output df has the two previous columns and the new features
-    _df = df.copy()
-    _df = _df.apply(_get_ocsvm_li_features_from_query, axis=1)
+    _df = df.apply(_get_ocsvm_li_features_from_query, axis=1)
     return _df
-
 
 class OCSVM_Li:
     def __init__(
@@ -236,47 +232,23 @@ class OCSVM_Li:
         self.use_scaler = use_scaler
 
     def preprocess_for_preds(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
+        self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, np.ndarray]:
-        df_pped = df.copy()  # Mem ~OK
+        df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
-
-        if drop_og_columns:
-            df_pped.drop(
-                ["label", "full_query"]
-                + [
-                    "statement_type",
-                    "query_template_id",
-                    "user_inputs",
-                    "attack_id",
-                    "attack_technique",
-                    "split",
-                    "attack_status",
-                    "attack_stage",
-                    "tamper_method",
-                    "template_split",
-                ],
-                axis=1,
-                inplace=True,
-                errors="ignore",
-            )
-
         return df_pped, labels
 
-    def preprocess_for_train(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
-    ) -> pd.DataFrame:
+    def preprocess_for_train(self, df: pd.DataFrame) -> pd.DataFrame:
         """Preprocess data for training. We ignore label data.
 
         Args:
             df (pd.DataFrame): _description_
-            drop_og_columns (bool, optional): _description_. Defaults to True.
 
         Returns:
             pd.DataFrame: _description_
         """
-        df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
+        df_pped, _ = self.preprocess_for_preds(df=df)
         return df_pped
 
     def train_model(
@@ -324,48 +296,23 @@ class LOF_Li:
         self.use_scaler = use_scaler
 
     def preprocess_for_preds(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
+        self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
-
-        if drop_og_columns:
-            df_pped.drop(
-                ["label", "full_query"]
-                + [
-                    "statement_type",
-                    "query_template_id",
-                    "user_inputs",
-                    "attack_id",
-                    "attack_technique",
-                    "split",
-                    "attack_status",
-                    "attack_stage",
-                    "tamper_method",
-                    "template_split",
-                ],
-                axis=1,
-                inplace=True,
-                errors="ignore",
-            )
-
         return df_pped, labels
 
-    def preprocess_for_train(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
-    ) -> pd.DataFrame:
+    def preprocess_for_train(self, df: pd.DataFrame) -> pd.DataFrame:
         """Preprocess data for training. We ignore label data.
 
         Args:
             df (pd.DataFrame): _description_
-            drop_og_columns (bool, optional): _description_. Defaults to True.
 
         Returns:
             pd.DataFrame: _description_
         """
-        df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
-        self.feature_columns = df_pped.columns.tolist()
+        df_pped, _ = self.preprocess_for_preds(df=df)
         return df_pped
 
     def train_model(
@@ -413,34 +360,14 @@ class AutoEncoder_Li:
         self.feature_columns = None
 
     def preprocess_for_preds(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
+        self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
-
-        if drop_og_columns:
-            df_pped.drop(
-                ["label", "full_query"]
-                + [
-                    "statement_type",
-                    "query_template_id",
-                    "user_inputs",
-                    "attack_id",
-                    "attack_technique",
-                    "split",
-                    "attack_status",
-                    "attack_stage",
-                    "tamper_method",
-                    "template_split",
-                ],
-                axis=1,
-                inplace=True,
-                errors="ignore",
-            )
         return df_pped, labels
-
-    def _dataframe_to_tensor_batched(self, df, batch_size=4096):
+    
+    def X_to_tensor(self, X) -> torch.Tensor:
         """
         Used during testing.
 
@@ -451,30 +378,22 @@ class AutoEncoder_Li:
         Returns:
             _type_: _description_
         """
-        n_samples = len(df)
-        tensors = []
+        X = X.values
+        if self.use_scaler:
+            X = self._scaler.transform(X)
+        X_tensors = torch.FloatTensor(X).to(self.device)
+        return X_tensors
 
-        for i in range(0, n_samples, batch_size):
-            batch_end = min(i + batch_size, n_samples)
-            df_batch = df.iloc[i:batch_end]
-            batch_dense = df_batch.values
-            if self.use_scaler:
-                batch_dense = self._scaler.transform(batch_dense)
-            tensors.append(torch.FloatTensor(batch_dense))
-
-        return torch.cat(tensors, dim=0).to(self.device)
-
-    def preprocess_for_train(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
-    ) -> pd.DataFrame:
+    def preprocess_for_train(self, df: pd.DataFrame) -> pd.DataFrame:
         """Preprocess data for training. We ignore label data.
+
         Args:
-            df (pd.DataFrame): Input dataframe
-            drop_og_columns (bool, optional): Whether to drop original columns. Defaults to True.
+            df (pd.DataFrame): _description_
+
         Returns:
-            pd.DataFrame: Preprocessed dataframe
+            pd.DataFrame: _description_
         """
-        df_pped, _ = self.preprocess_for_preds(df=df, drop_og_columns=drop_og_columns)
+        df_pped, _ = self.preprocess_for_preds(df=df)
         return df_pped
 
     def train_model(
@@ -492,7 +411,7 @@ class AutoEncoder_Li:
         # Let's apply Scaler here and not in preprocess, as we want to keep
         # information about the columns
         df_pped = np.array(df_pped)
-        assert(df_pped.min() >= 0)
+        assert df_pped.min() >= 0
 
         # If scaling =>
         if self.use_scaler:
@@ -506,7 +425,7 @@ class AutoEncoder_Li:
         else:
             train_data = torch.FloatTensor(df_pped)
             self.clf = MyAutoEncoderRelu(input_dim=input_dim)
-        
+
         self.clf.to(self.device)
 
         criterion = nn.MSELoss().to(self.device)
@@ -530,3 +449,26 @@ class AutoEncoder_Li:
             logger.debug(
                 f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
             )
+
+
+def preprocess_li(
+    model: OCSVM_Li | LOF_Li, df: pd.DataFrame, use_scaler: bool = False
+):
+    """Transform dataframe into features ready to be scored and their labels.
+
+    Args:
+        model (OCSVM_Li | LOF_Li): Model object to use to preprocess.
+        df (pd.DataFrame): Input dataframe
+        use_scaler (bool, optional): Whether to use scaler or not. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
+    X, labels = model.preprocess_for_preds(df=df)
+    X = X.to_numpy()
+
+    if use_scaler:
+        X_scaled = model._scaler.transform(X)
+        return X_scaled, labels
+
+    return X, labels

@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+from scipy import sparse
 from sklearn.preprocessing import StandardScaler, MaxAbsScaler
 from sklearn.neighbors import LocalOutlierFactor
 
@@ -41,7 +42,9 @@ class OCSVM_CV:
         self.feature_columns = None
         self.use_scaler = use_scaler
 
-    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
+    def preprocess_for_train(
+        self, df: pd.DataFrame
+    ) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         # Fit Vectorizer and transform queries at the same time.
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
@@ -66,59 +69,25 @@ class OCSVM_CV:
 
         if self.use_scaler:
             f_matrix = self._scaler.fit_transform(f_matrix)
-        
+
         model.fit(f_matrix)
         self.clf = model
 
-    # @profile
     def preprocess_for_preds(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
+        self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, np.ndarray]:
         """Return preprocessed queries.
 
-        WARNING: A New DataFrame with both features and original columns is returned if
-        drop_og_columns is set to true. This means a new index is generated.
-
         Args:
             df (pd.DataFrame): _description_
-            drop_og_columns (bool, optional): _description_. Defaults to True.
 
         Returns:
             tuple[pd.DataFrame, np.ndarray]: _description_
         """
-        # TODO: remove batching here, is done in caller.
-        labels = df["label"]
+
+        labels = df["label"].to_numpy()
         pp_queries = self.vectorizer.transform(df["full_query"])
-
-        if drop_og_columns:
-            return pp_queries, labels
-
-        # if not drop: we need to keep track of initial columns. We artificially create a
-        # new dataframe. The index is resetted for cases where passed df does not
-        # possess a 0-based index.
-        df_copy = df.copy().reset_index(drop=True)
-        batch_size = 5000
-
-        batch_dfs = []
-
-        # CountVectorizer is too big to perform a toarray directly, we process
-        # samples by batches then:
-        for start_idx in range(0, len(df_copy), batch_size):
-            # Select end idx
-            end_idx = min(start_idx + batch_size, len(df_copy))
-
-            # Fetch corresponding samples, transform to df (transform if needed)
-            batch_queries = pp_queries[start_idx:end_idx].toarray()
-            batch_queries_df = pd.DataFrame(batch_queries)
-
-            # And then retrieve original columns
-            batch_original = df_copy.iloc[start_idx:end_idx].copy()
-            batch_combined = pd.concat([batch_original.reset_index(drop=True), batch_queries_df], axis=1)
-            batch_dfs.append(batch_combined)
-
-        # Then merge all.
-        df_pped = pd.concat(batch_dfs, ignore_index=True)
-        return df_pped, labels
+        return pd.DataFrame(pp_queries.toarray()), labels
 
 
 class LOF_CV:
@@ -141,7 +110,9 @@ class LOF_CV:
         self.feature_columns = None
         self.use_scaler = use_scaler
 
-    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
+    def preprocess_for_train(
+        self, df: pd.DataFrame
+    ) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         # Fit Vectorizer and transform queries at the same time.
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
@@ -165,60 +136,27 @@ class LOF_CV:
         self.clf = model
 
     def preprocess_for_preds(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
+        self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, np.ndarray]:
         """Return preprocessed queries.
 
-        WARNING: A New DataFrame with both features and original columns is returned if
-        drop_og_columns is set to true. This means a new index is generated.
-
         Args:
             df (pd.DataFrame): _description_
-            drop_og_columns (bool, optional): _description_. Defaults to True.
 
         Returns:
             tuple[pd.DataFrame, np.ndarray]: _description_
         """
-        # TODO: remove batching here, is done in caller.
-        labels = df["label"]
+
+        labels = df["label"].to_numpy()
         pp_queries = self.vectorizer.transform(df["full_query"])
-
-        if drop_og_columns:
-            return pp_queries, labels
-
-        # if not drop: we need to keep track of initial columns. We artificially create a
-        # new dataframe. The index is resetted for cases where passed df does not
-        # possess a 0-based index.
-        df_copy = df.copy().reset_index(drop=True)
-        batch_size = 50000
-
-        batch_dfs = []
-
-        # CountVectorizer is too big to perform a toarray directly, we process
-        # samples by batches then:
-        for start_idx in range(0, len(df), batch_size):
-            # Select end idx
-            end_idx = min(start_idx + batch_size, len(df))
-
-            # Fetch corresponding samples, transform to df (transform if needed)
-            batch_queries = pp_queries[start_idx:end_idx].toarray()
-            batch_queries_df = pd.DataFrame(batch_queries)
-
-            # And then retrieve original columns
-            batch_original = df_copy.iloc[start_idx:end_idx].copy()
-            batch_combined = pd.concat([batch_original.reset_index(drop=True), batch_queries_df], axis=1)
-            batch_dfs.append(batch_combined)
-
-        # Then merge all.
-        df_pped = pd.concat(batch_dfs, ignore_index=True)
-        return df_pped, labels
+        return pd.DataFrame(pp_queries.toarray()), labels
 
 
 class AutoEncoder_CV:
     def __init__(
         self,
         GENERIC,
-        device, 
+        device,
         vectorizer_max_features: int | None = None,
         learning_rate: float = 0.001,
         epochs: int = 100,
@@ -229,7 +167,6 @@ class AutoEncoder_CV:
         self.clf = None
         self.GENERIC = GENERIC
         self.model_name = None
-
 
         self.vectorizer = CountVectorizer(max_features=vectorizer_max_features)
         self.use_scaler = use_scaler
@@ -247,72 +184,32 @@ class AutoEncoder_CV:
         self.feature_columns = None
 
     def preprocess_for_preds(
-        self, df: pd.DataFrame, drop_og_columns: bool = True
+        self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, np.ndarray]:
         """Return preprocessed queries.
 
-        WARNING: A New DataFrame with both features and original columns is returned if
-        drop_og_columns is set to true. This means a new index is generated.
-        
-        WARNING 2: This function performs scaling, no need to do it again afterwards.
-        
         Args:
             df (pd.DataFrame): _description_
-            drop_og_columns (bool, optional): _description_. Defaults to True.
 
         Returns:
             tuple[pd.DataFrame, np.ndarray]: _description_
         """
-        # TODO: remove batching here, is done in caller.
 
-        labels = df["label"]
+        labels = df["label"].to_numpy()
         pp_queries = self.vectorizer.transform(df["full_query"])
+        return pd.DataFrame(pp_queries.toarray()), labels
 
-        if drop_og_columns:
-            return pp_queries, labels
-
-        # if not drop: we need to keep track of initial columns. We artificially create a
-        # new dataframe. The index is resetted for cases where passed df does not
-        # possess a 0-based index.
-        df_copy = df.copy().reset_index(drop=True)
-        batch_size = 50000
-
-        batch_dfs = []
-
-        # CountVectorizer is too big to perform a toarray directly, we process
-        # samples by batches then:
-        for start_idx in range(0, len(df), batch_size):
-            # Select end idx
-            end_idx = min(start_idx + batch_size, len(df))
-
-            # Fetch corresponding samples, transform to df (transform if needed)
-            batch_queries = pp_queries[start_idx:end_idx].toarray()
-
-            if self.use_scaler:
-                batch_queries = self._scaler.transform(batch_queries)
-                batch_queries = np.clip(
-                    batch_queries, self._scaler_min, self._scaler_max
-                )
-
-            batch_queries_df = pd.DataFrame(batch_queries)
-            # And then retrieve original columns
-            batch_original = df_copy.iloc[start_idx:end_idx].copy()
-            batch_combined = pd.concat([batch_original.reset_index(drop=True), batch_queries_df], axis=1)
-            batch_dfs.append(batch_combined)
-
-        # Then merge all.
-        df_pped = pd.concat(batch_dfs, ignore_index=True)
-        return df_pped, labels
-
-    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
+    def preprocess_for_train(
+        self, df: pd.DataFrame
+    ) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
         self._scaler_min = pp_queries.min(axis=None)
-        assert(self._scaler_min >= 0)
+        assert self._scaler_min >= 0
         self._scaler_max = pp_queries.max(axis=None)
         return pp_queries
 
-    def _dataframe_to_tensor_batched(self, df, batch_size=4096):
+    def X_to_tensor(self, X) -> torch.Tensor:
         """
         Used during testing.
 
@@ -323,16 +220,11 @@ class AutoEncoder_CV:
         Returns:
             _type_: _description_
         """
-        n_samples = len(df)
-        tensors = []
-
-        for i in range(0, n_samples, batch_size):
-            batch_end = min(i + batch_size, n_samples)
-            df_batch = df.iloc[i:batch_end]
-            batch_dense = df_batch.values
-            tensors.append(torch.FloatTensor(batch_dense))
-
-        return torch.cat(tensors, dim=0).to(self.device)
+        X = X.values
+        if self.use_scaler:
+            X = self._scaler.transform(X)
+        X_tensors = torch.FloatTensor(X).to(self.device)
+        return X_tensors
 
     def _sparse_to_tensor_batched(self, sparse_matrix, batch_size=4096):
         """
@@ -344,6 +236,7 @@ class AutoEncoder_CV:
         Returns:
             _type_: _description_
         """
+        # TODO: Remove batched, not necessary, is done by caller.
         n_samples = sparse_matrix.shape[0]
         tensors = []
 
@@ -351,7 +244,7 @@ class AutoEncoder_CV:
             batch_end = min(i + batch_size, n_samples)
             batch_dense = sparse_matrix[i:batch_end].toarray()
             tensors.append(torch.FloatTensor(batch_dense))
-        return torch.cat(tensors, dim=0)
+        return torch.cat(tensors, dim=0).to(self.device)
 
     def train_model(
         self,
@@ -380,7 +273,9 @@ class AutoEncoder_CV:
 
         if self.use_scaler:
             scaled_data = self._scaler.fit_transform(f_matrix)
-            train_data = self._sparse_to_tensor_batched(scaled_data, batch_size=10000)
+            train_data = self._sparse_to_tensor_batched(
+                scaled_data, batch_size=10000
+            )
         else:
             train_data = self._sparse_to_tensor_batched(f_matrix)
 
@@ -401,3 +296,20 @@ class AutoEncoder_CV:
             logger.debug(
                 f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
             )
+
+
+def preprocessing_cv(
+    model: OCSVM_CV | LOF_CV,
+    df: pd.DataFrame,
+    use_scaler: bool = False,
+):
+
+    X, labels = model.preprocess_for_preds(df=df)
+    X = X.to_numpy()
+
+    if use_scaler:
+        X_scaled = sparse.csr_matrix(X)
+        X_scaled = model._scaler.transform(X)
+        return X_scaled, labels
+
+    return X, labels

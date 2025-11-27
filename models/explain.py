@@ -34,6 +34,62 @@ def get_ci(score, n):
     interval = z * math.sqrt((score * (1 - score)) / n)
     return interval
 
+
+def get_metrics_treshold(
+    labels: np.ndarray,
+    scores: np.ndarray,
+    threshold: float,
+    model_name: str = "",
+):
+
+    preds = (scores >= threshold).astype(int)
+
+    accuracy = f"{accuracy_score(labels, preds)* 100:.2f}%"
+    f1 = f"{f1_score(labels, preds)* 100:.2f}%"
+    precision = f"{precision_score(labels, preds) * 100:.2f}%"
+    recall = f"{recall_score(labels, preds) * 100:.2f}%"
+
+    p, r, _ = precision_recall_curve(labels, scores, pos_label=1)
+    auprc = auc(r, p)
+
+    fpr, tpr, _ = roc_curve(labels, scores)
+    auroc = auc(fpr, tpr)
+
+    C = confusion_matrix(labels, preds, labels=[0, 1])
+    TN, FP, _, _ = C.ravel()
+    FPR = FP / (FP + TN)
+    achieved_fpr = f"{FPR* 100:.5f}%"
+
+    auroc_ci = get_ci(auroc, len(scores))
+    auprc_ci = get_ci(auprc, len(scores))
+
+    logger.info(f"Metrics for {model_name}.")
+    logger.info(f"Accuracy: {accuracy}")
+    logger.info(f"F1 Score: {f1}")
+    logger.info(f"Precision: {precision}")
+    logger.info(f"Recall: {recall}")
+    logger.info(f"False Positive Rate: {achieved_fpr}")
+
+    logger.info(f"ROC-AUC: {auroc:.4f}, CI {auroc_ci:.4f}")
+    logger.info(f"AUPRC: {auprc:.4f}, CI {auprc_ci:.4f}")
+
+    return (
+        {
+            "model": model_name,
+            "fone": f1,
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "fpr": achieved_fpr,
+            "auprc": f"{auprc:.4f}",
+            "rocauc": f"{auroc:.4f}",
+            "auroc_ci": f"{auroc_ci:.4f}",
+            "auprc_ci": f"{auprc_ci:.4f}",
+        },
+        preds,
+    )
+
+
 def print_and_save_metrics_from_treshold(
     labels: np.ndarray,
     scores: np.ndarray,

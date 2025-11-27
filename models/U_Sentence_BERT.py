@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from typing import List
 import numpy as np
 import os
 import pandas as pd
@@ -7,19 +8,97 @@ import torch
 import torch.nn as nn
 import transformers
 
-from constants import MyAutoEncoderTanh
+from constants import MyAutoEncoderTanh, ProjectPaths
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
-from tqdm import tqdm
 from transformers import RobertaTokenizerFast
 
 logger = logging.getLogger(__name__)
 
 
-class OCSVM_SecureBERT:
+class BaseSecureBERT:
+    """Share logic for all SecureBERT models.
+
+    Returns:
+        _type_: _description_
+    """
+
     def __init__(
         self,
         device: torch.device,
+        project_paths: ProjectPaths,
+        bert_model: str,
+        batch_size: int,
+    ):
+        self.device = device
+        # We require a project_path object to find cached embeddings.
+        self.project_paths = project_paths
+        self.bert_model = bert_model
+        self.batch_size = batch_size
+
+        # This way, the same embeddings are generated for the same sentence
+        # Indeed, some layers are randomly initialized as the warning states.
+        torch.manual_seed(2)
+        self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
+        self.rb_model = transformers.RobertaModel.from_pretrained(self.bert_model)
+        self.rb_model.to(self.device)
+        self.rb_model.eval()
+
+        self.model_name = None
+        self.clf = None
+
+    # Shared proprocessing functions
+    def _cache_path(self, df: pd.DataFrame) -> str:
+        hash_val = hashlib.sha256(
+            pd.util.hash_pandas_object(df, index=True).values
+        ).hexdigest()
+        return os.path.join(
+            self.project_paths.embeddings_path,
+            f"embeddings-{hash_val}.pkl",
+        )
+
+    def _load_or_compute_embeddings(
+        self, df: pd.DataFrame, batch_size: int
+    ) -> List[np.ndarray]:
+
+        cache_path = self._cache_path(df)
+        if os.path.isfile(cache_path):
+            logger.info(f"Loaded cached SBERT embeddings from {cache_path}")
+            return pd.read_pickle(cache_path)
+
+        queries = df["full_query"].values
+        embeddings = []
+
+        with torch.no_grad():
+            for i in range(0, len(queries), batch_size):
+                batch = queries[i : i + batch_size].tolist()
+                inputs = self.tokenizer(
+                    batch,
+                    return_tensors="pt",
+                    truncation=True,
+                    padding=True,
+                    max_length=512,
+                )
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+                outputs = self.rb_model(**inputs, output_hidden_states=True)
+                batch_embeddings = outputs.pooler_output.cpu().numpy()
+                embeddings.extend(batch_embeddings)
+
+        pd.to_pickle(embeddings, cache_path)
+        return embeddings
+
+    def preprocess(self, df: pd.DataFrame, batch_size: int = 64):
+        embeddings = self._load_or_compute_embeddings(df, batch_size)
+        labels = df["label"].to_numpy()
+        return embeddings, labels
+
+
+class OCSVM_SecureBERT(BaseSecureBERT):
+    def __init__(
+        self,
+        device: torch.device,
+        project_paths: ProjectPaths,
         bert_model: str = "ehsanaghaei/SecureBERT",
         batch_size: int = 16,
         nu: float = 0.05,
@@ -27,286 +106,89 @@ class OCSVM_SecureBERT:
         gamma: str = "scale",
         max_iter: int = -1,
     ):
-        self.device = device
-        self.batch_size = batch_size
-        self.bert_model = bert_model
-
+        super().__init__(device, project_paths, bert_model, batch_size)
         self.nu = nu
         self.kernel = kernel
         self.gamma = gamma
         self.max_iter = max_iter
 
-        self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
-        self.rb_model = transformers.RobertaModel.from_pretrained(self.bert_model)
-        self.rb_model.to(self.device)
-        self.rb_model.eval()
-
-        self.clf = None
-        self.model_name = None
-
-    def preprocess(self, df: pd.DataFrame, project_paths) -> np.ndarray:
-        embeddings = []
-        # This function implements a caching mechanism, computing embeddings is
-        # rather time consuming.
-        str_hash_df = hashlib.sha256(
-            pd.util.hash_pandas_object(df, index=True).values
-        ).hexdigest()
-        fp_cache = "".join(
-            [project_paths.embeddings_path, "embeddings-", str_hash_df, ".pkl"]
-        )
-
-        if os.path.isfile(fp_cache):
-            logger.info(
-                f"Loaded already preprocessed embeddings located from {fp_cache}"
-            )
-            embeddings = pd.read_pickle(fp_cache)
-        else:
-            _p_batch_size = 64
-            queries = df["full_query"].values
-
-            with torch.no_grad():
-                for i in range(0, len(queries), _p_batch_size):
-                    batch_queries = queries[i : i + _p_batch_size]
-
-                    inputs = self.tokenizer(
-                        batch_queries.tolist(),
-                        return_tensors="pt",
-                        truncation=True,
-                        padding=True,
-                        max_length=512,
-                    )
-                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-                    outputs = self.rb_model(**inputs, output_hidden_states=True)
-                    batch_embeddings = outputs.pooler_output.cpu().numpy()
-                    embeddings.extend(batch_embeddings)
-
-            # Save embeddings to picle at fp_cache
-            pd.to_pickle(embeddings, fp_cache)
-
-        result_df = df.copy()
-        result_df["embeddings"] = embeddings
-        return result_df
-
     def train_model(
         self,
         df: pd.DataFrame,
-        project_paths,
         model_name: str = None,
     ):
         self.model_name = model_name
-        df_pp = self.preprocess(df=df,project_paths=project_paths)
-
-        embeddings = np.array(df_pp["embeddings"].tolist())
+        embeddings, _ = self.preprocess(df=df)
         self.clf = OneClassSVM(
             nu=self.nu, kernel=self.kernel, gamma=self.gamma, max_iter=self.max_iter
         )
         self.clf.fit(embeddings)
 
-    def get_scores(self, df: pd.DataFrame):
-        """Get scores from Dataset
 
-        Args:
-            df (pd.DataFrame): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        embeddings = np.array(df["embeddings"].tolist())
-        dists = self.clf.decision_function(embeddings)
-        return (df["label"].to_numpy(), dists)
-
-
-class LOF_SecureBERT:
+class LOF_SecureBERT(BaseSecureBERT):
     def __init__(
         self,
         device: torch.device,
+        project_paths: ProjectPaths,
         bert_model: str = "ehsanaghaei/SecureBERT",
         batch_size: int = 16,
         n_jobs: int = -1,
     ):
-        self.device = device
-        self.batch_size = batch_size
-        self.bert_model = bert_model
-
+        super().__init__(device, project_paths, bert_model, batch_size)
         self.n_jobs = n_jobs
-
-        self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
-        self.rb_model = transformers.RobertaModel.from_pretrained(self.bert_model)
-        self.rb_model.to(self.device)
-        self.rb_model.eval()
-
-        self.clf = None
-        self.model_name = None
-
-    def preprocess(self, df: pd.DataFrame, project_paths) -> np.ndarray:
-        embeddings = []
-        # This function implements a caching mechanism, computing embeddings is
-        # rather time consuming.
-        str_hash_df = hashlib.sha256(
-            pd.util.hash_pandas_object(df, index=True).values
-        ).hexdigest()
-        fp_cache = "".join(
-            [project_paths.embeddings_path, "embeddings-", str_hash_df, ".pkl"]
-        )
-
-        if os.path.isfile(fp_cache):
-            logger.info(
-                f"Loaded already preprocessed embeddings located from {fp_cache}"
-            )
-            embeddings = pd.read_pickle(fp_cache)
-        else:
-            queries = df["full_query"].values
-            # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
-            # low batch size and this prevent the memory from being full (and potentially
-            # crash if someone is using the GPU).
-            _p_batch_size = 64
-            with torch.no_grad():
-                for i in range(0, len(queries), _p_batch_size):
-                    batch_queries = queries[i : i + _p_batch_size]
-
-                    inputs = self.tokenizer(
-                        batch_queries.tolist(),
-                        return_tensors="pt",
-                        truncation=True,
-                        padding=True,
-                        max_length=512,
-                    )
-                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-                    outputs = self.rb_model(**inputs, output_hidden_states=True)
-                    batch_embeddings = outputs.pooler_output.cpu().numpy()
-                    embeddings.extend(batch_embeddings)
-
-            # Save embeddings to picle at fp_cache
-            pd.to_pickle(embeddings, fp_cache)
-
-        result_df = df.copy()
-        result_df["embeddings"] = embeddings
-        return result_df
 
     def train_model(
         self,
         df: pd.DataFrame,
-        project_paths,
         model_name: str = None,
     ):
         self.model_name = model_name
-        df_pp = self.preprocess(df=df, project_paths=project_paths)
+        embeddings, _ = self.preprocess(df=df)
 
-        embeddings = np.array(df_pp["embeddings"].tolist())
         self.clf = LocalOutlierFactor(n_jobs=self.n_jobs, novelty=True)
         self.clf.fit(embeddings)
 
-    def get_scores(self, df: pd.DataFrame):
-        """Get scores from Dataset
 
-        Args:
-            df (pd.DataFrame): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        embeddings = np.array(df["embeddings"].tolist())
-        dists = self.clf.decision_function(embeddings)
-        return (df["label"].to_numpy(), dists)
-
-
-class AutoEncoder_SecureBERT:
+class AutoEncoder_SecureBERT(BaseSecureBERT):
     def __init__(
         self,
         device: torch.device,
+        project_paths: ProjectPaths,
         bert_model: str = "ehsanaghaei/SecureBERT",
         learning_rate: float = 0.001,
         epochs: int = 100,
-        batch_size: int = 32,
+        batch_size: int = 16,
     ):
-        self.device = device
-        self.bert_model = bert_model
-
+        super().__init__(device, project_paths, bert_model, batch_size)
         self.learning_rate = learning_rate
         self.epochs = epochs
-        self.batch_size = batch_size
 
-        self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
-        self.rb_model = transformers.RobertaModel.from_pretrained(self.bert_model)
-        self.rb_model.to(self.device)
-        self.rb_model.eval()
 
-        self.clf = None
-        self.model_name = None
+    # TODO: Rename preprocess_for_preds into preprocess ?
+    # Wrapper to fit to preprocessing_generic_ae function call.
+    def preprocess_for_preds(self, df: pd.DataFrame):
+        return self.preprocess(df=df)
 
-    def preprocess(self, df: pd.DataFrame, project_paths) -> np.ndarray:
-        embeddings = []
-        # This function implements a caching mechanism, computing embeddings is
-        # rather time consuming.
-        str_hash_df = hashlib.sha256(
-            pd.util.hash_pandas_object(df, index=True).values
-        ).hexdigest()
-        fp_cache = "".join(
-            [project_paths.embeddings_path, "embeddings-", str_hash_df, ".pkl"]
-        )
-
-        if os.path.isfile(fp_cache):
-            logger.info(
-                f"Loaded already preprocessed embeddings located from {fp_cache}"
-            )
-            embeddings = pd.read_pickle(fp_cache)
-        else:
-            queries = df["full_query"].values
-            # Let's do smaller batch_size than self.batch_size: GPU is already saturated with
-            # low batch size and this prevent the memory from being full (and potentially
-            # crash if someone is using the GPU).
-            _p_batch_size = 64
-            logger.info(f"Beginning preprocessing with batch-size = {_p_batch_size}")
-
-            with torch.no_grad():
-                for i in tqdm(range(0, len(queries), _p_batch_size)):
-                    batch_queries = queries[i : i + _p_batch_size]
-
-                    inputs = self.tokenizer(
-                        batch_queries.tolist(),
-                        return_tensors="pt",
-                        truncation=True,
-                        padding=True,
-                        max_length=512,
-                    )
-                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-                    outputs = self.rb_model(**inputs, output_hidden_states=True)
-                    batch_embeddings = outputs.pooler_output.cpu().numpy()
-                    embeddings.extend(batch_embeddings)
-
-            # Save embeddings to picle at fp_cache
-            pd.to_pickle(embeddings, fp_cache)
-
-        result_df = df.copy()
-        result_df["embeddings"] = embeddings
-        return result_df
-
-    def get_scores(self, df: pd.DataFrame):
-        """Get scores from Dataset
+    def X_to_tensor(self, X) -> torch.Tensor:
+        """
+        Used during testing.
 
         Args:
-            df (pd.DataFrame): _description_
-
+            df (_type_): _description_
         Returns:
             _type_: _description_
         """
-        embeddings = np.array(df["embeddings"].tolist())
-        dists = self.clf.decision_function(embeddings)
-        return (df["label"].to_numpy(), dists)
+        X_array = np.array(X)
+        X_tensors = torch.FloatTensor(X_array).to(self.device)
+        return X_tensors
 
     def train_model(
         self,
         df: pd.DataFrame,
-        project_paths,
         model_name: str = None,
     ):
         self.model_name = model_name
-        df_pp = self.preprocess(df=df, project_paths=project_paths)
-
-        embeddings = np.array(df_pp["embeddings"].tolist())
+        embeddings, _ = self.preprocess(df=df)
 
         # Init variables for training + model
         input_dim = len(embeddings[0])
@@ -315,15 +197,19 @@ class AutoEncoder_SecureBERT:
         self.clf = MyAutoEncoderTanh(
             input_dim=input_dim,
         )
+        self.clf.to(self.device)
+
         criterion = nn.MSELoss()
         optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
-        train_data = torch.FloatTensor(embeddings)
+        X_tensor = self.X_to_tensor(embeddings)
 
         self.clf.train()
+
         for epoch in range(self.epochs):
             total_loss = 0
-            for i in range(0, len(train_data), self.batch_size):
-                batch = train_data[i : i + self.batch_size]
+            for i in range(0, len(X_tensor), self.batch_size):
+                batch = X_tensor[i : i + self.batch_size]
+                batch = batch.to(self.device)
 
                 optimizer.zero_grad()
                 reconstructed = self.clf(batch)
@@ -334,5 +220,26 @@ class AutoEncoder_SecureBERT:
                 total_loss += loss.item()
 
             logger.debug(
-                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
+                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(X_tensor):.6f}"
             )
+
+
+def preprocessing_sbert(
+    model: OCSVM_SecureBERT | LOF_SecureBERT,
+    df: pd.DataFrame,
+    use_scaler: bool = False,
+):
+    """Preprocess queries from pandas DataFrame, returns embeddings and associated labels.
+
+    Args:
+        model (OCSVM_SecureBERT | LOF_SecureBERT | AutoEncoder_SecureBERT): _description_
+        df (pd.DataFrame): _description_
+        use_scaler (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
+
+    # X is the embeddings, no further preprocessing required.
+    X, labels = model.preprocess(df=df)
+    return X, labels
