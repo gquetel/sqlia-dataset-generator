@@ -18,7 +18,6 @@ import random
 import pandas as pd
 import sys
 import logging
-from scipy import sparse
 import torch
 from tqdm import tqdm
 
@@ -131,6 +130,13 @@ def init_args() -> argparse.Namespace:
         "--capture-insider",
         action="store_true",
         help="Treat insider attacks as observable (otherwise, they are treated as false negatives)",
+    )
+
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=["all"],
+        help="Models to train (e.g., --models ocsvm_li ae_cv). Use 'all' to run everything.",
     )
 
     parser.add_argument(
@@ -664,9 +670,7 @@ def train_ae_sbert(
         batch_size=512,
     )
 
-    model.train_model(
-        df=df_train, model_name=model_name
-    )
+    model.train_model(df=df_train, model_name=model_name)
     return compute_metrics_generic(
         model=model,
         df_test=df_test,
@@ -692,13 +696,66 @@ def save_results(args):
     dfres.to_csv(filepath, index=False)
 
 
+def select_models(args):
+    AUTHORIZED_GROUPS = {
+        "li": ["ocsvm_li", "lof_li", "ae_li"],
+        "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
+        "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
+    }
+
+    MODEL_REGISTRY = {
+        "ocsvm_li": lambda df_train, df_test, df_val: train_ocsvm_li(
+            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+        ),
+        "lof_cv": lambda df_train, df_test, df_val: train_lof_cv(
+            df_train=df_train, df_test=df_test, df_val=df_val
+        ),
+        "ocsvm_cv": lambda df_train, df_test, df_val: train_ocsvm_cv(
+            df_train=df_train, df_test=df_test, df_val=df_val
+        ),
+        "lof_li": lambda df_train, df_test, df_val: train_lof_li(
+            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+        ),
+        "ae_li": lambda df_train, df_test, df_val: train_ae_li(
+            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+        ),
+        "ae_cv": lambda df_train, df_test, df_val: train_ae_cv(
+            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
+        ),
+        "ocsvm_sbert": train_ocsvm_sbert,
+        "lof_sbert": train_lof_sbert,
+        "ae_sbert": train_ae_sbert,
+    }
+
+    if "all" in args.models:
+        return MODEL_REGISTRY
+
+    requested = []
+
+    # List all requested models (by name or group name)
+    for item in args.models:
+        if item in AUTHORIZED_GROUPS:
+            requested.extend(AUTHORIZED_GROUPS[item])
+        else:
+            requested.append(item)
+
+    # Now check if names are valid.
+    valid = {}
+    for model_name in requested:
+        if model_name in MODEL_REGISTRY:
+            valid[model_name] = MODEL_REGISTRY[model_name]
+        else:
+            logger.warning(f"Unrecognized model {model_name}, skipping.")
+    return valid
+
+
 def train_models(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
+    selected_models: dict,
     args,
 ):
-    # TODO: Check in all codebase if drop_og_columns should ever be set to False.
     logger.info(
         f"Training - number of attacks {len(df_train[df_train['label'] == 1])}"
         f" and number of normals {len(df_train[df_train['label'] == 0])}"
@@ -709,62 +766,17 @@ def train_models(
     )
 
     # Train models and get their output.
-    models = {}
+    models_output = {}
 
-    # # We keep this one with scaling, it behaves way better.
-    # labels, scores = train_ocsvm_li(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["Li and OCSVM"] = (labels, scores)
-    # save_results(args=args)
+    for model_name, model_fn in selected_models.items():
+        labels, scores = model_fn(df_train, df_test, df_val)
+        models_output[model_name] = (labels, scores)
+        save_results(args=args)
 
-    # labels, scores = train_lof_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["CountVectorizer and LOF "] = (labels, scores)
-    # save_results(args=args)
-
-    # # We keep this one without scaler, it has the best results.
-    # labels, scores = train_ocsvm_cv(df_train=df_train, df_test=df_test, df_val=df_val)
-    # models["CountVectorizer and OCSVM"] = (labels, scores)
-    # save_results(args=args)
-
-    # # We keep this one without scaler, it has the best results.
-    # labels, scores = train_lof_li(df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True)
-    # models["Li and LOF"] = (labels, scores)
-    # save_results(args=args)
-
-    # # AE is behaving way better with scaling
-    # labels, scores = train_ae_li(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-    # )
-    # models["Li and AE"] = (labels, scores)
-    # save_results(args=args)
-
-    # # AE is behaving way better with scaling
-    # labels, scores = train_ae_cv(
-    #     df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
-    # )
-    # models["CountVectorizer and AE"] = (labels, scores)
-    # save_results(args=args)
-
-    labels, scores = train_ocsvm_sbert(
-        df_train=df_train, df_test=df_test, df_val=df_val
-    )
-    models["SBERT and OCSVM"] = (labels, scores)
-    save_results(args=args)
-
-    labels, scores = train_lof_sbert(
-        df_train=df_train, df_test=df_test, df_val=df_val
-    )
-    models["SBERT and LOF"] = (labels, scores)
-    save_results(args=args)
-
-    labels, scores = train_ae_sbert(df_train=df_train, df_test=df_test, df_val=df_val)
-    models["SBERT and AE"] = (labels, scores)
-    save_results(args=args)
-
-    labels_list = [labels for labels, _ in models.values()]
-    scores_list = [scores for _, scores in models.values()]
-    names_list = list(models.keys())
+    # consistency checks, curve plotting, etc.
+    labels_list = [l for l, _ in models_output.values()]
+    scores_list = [s for _, s in models_output.values()]
+    names_list = list(models_output.keys())
 
     ref_labels = labels_list[0]
     for labels in labels_list[1:]:
@@ -792,6 +804,11 @@ if __name__ == "__main__":
     args = init_args()
     init_logging(args)
 
+    selected_models = select_models(args)
+    if len(selected_models) == 0:
+        logger.critical("No valid model selected, exiting.")
+        exit()
+
     df = pd.read_csv(
         args.dataset,
         dtype={
@@ -809,7 +826,7 @@ if __name__ == "__main__":
         },
     )
     if args.testing:
-        df = df.sample(500)
+        df = df.sample(5000)
 
     if args.subfolder:
         project_paths.set_subfolder_output_path(args.subfolder)
@@ -825,4 +842,4 @@ if __name__ == "__main__":
     )
     df_test = df[df["split"] == "test"]
 
-    train_models(df_train, df_test, df_val, args)
+    train_models(df_train, df_test, df_val, selected_models, args)
