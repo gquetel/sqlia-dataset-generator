@@ -1,8 +1,10 @@
 import hashlib
 import logging
+from pathlib import Path
 from typing import List
 import numpy as np
 import os
+import pickle
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -163,6 +165,50 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
         self.learning_rate = learning_rate
         self.epochs = epochs
 
+    def load_model(self, model_name: str):
+        self.model_name = model_name
+        save_dir = self.project_paths.models_path
+        model_path = f"{save_dir}{self.model_name}.pth"
+        meta_path = f"{save_dir}{self.model_name}_meta.pth"
+
+        if not Path(model_path).exists():
+            raise FileNotFoundError(f"Model weights not found: {model_path}")
+
+        if not Path(meta_path).exists():
+            raise FileNotFoundError(f"Model metadata not found: {meta_path}")
+
+        with open(meta_path, "rb") as f:
+            metadata = pickle.load(f)
+
+        self.learning_rate = metadata.get("learning_rate", self.learning_rate)
+        self.epochs = metadata.get("epochs", self.epochs)
+        self.batch_size = metadata.get("batch_size", self.batch_size)
+        input_dim = metadata["input_dim"]
+
+        self.clf = MyAutoEncoderTanh(input_dim=input_dim)
+        self.clf.to(self.device)
+
+        state_dict = torch.load(model_path, map_location=self.device)
+        self.clf.load_state_dict(state_dict)
+
+        self.clf.eval()
+        logger.info(f"Loaded AutoEncoder model from {model_path}")
+    
+    
+    def save_model(self):
+        save_dir = self.project_paths.models_path
+        model_path = f"{save_dir}{self.model_name}.pth"
+        meta_path = f"{save_dir}{self.model_name}_meta.pth"
+
+        torch.save(self.clf.state_dict(), model_path)
+        metadata = {
+            "learning_rate": self.learning_rate,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "input_dim": next(self.clf.parameters()).shape[1],
+        }
+        with open(meta_path, "wb") as f:
+            pickle.dump(metadata, f)
 
     # TODO: Rename preprocess_for_preds into preprocess ?
     # Wrapper to fit to preprocessing_generic_ae function call.
@@ -222,6 +268,7 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
             logger.debug(
                 f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(X_tensor):.6f}"
             )
+        self.save_model()
 
 
 def preprocessing_sbert(

@@ -58,7 +58,7 @@ class ProjectPaths:
 
     @property
     def models_path(self) -> str:
-        path = f"{self.base_path}/cache/"
+        path = f"{self.base_path}/output/models/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 
