@@ -49,17 +49,6 @@ def get_statement_types_and_proportions(dataset_config: dict):
 
     return stmts
 
-def get_dataset_output_path(dataset_config: dict, general_config: dict):
-    """Get the output path for a dataset, with fallback to general config."""
-    return dataset_config.get("output_path", general_config.get("output_path", "dataset.csv"))
-
 def get_dataset_attacks_ratio(dataset_config: dict, general_config: dict):
     """Get the attacks ratio for a dataset, with fallback to general config."""
     return dataset_config.get("attacks_ratio", general_config.get("attacks_ratio", 0.1))
-
-def get_dataset_database_name(dataset_config: dict):
-    """Get the database name for a dataset.
-
-    Uses the dataset name as the database name.
-    """
-    return dataset_config.get("name", "dataset")

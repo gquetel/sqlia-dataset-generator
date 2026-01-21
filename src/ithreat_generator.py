@@ -13,12 +13,11 @@ logger = logging.getLogger(__name__)
 
 class iThreatGenerator:
     def __init__(
-        self, config: dict, sqlconnector: SQLConnector
+        self, config: dict, sqlconnector: SQLConnector, testing_mode : bool = False
     ):
         self.sqlc = sqlconnector
         self.config = config
-
-        pass
+        self.testing_mode = testing_mode
 
     def enable_query_logging(self):
         """Send a query to the DBMS to enable the query logging."""
@@ -56,19 +55,24 @@ class iThreatGenerator:
 
         _, _, host, port, priv_user, priv_pwd = get_mysql_info(config=self.config)
 
-        database = "dataset"
+        database = self.config["dataset"]["name"]
         
         connect_string = (
             f"mysql://{priv_user}:{priv_pwd}@{host}:{str(port)}/{database}"
         )
         # We don't want to use session files, no interaction either.
         base_command = f"sqlmap --fresh-queries  --batch -d '{connect_string}' "
-        objectives = [
-            "--dump",  # Dump DBMS database table entries
-            "--passwords",  #  Enumerate DBMS users password hashes
-            "--schema",  #  Enumerate DBMS users privileges
-            "--all",  # Retrieve everything
-        ]
+
+        if self.testing_mode:
+            objectives = ["--schema"]
+        else:
+            objectives = [
+                "--dump",  # Dump DBMS database table entries
+                "--passwords",  #  Enumerate DBMS users password hashes
+                "--schema",  #  Enumerate DBMS users privileges
+                "--all",  # Retrieve everything
+            ]
+
         df_res = pd.DataFrame()
         cnt_obj = 0
 

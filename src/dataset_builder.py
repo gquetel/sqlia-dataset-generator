@@ -41,24 +41,19 @@ def _extract_params(template):
 class DatasetBuilder:
     def __init__(self, config) -> None:
         # Object attributes initialisation
-
+        
+        # config is made of a "general" attribute containing information generic to 
+        # the whole app (such as seed info), and "dataset" that is specific to the 
+        # dataset currently generated.
         self.config = config
-        self.seed = config_parser.get_seed(self.config)
+        self.seed = config["general"]["seed"]
 
-        # Extract the dataset-specific config (there should be only one per builder)
-        self.dataset_config = self.config["datasets"][0]
-
-        # Get the database name for this dataset
-        self.database_name = config_parser.get_dataset_database_name(self.dataset_config)
+        self.dataset_config = self.config["dataset"]
+        self.dataset_name = self.dataset_config["name"]
 
         #  Dict holding all possible filler values, Keys are tuple of the form:
         #  (dataset_name, dictionnary_name)
         self.dictionaries = {}
-
-        # Dataset output path (can be overridden per dataset)
-        self.outpath = config_parser.get_dataset_output_path(
-            self.dataset_config, self.config["general"]
-        )
 
         # Connection wrapper to SQL server.
         self.sqlc = None
@@ -81,36 +76,30 @@ class DatasetBuilder:
     def populate_dictionaries(self):
         """Load dictionaries of legitimate values for placeholders.
 
-        The function iterates over all datasets, checks under
-        data/databases/$dataset/dicts and load all existing file into
-        self.dictionaries[(dataset_name, placeholder_id)]
+        The function checks under data/datasets/$dataset/dicts and loads all
+        existing files into self.dictionaries[(dataset_name, placeholder_id)]
         """
-        used_datasets = config_parser.get_used_datasets(self.config)
-
-        for db in used_datasets:
-            dicts_dir = "".join(["./data/databases/", db, "/dicts/"])
-            for filename in os.listdir(dicts_dir):
-                with open(dicts_dir + filename, "r") as f:
-                    self.dictionaries[(db, filename)] = f.read().splitlines()
+        dicts_dir = f"./data/datasets/{self.dataset_name}/dicts/"
+        for filename in os.listdir(dicts_dir):
+            with open(dicts_dir + filename, "r") as f:
+                self.dictionaries[(self.dataset_name, filename)] = f.read().splitlines()
 
     def get_all_templates(self) -> pd.DataFrame:
         """Return all statements templates from generation settings."""
-        used_datasets = config_parser.get_used_datasets(self.config)
         statements_type = config_parser.get_statement_types_and_proportions(
             self.dataset_config
         )
         _all_templates = pd.DataFrame()
 
-        for db in used_datasets:
-            dir_path = "".join(["./data/databases/", db, "/queries/"])
-            for stmt_type in statements_type:
-                # Iterate over statements_type, load relevant csv file
-                # And then add necessary fields.
-                _t = pd.read_csv(dir_path + stmt_type["type"] + ".csv")
+        dir_path = f"./data/datasets/{self.dataset_name}/queries/"
+        for stmt_type in statements_type:
+            # Iterate over statements_type, load relevant csv file
+            # And then add necessary fields.
+            _t = pd.read_csv(dir_path + stmt_type["type"] + ".csv")
 
-                _t["proportion"] = stmt_type["proportion"]
-                _t["statement_type"] = stmt_type["type"]
-                _all_templates = pd.concat([_t, _all_templates])
+            _t["proportion"] = stmt_type["proportion"]
+            _t["statement_type"] = stmt_type["type"]
+            _all_templates = pd.concat([_t, _all_templates])
 
         _all_templates["placeholders"] = _all_templates["template"].apply(
             _extract_params
@@ -136,9 +125,9 @@ class DatasetBuilder:
         self.df_tadmin = self.templates[self.templates["ID"].str.contains("admin")]
         self.templates = self.templates[~self.templates["ID"].str.contains("admin")]
 
-        # Testing settings, allows for quick iteration over templates.
+        # Testing settings, simply test a single template.
         if testing_mode:
-            n_templates = 10
+            n_templates = 1
 
             self.templates = self.templates.sample(n=n_templates)
             logger.warning(
@@ -229,7 +218,7 @@ class DatasetBuilder:
         )
 
     def fill_placeholder(
-        self, query: str, placeholder: str, dataset_name: str, count: int = 1
+        self, query: str, placeholder: str, count: int = 1
     ) -> tuple[str, str]:
         if placeholder == "rand_pos_number":
             filler = random.randint(0, 64000)
@@ -241,7 +230,7 @@ class DatasetBuilder:
             alphabet = string.ascii_letters + string.digits
             filler = "".join(secrets.choice(alphabet) for i in range(20))
         else:
-            filler = random.choice(self.dictionaries[(dataset_name, placeholder)])
+            filler = random.choice(self.dictionaries[(self.dataset_name, placeholder)])
         filler = str(filler).replace('"', '""')
         return (query.replace(f"{{{placeholder}}}", f"{filler}", 1), filler)
 
@@ -341,13 +330,11 @@ class DatasetBuilder:
                 condition = random.choice(geo_fields)
             # Now fill condition with actual placeholder and keep their value in user_inputs.
             all_placeholders = re.findall(r"\{([-a-zA-Z_]+)\}", condition)
-            dataset_name = template_info.ID.split("-")[0]
 
             for placeholder in all_placeholders:
                 condition, filler = self.fill_placeholder(
                     query=condition,
                     placeholder=placeholder,
-                    dataset_name=dataset_name,
                     count=1,
                 )
                 # Add generated fillers to user_input array
@@ -369,8 +356,6 @@ class DatasetBuilder:
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
-            dataset_name = template_row.ID.split("-")[0]
-
             query = template_row.template
             user_inputs = []
 
@@ -390,7 +375,6 @@ class DatasetBuilder:
                     query, filler = self.fill_placeholder(
                         query=query,
                         placeholder=placeholder,
-                        dataset_name=dataset_name,
                         count=1,
                     )
                     user_inputs.append(filler)
@@ -418,7 +402,7 @@ class DatasetBuilder:
 
     def _verify_syntactic_validity_query(self, query: str):
         if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config, self.database_name)
+            self.sqlc = SQLConnector(self.config, self.dataset_name)
         res = self.sqlc.is_query_syntvalid(query=query)
         return res
 
@@ -432,7 +416,7 @@ class DatasetBuilder:
         # templates are already selected / sampled in self.templates
 
         if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config, self.database_name)
+            self.sqlc = SQLConnector(self.config, self.dataset_name)
         # Prune all sent_queries for attacks
         _ = self.sqlc.get_and_empty_sent_queries()
 
@@ -440,14 +424,14 @@ class DatasetBuilder:
             templates=self.templates, sqlconnector=self.sqlc, port=server_port
         )
         server.start_server()
-
         # Now iterate over templates and techniques to generate payloads.
         sqlg = sqlmapGenerator(
-            config=self.config,
+            dataset_config=self.dataset_config,
             templates=self.templates,
             sqlconnector=self.sqlc,
             placeholders_dictionaries_list=self.dictionaries,
             port=server_port,
+            seed=self.seed,
         )
         generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
         server.stop_server()
@@ -456,7 +440,7 @@ class DatasetBuilder:
         self.df = generated_attack_queries
 
     def _clean_cache_folder(self):
-        shutil.rmtree("./cache/", ignore_errors=True)
+        shutil.rmtree("./.cache/", ignore_errors=True)
 
     def _add_template_split_info(self):
         """Add a column which specify wether the sample comes from the 'original'
@@ -491,9 +475,9 @@ class DatasetBuilder:
 
     def generate_ithreat(self, args):
         if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config, self.database_name)
+            self.sqlc = SQLConnector(self.config, self.dataset_name)
 
-        itg = iThreatGenerator(self.config, self.sqlc)
+        itg = iThreatGenerator(self.config, self.sqlc, args.testing)
 
         # df_metasploit = itg.perform_insider_attack_metasploit()
         df_sqlmap = itg.perform_insider_attack_sqlmap()
@@ -533,6 +517,9 @@ class DatasetBuilder:
         df_ithreat = self.generate_ithreat(args)
         self.df = pd.concat([self.df, df_ithreat])
 
-    def save(self):
-        self.df.to_csv(self.outpath, index=False)
+    def save(self, output_dir : str):
+        os.makedirs(output_dir, exist_ok=True)
+        outpath = os.path.join(output_dir, f"{self.dataset_name}.csv")
+
+        self.df.to_csv(outpath, index=False)
         self._clean_cache_folder()

@@ -13,7 +13,6 @@ import secrets
 import random
 
 from .db_cnt_manager import SQLConnector
-from .config_parser import get_seed
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +20,24 @@ logger = logging.getLogger(__name__)
 class sqlmapGenerator:
     def __init__(
         self,
-        config: dict,
+        dataset_config: dict,
         templates: pd.DataFrame,
         sqlconnector: SQLConnector,
         placeholders_dictionaries_list: list,
         port: int,
+        seed: int,
     ):
         """Initialize data structures for payload generation."""
 
         self.templates = templates.to_dict("records")
-        self.config = config
+        self.dataset_config = dataset_config
         self.port = port
         self.sqlc = sqlconnector
         # List of dictionaries of values
         self.pdl = placeholders_dictionaries_list
+
+        # Extract dataset name from dataset-specific config
+        self.dataset_name = dataset_config["name"]
 
         # List of tamper scripts that can be used during the attack, 1 is choosen at
         # random for each sqlmap invocation amongst this attribute.
@@ -53,7 +56,7 @@ class sqlmapGenerator:
         #  space2dash tamper script lead to sqlmap being unable to identify injections
         # let's not use it for generation.
 
-        self.seed = get_seed(self.config)
+        self.seed = seed
 
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
@@ -164,11 +167,11 @@ class sqlmapGenerator:
             return queries[-1]
         return []
 
-    def _construct_eval_option(self, schema_name: str, parameters: list[str]) -> str:
+    def _construct_eval_option(self, dataset_name: str, parameters: list[str]) -> str:
         """_summary_
 
         Args:
-            schema_name (str): _description_
+            dataset_name (str): _description_
             parameters (list[str]): _description_
 
         Returns:
@@ -216,7 +219,7 @@ class sqlmapGenerator:
                 ]
             else:
                 ran_values = random.choices(
-                    self.pdl[(schema_name, param_no_sx)], k=10
+                    self.pdl[(dataset_name, param_no_sx)], k=10
                 )
 
             values_str = str(ran_values).replace('"', '\\"')
@@ -257,7 +260,7 @@ class sqlmapGenerator:
         url: str,
         settings_tech: str,
         params: list[str],
-        schema_name: str,
+        dataset_name: str,
         debug_mode: bool,
         template_info: dict,
     ) -> pd.DataFrame:
@@ -294,13 +297,13 @@ class sqlmapGenerator:
             _t_params = params.copy()
             _t_params.remove(param)
             settings_eval = self._construct_eval_option(
-                schema_name=schema_name, parameters=_t_params
+                dataset_name=dataset_name, parameters=_t_params
             )
             tamper_script = random.choice(self._tamper_scripts)
             settings_verbose = "-v 3 " if debug_mode else "-v 0 "
 
             recon_settings = (
-                f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=1 --batch "
+                f"{settings_verbose} --skip-waf --level=5 --risk=1 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
                 f" -p '{param}' "
                 f' -tamper="{tamper_script}" '
@@ -370,7 +373,7 @@ class sqlmapGenerator:
         settings_verbose = "-v 3 " if debug_mode else "-v 0 "
 
         exploit_settings = (
-            f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=1 --batch "
+            f"{settings_verbose} --skip-waf --level=5 --risk=1 --batch "
             f"--skip='user-agent,referer,host'"
             f' -tamper="{tamper_script}" '
             f'{settings_tech} -u "{url}"'
@@ -423,7 +426,6 @@ class sqlmapGenerator:
         """
         # Load all information to build the sqlmap command.
         name_tech, settings_tech = technique
-        schema_name = template_info["ID"].split("-")[0]
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
             param_no_sx = param.rstrip("123456789")
@@ -441,7 +443,7 @@ class sqlmapGenerator:
                 )
             else:
                 random_param_value = random.choice(
-                    self.pdl[(schema_name, param_no_sx)]
+                    self.pdl[(self.dataset_name, param_no_sx)]
                 )
 
             params[param] = random_param_value
@@ -454,7 +456,7 @@ class sqlmapGenerator:
             url=url,
             settings_tech=settings_tech,
             params=template_info["placeholders"],
-            schema_name=schema_name,
+            dataset_name=self.dataset_name,
             debug_mode=debug_mode,
             template_info=template_info,
         )
@@ -522,7 +524,7 @@ class sqlmapGenerator:
             "inline": "--technique=Q --all ",
         }
 
-        Path("./cache/").mkdir(parents=True, exist_ok=True)
+        Path("./.cache/").mkdir(parents=True, exist_ok=True)
 
         # Template's number is reduced, we also only consider the error technique.
         if testing_mode:
@@ -530,8 +532,8 @@ class sqlmapGenerator:
 
         for template in self.templates:
             for i in techniques.items():
-                # example of cache file: ./cache/airport-I1-union
-                cache_filepath = f"./cache/{template['ID']}-{i[0]}"
+                # example of cache file: ./.cache/airport-I1-union
+                cache_filepath = f"./.cache/{template['ID']}-{i[0]}"
                 if Path(cache_filepath).is_file():
                     self.generated_attacks = pd.read_csv(cache_filepath)
                     last_atkid = self.generated_attacks.iloc[-1]["attack_id"]

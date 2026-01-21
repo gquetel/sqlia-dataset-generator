@@ -41,6 +41,7 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="Enable debug mode, output will be VERY verbose.",
     )
+    
 
     parser.add_argument(
         "--no-syn-check",
@@ -61,6 +62,14 @@ def init_args() -> argparse.Namespace:
         default="config.toml",
         help="Filepath to the dataset generation configuration file."
     )
+    
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        dest="output_dir",
+        default="./output/",
+        help="Filepath to the directory that will contain all generated datasets."
+    )
 
 
     return parser.parse_args()
@@ -72,17 +81,85 @@ def init_toml_config(args: argparse.Namespace) -> dict:
         config = tomllib.load(f)
     return config
 
+
+def validate_datasets_config(config: dict):
+    """Validate that all dataset names and their statement CSV files are properly configured.
+
+    Args:
+        config: The loaded TOML configuration
+
+    Raises:
+        ValueError: If any dataset name doesn't have a corresponding folder,
+                   or if any statement CSV file is missing or empty
+    """
+    datasets_dir = Path("data/datasets")
+
+    if not datasets_dir.exists():
+        raise ValueError(f"Dataset directory not found.")
+
+    available_folders = {
+        folder.name for folder in datasets_dir.iterdir()
+        if folder.is_dir()
+    }
+
+    configured_datasets = config.get("datasets", [])
+
+    # Check if any datasets are configured
+    if not configured_datasets:
+        raise ValueError("No datasets configured in configuration file")
+
+    # Check for missing folders and validate statement CSV files
+    for dataset_config in configured_datasets:
+        dataset_name = dataset_config.get("name")
+
+        # Check if dataset folder exists
+        if dataset_name not in available_folders:
+            raise ValueError(
+                f"Dataset folder not found in {datasets_dir}: {dataset_name}\n"
+                f"Available folders: {', '.join(sorted(available_folders)) if available_folders else '(none)'}"
+            )
+
+        # Validate statement CSV files
+        statements = dataset_config.get("statements", {})
+        if not statements:
+            raise ValueError(f"No statements configured for dataset '{dataset_name}'")
+
+        queries_dir = datasets_dir / dataset_name / "queries"
+        if not queries_dir.exists():
+            raise ValueError(f"Queries directory not found for dataset '{dataset_name}': {queries_dir}")
+
+        for statement_name in statements.keys():
+            csv_file = queries_dir / f"{statement_name}.csv"
+
+            # Check if CSV file exists
+            if not csv_file.exists():
+                raise ValueError(
+                    f"Statement CSV file not found for dataset '{dataset_name}': {csv_file}\n"
+                    f"Expected file for statement '{statement_name}'"
+                )
+
+            # Check if CSV file has at least one entry (excluding header)
+            try:
+                with open(csv_file, 'r') as f:
+                    lines = f.readlines()
+                    if len(lines) < 2:  # Need at least header + one data row
+                        raise ValueError(
+                            f"Statement CSV file is empty or has no entries for dataset '{dataset_name}': {csv_file}\n"
+                            f"File must contain at least one query template (excluding header row)"
+                        )
+            except Exception as e:
+                if isinstance(e, ValueError):
+                    raise
+                raise ValueError(f"Error reading statement CSV file '{csv_file}': {e}")
+
 def main():
     args = init_args()
     init_logging(args.debug)
     config = init_toml_config(args)
+    validate_datasets_config(config)
 
     datasets = config.get("datasets", [])
-
-    if not datasets:
-        logger.error("No datasets found in configuration file")
-        return
-
+    
     for dataset_config in datasets:
         dataset_name = dataset_config.get("name", "unknown")
         logger.info(f"Building dataset: {dataset_name}")
@@ -91,7 +168,7 @@ def main():
         dataset_specific_config = {
             "general": config["general"],
             "mysql": config["mysql"],
-            "datasets": [dataset_config]
+            "dataset": dataset_config
         }
 
         db = DatasetBuilder(dataset_specific_config)
@@ -101,9 +178,9 @@ def main():
         else:
             db.build(args)
 
-        db.save()
+        db.save(args.output_dir)
         logger.info(f"Dataset {dataset_name} saved successfully")
-    
+    # TODO: Function call that merges all generated datasets.
 
 if __name__ == "__main__":
     main()

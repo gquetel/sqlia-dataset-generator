@@ -9,6 +9,7 @@ cache-old
 result
 cache/**
 venv-3.12.3
+CLAUDE.md
 
 # MySQL local development
 .mysql/
