@@ -26,7 +26,7 @@ priv_user="root"
 priv_pwd="root"
 
 [[datasets]]
-name = "airport"
+name = "OurAirports"
 
 [datasets.statements]
 select = "7/10"
@@ -35,12 +35,12 @@ update = "1/10"
 insert = "1/10"
 admin = "1/100"
 
-[[datasets]]
-name = "dataset_2"
-output_path = "dataset2.csv"
-attacks_ratio = 0.3
+# [[datasets]]
+# name = "dataset_2"
+# output_path = "dataset2.csv"
+# attacks_ratio = 0.3
 
-[datasets.statements]
-read_query = "5/10"
-write_query = "3/10"
-maintenance = "2/10"
+# [datasets.statements]
+# read_query = "5/10"
+# write_query = "3/10"
+# maintenance = "2/10"

@@ -10,4 +10,4 @@ CREATE USER 'tata'@'localhost' IDENTIFIED BY 'tata';
 FLUSH PRIVILEGES;
 
 -- Load dataset-specific schemas (each creates its own database)
-SOURCE ./databases/airport/init_db.sql;
+SOURCE ./datasets/OurAirports/init_db.sql;

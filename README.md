@@ -36,7 +36,7 @@ The dataset generation relies on templates of queries, filled by legitimate valu
 SELECT * FROM airport WHERE icao_code = '{airports_icao_code}'
 ```
 
-Currently, query [templates](data/databases/airport/queries) only comprise a single database schema ([airport](data/databases/airport/queries), derived from the OurAirports.com project). Ultimately, generating dataset for new database schemas should only consist of adding a folder under [databases](./databases/) containing 2 subfolders (not fully tested yet) : 
+Currently, query [templates](data/datasets/airport/queries) only comprise a single database schema ([OurAirports](data/datasets/OurAirports/queries), derived from the OurAirports.com project). Ultimately, generating dataset for new database schemas should only consist of adding a folder under [datasets](./datasets/) containing 2 subfolders (not fully tested yet) : 
 - `dicts`: Contains dictionary files. Each file's name must match a placeholder name used in query templates. 
 - `queries`: Contains CSV files defining the query templates. Each file must include the following columns:
   - `template`: The SQL query template. Placeholders must be enclosed in curly braces ({}) and match a corresponding dictionary filename.
@@ -69,7 +69,7 @@ We also generate queries typical of [insider attack](https://doi.org/10.1007/978
 
 After generating malicious queries, normal samples are generated using dictionaries of legitimate values. The `attacks_ratio` defined in `ini.ini` will dictate how many normal samples will be included in the test set. For the training set, we generate roughly the same number of samples than generated attacks.
 
-For instance, with the above query template, the generator will load the [data/databases/airport/dicts/airports_icao_code](data/databases/airport/dicts/airports_icao_code) file, and randomly select a value to create a normal sample such as: 
+For instance, with the above query template, the generator will load the [data/datasets/OurAirports/dicts/airports_icao_code](data/datasets/OurAirports/dicts/airports_icao_code) file, and randomly select a value to create a normal sample such as: 
 
 ```
 SELECT * FROM airport WHERE icao_code = 'LFPN'

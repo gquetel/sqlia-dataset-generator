@@ -1,12 +1,12 @@
 -- Airport database schema
--- This script creates the airport database and its tables
+-- This script creates the airpoOurAirportsrt database and its tables
 
-DROP DATABASE IF EXISTS airport;
-CREATE DATABASE airport;
-USE airport;
+DROP DATABASE IF EXISTS OurAirports;
+CREATE DATABASE OurAirports;
+USE OurAirports;
 
 -- Grant privileges to tata user
-GRANT ALL PRIVILEGES ON airport.* TO 'tata'@'localhost';
+GRANT ALL PRIVILEGES ON OurAirports.* TO 'tata'@'localhost';
 FLUSH PRIVILEGES;
 
 CREATE TABLE airport (
