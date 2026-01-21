@@ -10,6 +10,9 @@ result
 cache/**
 venv-3.12.3
 
+# MySQL local development
+.mysql/
+
 diff.py
 merge.py
 # Byte-compiled / optimized / DLL files

@@ -45,12 +45,20 @@ class DatasetBuilder:
         self.config = config
         self.seed = config_parser.get_seed(self.config)
 
+        # Extract the dataset-specific config (there should be only one per builder)
+        self.dataset_config = self.config["datasets"][0]
+
+        # Get the database name for this dataset
+        self.database_name = config_parser.get_dataset_database_name(self.dataset_config)
+
         #  Dict holding all possible filler values, Keys are tuple of the form:
-        #  (schema_name, dictionnary_name)
+        #  (dataset_name, dictionnary_name)
         self.dictionaries = {}
 
-        # Dataset output path
-        self.outpath = config_parser.get_output_path(config)
+        # Dataset output path (can be overridden per dataset)
+        self.outpath = config_parser.get_dataset_output_path(
+            self.dataset_config, self.config["general"]
+        )
 
         # Connection wrapper to SQL server.
         self.sqlc = None
@@ -77,9 +85,9 @@ class DatasetBuilder:
         data/databases/$dataset/dicts and load all existing file into
         self.dictionaries[(dataset_name, placeholder_id)]
         """
-        used_databases = config_parser.get_used_databases(self.config)
+        used_datasets = config_parser.get_used_datasets(self.config)
 
-        for db in used_databases:
+        for db in used_datasets:
             dicts_dir = "".join(["./data/databases/", db, "/dicts/"])
             for filename in os.listdir(dicts_dir):
                 with open(dicts_dir + filename, "r") as f:
@@ -87,13 +95,13 @@ class DatasetBuilder:
 
     def get_all_templates(self) -> pd.DataFrame:
         """Return all statements templates from generation settings."""
-        used_databases = config_parser.get_used_databases(self.config)
+        used_datasets = config_parser.get_used_datasets(self.config)
         statements_type = config_parser.get_statement_types_and_proportions(
-            self.config
+            self.dataset_config
         )
         _all_templates = pd.DataFrame()
 
-        for db in used_databases:
+        for db in used_datasets:
             dir_path = "".join(["./data/databases/", db, "/queries/"])
             for stmt_type in statements_type:
                 # Iterate over statements_type, load relevant csv file
@@ -167,7 +175,9 @@ class DatasetBuilder:
 
     def _augment_test_set_normal_queries(self, do_syn_check: bool):
         """We augment the number of normal queries in test set."""
-        atk_ratio = config_parser.get_attacks_ratio(self.config)
+        atk_ratio = config_parser.get_dataset_attacks_ratio(
+            self.dataset_config, self.config["general"]
+        )
 
         n_attack_test_set = self.df[
             (self.df["split"] == "test") & (self.df["label"] == 1)
@@ -219,7 +229,7 @@ class DatasetBuilder:
         )
 
     def fill_placeholder(
-        self, query: str, placeholder: str, schema_name: str, count: int = 1
+        self, query: str, placeholder: str, dataset_name: str, count: int = 1
     ) -> tuple[str, str]:
         if placeholder == "rand_pos_number":
             filler = random.randint(0, 64000)
@@ -231,7 +241,7 @@ class DatasetBuilder:
             alphabet = string.ascii_letters + string.digits
             filler = "".join(secrets.choice(alphabet) for i in range(20))
         else:
-            filler = random.choice(self.dictionaries[(schema_name, placeholder)])
+            filler = random.choice(self.dictionaries[(dataset_name, placeholder)])
         filler = str(filler).replace('"', '""')
         return (query.replace(f"{{{placeholder}}}", f"{filler}", 1), filler)
 
@@ -331,13 +341,13 @@ class DatasetBuilder:
                 condition = random.choice(geo_fields)
             # Now fill condition with actual placeholder and keep their value in user_inputs.
             all_placeholders = re.findall(r"\{([-a-zA-Z_]+)\}", condition)
-            schema_name = template_info.ID.split("-")[0]
+            dataset_name = template_info.ID.split("-")[0]
 
             for placeholder in all_placeholders:
                 condition, filler = self.fill_placeholder(
                     query=condition,
                     placeholder=placeholder,
-                    schema_name=schema_name,
+                    dataset_name=dataset_name,
                     count=1,
                 )
                 # Add generated fillers to user_input array
@@ -359,7 +369,7 @@ class DatasetBuilder:
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
             all_placeholders = _extract_params(template=template_row.template)
-            schema_name = template_row.ID.split("-")[0]
+            dataset_name = template_row.ID.split("-")[0]
 
             query = template_row.template
             user_inputs = []
@@ -380,7 +390,7 @@ class DatasetBuilder:
                     query, filler = self.fill_placeholder(
                         query=query,
                         placeholder=placeholder,
-                        schema_name=schema_name,
+                        dataset_name=dataset_name,
                         count=1,
                     )
                     user_inputs.append(filler)
@@ -408,7 +418,7 @@ class DatasetBuilder:
 
     def _verify_syntactic_validity_query(self, query: str):
         if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config)
+            self.sqlc = SQLConnector(self.config, self.database_name)
         res = self.sqlc.is_query_syntvalid(query=query)
         return res
 
@@ -422,7 +432,7 @@ class DatasetBuilder:
         # templates are already selected / sampled in self.templates
 
         if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config)
+            self.sqlc = SQLConnector(self.config, self.database_name)
         # Prune all sent_queries for attacks
         _ = self.sqlc.get_and_empty_sent_queries()
 
@@ -481,7 +491,7 @@ class DatasetBuilder:
 
     def generate_ithreat(self, args):
         if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config)
+            self.sqlc = SQLConnector(self.config, self.database_name)
 
         itg = iThreatGenerator(self.config, self.sqlc)
 

@@ -1,8 +1,8 @@
 import argparse
-import configparser
 import logging
 from pathlib import Path
 import sys
+import tomllib
 
 from src.dataset_builder import DatasetBuilder
 
@@ -29,13 +29,6 @@ def init_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Creates a dataset of SQL queries specific to a domain, containing both normal queries and queries with injections attacks."
     )
-    parser.add_argument(
-        "--ini",
-        type=str,
-        dest="ini",
-        required=True,
-        help="Filepath to the .ini configuration file.",
-    )
 
     parser.add_argument(
         "--testing",
@@ -61,30 +54,55 @@ def init_args() -> argparse.Namespace:
         help="Only generate insider threat queries.",
     )
 
+    parser.add_argument(
+        "--config-file",
+        type=str,
+        dest="config_file",
+        default="config.toml",
+        help="Filepath to the dataset generation configuration file."
+    )
+
 
     return parser.parse_args()
 
 
-def init_config(args: argparse.Namespace) -> configparser.ConfigParser:
-    # Interpolation required to use values from other sections in the same file:
-    # https://docs.python.org/3/library/configparser.html
-    config = configparser.ConfigParser(interpolation=configparser.BasicInterpolation())
-    config.read(args.ini)
+def init_toml_config(args: argparse.Namespace) -> dict:
+    """Load and parse the TOML configuration file."""
+    with open(args.config_file, "rb") as f:
+        config = tomllib.load(f)
     return config
-
 
 def main():
     args = init_args()
     init_logging(args.debug)
-    config = init_config(args)
-    db = DatasetBuilder(config)
+    config = init_toml_config(args)
 
-    if args.ithreat_only: 
-        db.build_ithreat(args)
-    else:
-        db.build(args)
-    
-    db.save()
+    datasets = config.get("datasets", [])
+
+    if not datasets:
+        logger.error("No datasets found in configuration file")
+        return
+
+    for dataset_config in datasets:
+        dataset_name = dataset_config.get("name", "unknown")
+        logger.info(f"Building dataset: {dataset_name}")
+
+        # We create a unified config for each dataset to be given to DatasetBuilder.
+        dataset_specific_config = {
+            "general": config["general"],
+            "mysql": config["mysql"],
+            "datasets": [dataset_config]
+        }
+
+        db = DatasetBuilder(dataset_specific_config)
+
+        if args.ithreat_only:
+            db.build_ithreat(args)
+        else:
+            db.build(args)
+
+        db.save()
+        logger.info(f"Dataset {dataset_name} saved successfully")
     
 
 if __name__ == "__main__":

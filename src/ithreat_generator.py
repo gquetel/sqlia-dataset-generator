@@ -1,4 +1,3 @@
-import configparser
 import logging
 from pathlib import Path
 from subprocess import STDOUT, Popen, PIPE
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class iThreatGenerator:
     def __init__(
-        self, config: configparser.ConfigParser, sqlconnector: SQLConnector
+        self, config: dict, sqlconnector: SQLConnector
     ):
         self.sqlc = sqlconnector
         self.config = config

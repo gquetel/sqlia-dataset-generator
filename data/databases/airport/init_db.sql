@@ -1,14 +1,13 @@
--- Execute as root on database 
-DROP DATABASE IF EXISTS dataset;
-DROP USER IF EXISTS 'tata'@'localhost';
+-- Airport database schema
+-- This script creates the airport database and its tables
+
+DROP DATABASE IF EXISTS airport;
+CREATE DATABASE airport;
+USE airport;
+
+-- Grant privileges to tata user
+GRANT ALL PRIVILEGES ON airport.* TO 'tata'@'localhost';
 FLUSH PRIVILEGES;
-
-create database dataset;
-use dataset; 
-
-CREATE USER 'tata'@'localhost' IDENTIFIED BY 'tata';
-GRANT ALL PRIVILEGES ON dataset.* TO 'tata'@'localhost';
-flush privileges; 
 
 CREATE TABLE airport (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -23,7 +22,7 @@ CREATE TABLE airport (
     iso_region VARCHAR(10),
     municipality VARCHAR(100),
     scheduled_service VARCHAR(3),
-    gps_code VARCHAR(10), 
+    gps_code VARCHAR(10),
     icao_code VARCHAR(10),
     iata_code VARCHAR(3),
     local_code VARCHAR(10),

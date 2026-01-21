@@ -1,4 +1,3 @@
-import configparser
 import logging
 from pathlib import Path
 from subprocess import STDOUT, Popen, PIPE
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 class sqlmapGenerator:
     def __init__(
         self,
-        config: configparser.ConfigParser,
+        config: dict,
         templates: pd.DataFrame,
         sqlconnector: SQLConnector,
         placeholders_dictionaries_list: list,

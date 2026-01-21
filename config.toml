@@ -1,0 +1,46 @@
+[general]
+# Generated dataset path
+output_path = "dataset.csv"
+
+# Ratio of attacks in the test set. This does not modify the final number of 
+# attack in the dataset but the number of generated normal samples to reach the 
+# ratio value.
+attacks_ratio = 0.1
+
+# Seed to have constance in template selection or normal values selection.
+seed = 42
+
+[mysql]
+# user and password used for interacting with the mysql server. By default, it
+# consists of the unprivileged user created by the provided data/bootstrap.sql
+# script.
+user = "tata"
+password = "tata"
+host = "localhost"
+port = 61337
+
+# Password for MySQL root user, required for : 
+# - `pt-kill` command executed between each attack campaign.
+# - `log-level command` to enable logging of queries.
+priv_user="root"
+priv_pwd="root"
+
+[[datasets]]
+name = "airport"
+
+[datasets.statements]
+select = "7/10"
+delete = "9/100"
+update = "1/10"
+insert = "1/10"
+admin = "1/100"
+
+[[datasets]]
+name = "dataset_2"
+output_path = "dataset2.csv"
+attacks_ratio = 0.3
+
+[datasets.statements]
+read_query = "5/10"
+write_query = "3/10"
+maintenance = "2/10"
