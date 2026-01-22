@@ -6,7 +6,7 @@ let
     # config.cudaSupport = true;
   };
 
-   sqlmap = pkgs.python313Packages.sqlmap.overridePythonAttrs (oldAttrs: {
+  sqlmap = pkgs.python313Packages.sqlmap.overridePythonAttrs (oldAttrs: {
     propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
       pkgs.python313Packages.sqlalchemy
       pkgs.python313Packages.pymysql
@@ -68,7 +68,7 @@ let
       ]
       ++ [
         mysql-connector
-        pytest  
+        pytest
       ]
     )).override
       (args: {
@@ -83,6 +83,12 @@ pkgs.mkShell rec {
     pkgs.mysql84
     pkgs.metasploit
     sqlmap
+    # Formatting tools
+    pkgs.treefmt
+    pkgs.black
+    pkgs.nixpkgs-fmt
+    pkgs.taplo
+    pkgs.mdformat
   ];
 
   allowUnfree = true;

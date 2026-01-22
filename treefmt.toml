@@ -1,0 +1,16 @@
+[formatter.black]
+command = "black"
+includes = ["*.py"]
+
+[formatter.nixpkgs-fmt]
+command = "nixpkgs-fmt"
+includes = ["*.nix"]
+
+[formatter.taplo]
+command = "taplo"
+options = ["format"]
+includes = ["*.toml"]
+
+[formatter.mdformat]
+command = "mdformat"
+includes = ["*.md"]
