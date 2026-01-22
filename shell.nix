@@ -111,25 +111,33 @@ pkgs.mkShell rec {
         --user=$USER
     fi
 
-    # Start MySQL
-    echo "Starting MySQL on port $MYSQL_PORT..."
-    mysqld \
-      --datadir="$MYSQL_DATADIR" \
-      --socket="$MYSQL_UNIX_PORT" \
-      --port=$MYSQL_PORT &
-    MYSQL_PID=$!
-    echo $MYSQL_PID > "$MYSQL_HOME/mysqld.pid"
-
-    # Wait for MySQL to start
+    # Check if MySQL is already running
     MYSQL_STARTED=false
-    for i in {1..30}; do
-      if mysqladmin --socket="$MYSQL_UNIX_PORT" ping &>/dev/null; then
-        echo "MySQL started successfully!"
-        MYSQL_STARTED=true
-        break
-      fi
-      sleep 1
-    done
+    MYSQL_ALREADY_RUNNING=false
+    if mysqladmin --socket="$MYSQL_UNIX_PORT" ping &>/dev/null; then
+      echo "MySQL already running on port $MYSQL_PORT"
+      MYSQL_STARTED=true
+      MYSQL_ALREADY_RUNNING=true
+    else
+      # Start MySQL
+      echo "Starting MySQL on port $MYSQL_PORT..."
+      mysqld \
+        --datadir="$MYSQL_DATADIR" \
+        --socket="$MYSQL_UNIX_PORT" \
+        --port=$MYSQL_PORT &
+      MYSQL_PID=$!
+      echo $MYSQL_PID > "$MYSQL_HOME/mysqld.pid"
+
+      # Wait for MySQL to start
+      for i in {1..30}; do
+        if mysqladmin --socket="$MYSQL_UNIX_PORT" ping &>/dev/null; then
+          echo "MySQL started successfully!"
+          MYSQL_STARTED=true
+          break
+        fi
+        sleep 1
+      done
+    fi
 
     if [ "$MYSQL_STARTED" = true ]; then
       # Initialize databases with bootstrap.sql
@@ -160,32 +168,35 @@ pkgs.mkShell rec {
 
     # Setup cleanup trap for shell exit
     cleanup_mysql() {
-      if [ -f "$MYSQL_HOME/mysqld.pid" ]; then
-        PID=$(cat "$MYSQL_HOME/mysqld.pid")
-        echo ""
-        echo "Stopping MySQL..."
-        kill $PID 2>/dev/null || true
+      # Only clean up if we started MySQL ourselves
+      if [ "$MYSQL_ALREADY_RUNNING" = false ]; then
+        if [ -f "$MYSQL_HOME/mysqld.pid" ]; then
+          PID=$(cat "$MYSQL_HOME/mysqld.pid")
+          echo ""
+          echo "Stopping MySQL..."
+          kill $PID 2>/dev/null || true
 
-        # Wait for MySQL to fully stop
-        for i in {1..30}; do
-          if ! kill -0 $PID 2>/dev/null; then
-            break
+          # Wait for MySQL to fully stop
+          for i in {1..30}; do
+            if ! kill -0 $PID 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          # Force kill if still running
+          if kill -0 $PID 2>/dev/null; then
+            kill -9 $PID 2>/dev/null || true
+            sleep 1
           fi
-          sleep 1
-        done
-
-        # Force kill if still running
-        if kill -0 $PID 2>/dev/null; then
-          kill -9 $PID 2>/dev/null || true
-          sleep 1
         fi
-      fi
 
-      # Clean up MySQL directory
-      if [ -d "$MYSQL_HOME" ]; then
-        echo "Cleaning up MySQL data..."
-        rm -rf "$MYSQL_HOME"
-        echo "MySQL cleanup complete"
+        # Clean up MySQL directory
+        if [ -d "$MYSQL_HOME" ]; then
+          echo "Cleaning up MySQL data..."
+          rm -rf "$MYSQL_HOME"
+          echo "MySQL cleanup complete"
+        fi
       fi
     }
 
