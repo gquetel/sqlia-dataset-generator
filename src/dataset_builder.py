@@ -73,6 +73,33 @@ class DatasetBuilder:
         np.random.seed(self.seed)
         self.populate_dictionaries()
 
+    def _get_sql_connector(self):
+        """Get or initialize the SQL connector lazily.
+
+        Returns:
+            SQLConnector: The SQL connector instance
+        """
+        if self.sqlc is None:
+            self.sqlc = SQLConnector(self.config, self.dataset_name)
+        return self.sqlc
+
+    def _get_normal_template_ids(self):
+        """Get list of template IDs for normal query generation.
+
+        Combines:
+        - Templates used to generate attacks (self.templates)
+        - Templates selected for normal-only generation (self.df_tno)
+        - Administrative query templates (self.df_tadmin)
+
+        Returns:
+            list: Combined list of template IDs
+        """
+        return (
+            list(self.templates["ID"].unique())
+            + list(self.df_tno["ID"].unique())
+            + list(self.df_tadmin["ID"].unique())
+        )
+
     def populate_dictionaries(self):
         """Load dictionaries of legitimate values for placeholders.
 
@@ -180,11 +207,7 @@ class DatasetBuilder:
         #   only templates.
         # - Plus the administrative queries
 
-        l_normal_templates = (
-            list(self.templates["ID"].unique())
-            + list(self.df_tno["ID"].unique())
-            + list(self.df_tadmin["ID"].unique())
-        )
+        l_normal_templates = self._get_normal_template_ids()
 
         self.populate_normal_templates(
             n_n=target_n_normal_test, templates_list=l_normal_templates
@@ -401,9 +424,8 @@ class DatasetBuilder:
         )
 
     def _verify_syntactic_validity_query(self, query: str):
-        if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config, self.dataset_name)
-        res = self.sqlc.is_query_syntvalid(query=query)
+        sqlc = self._get_sql_connector()
+        res = sqlc.is_query_syntvalid(query=query)
         return res
 
     def generate_attack_queries_sqlmapapi(
@@ -415,20 +437,19 @@ class DatasetBuilder:
         # First, initialize all HTTP endpoints for each template.
         # templates are already selected / sampled in self.templates
 
-        if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config, self.dataset_name)
+        sqlc = self._get_sql_connector()
         # Prune all sent_queries for attacks
-        _ = self.sqlc.get_and_empty_sent_queries()
+        _ = sqlc.get_and_empty_sent_queries()
 
         server = TemplatedSQLServer(
-            templates=self.templates, sqlconnector=self.sqlc, port=server_port
+            templates=self.templates, sqlconnector=sqlc, port=server_port
         )
         server.start_server()
         # Now iterate over templates and techniques to generate payloads.
         sqlg = sqlmapGenerator(
             dataset_config=self.dataset_config,
             templates=self.templates,
-            sqlconnector=self.sqlc,
+            sqlconnector=sqlc,
             placeholders_dictionaries_list=self.dictionaries,
             port=server_port,
             seed=self.seed,
@@ -474,10 +495,9 @@ class DatasetBuilder:
         self.df = self.generate_ithreat(args)
 
     def generate_ithreat(self, args):
-        if self.sqlc == None:
-            self.sqlc = SQLConnector(self.config, self.dataset_name)
+        sqlc = self._get_sql_connector()
 
-        itg = iThreatGenerator(self.config, self.sqlc, args.testing)
+        itg = iThreatGenerator(self.config, sqlc, args.testing)
 
         # df_metasploit = itg.perform_insider_attack_metasploit()
         df_sqlmap = itg.perform_insider_attack_sqlmap()
@@ -500,11 +520,7 @@ class DatasetBuilder:
         # - Plus those sampled by  self.select_templates to be considered as normal
         #   only templates.
         # - Plus the administrative queries
-        l_normal_templates = (
-            list(self.templates["ID"].unique())
-            + list(self.df_tno["ID"].unique())
-            + list(self.df_tadmin["ID"].unique())
-        )
+        l_normal_templates = self._get_normal_template_ids()
         self.populate_normal_templates(self._n_attacks, l_normal_templates)
         self.generate_normal_queries(do_syn_check)
         self._add_split_column()
