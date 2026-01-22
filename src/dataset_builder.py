@@ -484,7 +484,7 @@ class DatasetBuilder:
 
         _init_len = len(self.df)
         self.df = self.df[~self.df["full_query"].isin(contradictions)]
-        logger.info(f"Removed {_init_len - len(self.df)} generated contradictions.")
+        logger.warning(f"Removed {_init_len - len(self.df)} generated contradictions.")
 
     def _remove_user_input_admin(self):
         admin_ids = list(self.df_tadmin["ID"].unique())

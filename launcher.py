@@ -174,7 +174,7 @@ def main():
         db = DatasetBuilder(dataset_specific_config)
 
         if args.ithreat_only:
-            db.build_ithreat(args)
+            db.df = db.generate_ithreat(args)
         else:
             db.build(args)
 

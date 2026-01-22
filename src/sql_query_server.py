@@ -116,7 +116,7 @@ class TemplatedSQLRequestHandler(BaseHTTPRequestHandler):
             # Mimic information leak. Required for several sqlmap techniques.
             # We want tracability on this. If all queries fails, there is something wrong
             # With the DBMS.
-            logger.warning(f"Timeout for query {query}")
+            logger.critical(f"Timeout for query {query}")
             self._set_response()
             try:
                 self.wfile.write(bytes(str(e), "UTF-8"))

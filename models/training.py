@@ -93,7 +93,7 @@ def init_device() -> torch.device:
         )
         torch.cuda.set_per_process_memory_fraction(0.99, 0)
     else:
-        logger.critical("Using CPU for experiments.")
+        logger.info("Using CPU for experiments.")
     return device
 
 

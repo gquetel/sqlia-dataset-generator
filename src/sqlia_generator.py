@@ -114,12 +114,12 @@ class sqlmapGenerator:
             # sometimes hang, so we also added  'connection_timeout': 10,  to the
             # connection settings. We need to catch that exception.
             except mysql.connector.errors.ReadTimeoutError:
-                logger.warning(
+                logger.critical(
                     f"TRUNCATE call hanged for more than 10 seconds, the database might"
                     f" not be clean."
                 )
             except mysql.connector.errors.DatabaseError as e:
-                logger.warning(f"TRUNCATE call failed: {str(e.msg)}")
+                logger.critical(f"TRUNCATE call failed: {str(e.msg)}")
 
         # Clear query cache
         _ = self.sqlc.get_and_empty_sent_queries()

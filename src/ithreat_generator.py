@@ -122,7 +122,7 @@ class iThreatGenerator:
 
     def perform_insider_attack_metasploit(self):
         if shutil.which("msfconsole") is None:
-            logger.warning(
+            logger.critical(
                 "msfconsole command not found, skipping metasploit generation"
             )
             return pd.DataFrame()
