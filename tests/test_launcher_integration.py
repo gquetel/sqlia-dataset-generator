@@ -40,6 +40,7 @@ import pytest
 from pathlib import Path
 import sys
 import subprocess
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -47,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 class TestLauncherIntegration:
     """Integration tests for launcher.py with actual config files"""
 
-    def test_valid_single_dataset_config(self, tmp_path):
+    def test_valid_single_dataset_config(self, tmp_path, subtests):
         """Test launcher with valid single dataset configuration"""
         # Use real dataset files from data/datasets/OurAirports
         # Only output to tmp_path to avoid polluting the repo during tests.
@@ -90,16 +91,45 @@ select = "1/1"
         # Check successful generation
         combined_output = result.stdout + result.stderr
 
-        assert "Dataset OurAirports saved successfully" in combined_output, \
-            f"Expected success message not found. Output:\n{combined_output}"
+        with subtests.test(msg="success message appears in output"):
+            assert "Dataset OurAirports saved successfully" in combined_output, \
+                f"Expected success message not found. Output:\n{combined_output}"
 
-        # Should not have CRITICAL errors
-        assert "CRITICAL" not in result.stderr, \
-            f"CRITICAL error found in stderr:\n{result.stderr}"
+        with subtests.test(msg="no critical errors in stderr"):
+            assert "CRITICAL" not in result.stderr, \
+                f"CRITICAL error found in stderr:\n{result.stderr}"
 
-        # Check output files exist
-        assert (output_dir / "OurAirports.csv").exists(), \
-            f"OurAirports.csv not found in {output_dir}"
+        with subtests.test(msg="output file exists"):
+            assert (output_dir / "OurAirports.csv").exists(), \
+                f"OurAirports.csv not found in {output_dir}"
+
+        # Load and validate dataset contents
+        df = pd.read_csv(output_dir / "OurAirports.csv")
+
+        with subtests.test(msg="attack ratio is correct"):
+            n_attacks = len(df[df["label"] == 1])
+            n_total = len(df)
+            actual_ratio = n_attacks / n_total
+            expected_ratio = 0.1
+            assert abs(actual_ratio - expected_ratio) < 0.01, \
+                f"Attack ratio {actual_ratio:.3f} differs from expected {expected_ratio}"
+
+        with subtests.test(msg="all attacks in test set"):
+            attacks = df[df["label"] == 1]
+            assert (attacks["split"] == "test").all(), \
+                "Not all attack samples are in test set"
+
+        with subtests.test(msg="insider attacks are present"):
+            assert "attack_technique" in df.columns, "Missing attack_technique column"
+            insider_attacks = df[df["attack_technique"] == "insider"]
+            assert len(insider_attacks) > 0, \
+                "No insider attacks found in dataset"
+
+        with subtests.test(msg="normal samples in both train and test"):
+            normal = df[df["label"] == 0]
+            assert "train" in normal["split"].values, "No normal samples in train set"
+            assert "test" in normal["split"].values, "No normal samples in test set"
+        
 
     def test_invalid_missing_statement_csv_files(self, tmp_path, monkeypatch):
         """Test launcher fails when statement CSV files are missing for datasets"""

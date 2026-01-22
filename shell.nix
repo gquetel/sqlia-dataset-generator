@@ -8,11 +8,20 @@ let
 
    sqlmap = pkgs.python313Packages.sqlmap.overridePythonAttrs (oldAttrs: {
     propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
-      pkgs.python313Packages.sqlalchemy 
-      pkgs.python313Packages.pymysql 
+      pkgs.python313Packages.sqlalchemy
+      pkgs.python313Packages.pymysql
     ];
   });
-
+  # Custom version 9.0.2 with built-in subtests. Can use packaged if 
+  # version is superior to 9.0.0 which the one where they merged subtest into core.
+  pytest = pkgs.python313Packages.pytest.overridePythonAttrs (oldAttrs: rec {
+    version = "9.0.2";
+    src = pkgs.fetchPypi {
+      pname = "pytest";
+      inherit version;
+      sha256 = "sha256-dRhmUakr2JYR0dn8IPC0NF/YJ8QczVwpmoaKBdcO3xE=";
+    };
+  });
 
   mysql-connector =
     let
@@ -56,11 +65,11 @@ let
         ps.evaluate
         ps.torch
         ps.transformers
-
-        # Testing
-        ps.pytest
       ]
-      ++ [ mysql-connector ]
+      ++ [
+        mysql-connector
+        pytest  
+      ]
     )).override
       (args: {
         ignoreCollisions = true;

@@ -83,11 +83,11 @@ We provide 2 mechanisms to obtain the developing environment required to generat
 ### Setting up the environment using nix-shell 
 The generation environment is rendered available through the definition of nix shell environment in `shell.nix`. The environment contains: a MySQL server to validate normal queries to and execute attack ones (sqlmap requires interaction with a running DBMS to generate payloads), sqlmap and `percona-toolkit` from which the `pt-kill` command is used to make sure no lock on tables is present before the invocation of `sqlmap`. Finally, a python interpreter with packages dependencies (for both generation and training of models) is included.
 
-Alternatively, an equivalent environment can be manually created by using the following software versions: 
+Alternatively, an equivalent environment can be manually created by using the following software versions:
 - MySQL 8.4.5
 - sqlmap 1.9.4
 - pt-kill 3.2.0
-- python 3.12.10, the dependency packages versions used are further detailed in [requirements.txt](requirements.txt).
+- python 3.13, the dependency packages versions used are further detailed in [requirements.txt](requirements.txt).
 
 ### Setting up the environment docker container 
 
@@ -158,6 +158,27 @@ Other options are available as follows:
 - `--no-syn-check` The correct syntax of normal queries will not be verified, this speed up their generation.
 
 Note: To preserve diversity in generated payloads, we do not fix random seeds when invoking `sqlmap`. As a result, while each generated dataset is similar in structure, they may differ slightly.
+
+## Testing
+
+The repository includes comprehensive integration tests to validate dataset generation:
+
+```bash
+# Run all tests (requires nix-shell or equivalent environment)
+pytest
+
+# Run with verbose output to see detailed validation checks
+pytest -v
+```
+
+Tests validate:
+- Configuration file parsing and dataset folder validation
+- Dataset generation with correct attack ratios
+- Train/test split correctness
+- Presence of insider threat attacks
+- Output file structure and content
+
+See `tests/test_launcher_integration.py` for detailed testing conventions and examples.
 
 ## Baseline Evaluation
 

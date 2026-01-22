@@ -21,4 +21,4 @@ sqlglot==26.16.2
 sqlparse==0.5.3
 
 # Testing
-pytest==8.3.4
+pytest==9.0.2  # Built-in subtests support
