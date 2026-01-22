@@ -6,10 +6,10 @@ let
     # config.cudaSupport = true;
   };
 
-   sqlmap = pkgs.python3Packages.sqlmap.overridePythonAttrs (oldAttrs: {
+   sqlmap = pkgs.python313Packages.sqlmap.overridePythonAttrs (oldAttrs: {
     propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
-      pkgs.python3Packages.sqlalchemy 
-      pkgs.python3Packages.pymysql 
+      pkgs.python313Packages.sqlalchemy 
+      pkgs.python313Packages.pymysql 
     ];
   });
 
@@ -20,7 +20,7 @@ let
       version = "9.3.0";
       format = "wheel";
     in
-    pkgs.python312.pkgs.buildPythonPackage {
+    pkgs.python313.pkgs.buildPythonPackage {
       # Have to use direct fetchurl as package is not updated in nixkpgs
       inherit pname version format;
       src = pkgs.fetchurl {
@@ -31,7 +31,7 @@ let
     };
 
   pythonEnv = (
-    (pkgs.python312.withPackages (
+    (pkgs.python313.withPackages (
       ps:
       [
         # Required for generation
