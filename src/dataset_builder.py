@@ -153,15 +153,18 @@ class DatasetBuilder:
 
         # Testing settings, simply test a single template.
         if testing_mode:
-            n_templates = 1
+            # TODO, choose one of each statement type instead.
+            n_templates = 1 
 
             self.templates = self.templates.sample(n=n_templates)
             logger.warning(
                 f"Testing mode enabled, using {n_templates} templates and error technique"
             )
 
-        # Samples templates for normal only generation:
-        ratio_tno = 0.1  # TODO: add this in config
+        # Samples templates that will only be used for generating normal queries.
+        ratio_tno = config_parser.get_normal_only_template_ratio(
+            self.config
+        )
         n_tno = round(self.templates.shape[0] * ratio_tno)
         self.df_tno = self.templates.sample(n=n_tno)
 
@@ -190,8 +193,8 @@ class DatasetBuilder:
 
     def _augment_test_set_normal_queries(self, do_syn_check: bool):
         """We augment the number of normal queries in test set."""
-        atk_ratio = config_parser.get_dataset_attacks_ratio(
-            self.dataset_config, self.config["general"]
+        atk_ratio = config_parser.get_attacks_ratio(
+            self.config
         )
 
         n_attack_test_set = self.df[
@@ -509,6 +512,8 @@ class DatasetBuilder:
         return df_sqlmap
 
     def build(self, args):
+        # If testing_mode begins to be too annoying to pass around, 
+        # transform it into a class attribute. 
         testing_mode = args.testing
         debug_mode = args.debug
         do_syn_check = not args.no_syn_check

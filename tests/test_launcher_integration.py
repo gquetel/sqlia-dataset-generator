@@ -59,11 +59,14 @@ class TestLauncherIntegration:
 
         # Create valid config file that outputs to tmp_path
         config_file = tmp_path / "test_config.toml"
-        config_file.write_text(f"""
+        config_file.write_text(
+            f"""
 [general]
 output_path = "dataset.csv"
 attacks_ratio = 0.1
+normal_only_template_ratio = 0.1
 seed = 42
+
 
 [mysql]
 user = "tata"
@@ -78,30 +81,41 @@ name = "OurAirports"
 
 [datasets.statements]
 select = "1/1"
-""")
+"""
+        )
 
         # Run launcher with full generation (testing mode uses a few templates only)
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent / "launcher.py"),
-             "--config-file", str(config_file), "--testing", "--output-dir", str(output_dir)],
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+                "--output-dir",
+                str(output_dir),
+            ],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         # Check successful generation
         combined_output = result.stdout + result.stderr
 
         with subtests.test(msg="success message appears in output"):
-            assert "Dataset OurAirports saved successfully" in combined_output, \
-                f"Expected success message not found. Output:\n{combined_output}"
+            assert (
+                "Dataset OurAirports saved successfully" in combined_output
+            ), f"Expected success message not found. Output:\n{combined_output}"
 
         with subtests.test(msg="no critical errors in stderr"):
-            assert "CRITICAL" not in result.stderr, \
-                f"CRITICAL error found in stderr:\n{result.stderr}"
+            assert (
+                "CRITICAL" not in result.stderr
+            ), f"CRITICAL error found in stderr:\n{result.stderr}"
 
         with subtests.test(msg="output file exists"):
-            assert (output_dir / "OurAirports.csv").exists(), \
-                f"OurAirports.csv not found in {output_dir}"
+            assert (
+                output_dir / "OurAirports.csv"
+            ).exists(), f"OurAirports.csv not found in {output_dir}"
 
         # Load and validate dataset contents
         df = pd.read_csv(output_dir / "OurAirports.csv")
@@ -111,29 +125,33 @@ select = "1/1"
             n_total = len(df)
             actual_ratio = n_attacks / n_total
             expected_ratio = 0.1
-            assert abs(actual_ratio - expected_ratio) < 0.01, \
-                f"Attack ratio {actual_ratio:.3f} differs from expected {expected_ratio}"
+            assert (
+                abs(actual_ratio - expected_ratio) < 0.01
+            ), f"Attack ratio {actual_ratio:.3f} differs from expected {expected_ratio}"
 
         with subtests.test(msg="all attacks in test set"):
             attacks = df[df["label"] == 1]
-            assert (attacks["split"] == "test").all(), \
-                "Not all attack samples are in test set"
+            assert (
+                attacks["split"] == "test"
+            ).all(), "Not all attack samples are in test set"
 
         with subtests.test(msg="insider attacks are present"):
-            assert "attack_technique" in df.columns, "Missing attack_technique column"
+            assert (
+                "attack_technique" in df.columns
+            ), "Missing attack_technique column"
             insider_attacks = df[df["attack_technique"] == "insider"]
-            assert len(insider_attacks) > 0, \
-                "No insider attacks found in dataset"
+            assert len(insider_attacks) > 0, "No insider attacks found in dataset"
 
         with subtests.test(msg="normal samples in both train and test"):
             normal = df[df["label"] == 0]
-            assert "train" in normal["split"].values, "No normal samples in train set"
+            assert (
+                "train" in normal["split"].values
+            ), "No normal samples in train set"
             assert "test" in normal["split"].values, "No normal samples in test set"
-        
 
     def test_invalid_missing_statement_csv_files(self, tmp_path, monkeypatch):
         """Test launcher fails when statement CSV files are missing for datasets"""
-        # Setup: Folders exists, but not the statement files. 
+        # Setup: Folders exists, but not the statement files.
         dataset_name = "Library"
         datasets_dir = tmp_path / "data" / "datasets" / dataset_name
         datasets_dir.mkdir(parents=True)
@@ -143,12 +161,14 @@ select = "1/1"
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        # Create config file with statements but their CSV files does not exists.  
+        # Create config file with statements but their CSV files does not exists.
         config_file = tmp_path / "test_config.toml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 [general]
 output_path = "dataset.csv"
 attacks_ratio = 0.1
+normal_only_template_ratio = 0.1
 seed = 42
 
 [mysql]
@@ -163,39 +183,51 @@ priv_pwd = "root"
 name = "Library"
 [datasets.statements]
 select = "1/1"
-""")
+"""
+        )
 
         monkeypatch.chdir(tmp_path)
 
         # Run launcher - should fail because there is no select.csv files
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent / "launcher.py"),
-             "--config-file", str(config_file), "--testing"],
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+            ],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         # Should fail with non-zero exit code
-        assert result.returncode != 0, f"Expected failure but got success. Output:\n{result.stdout}\n{result.stderr}"
+        assert (
+            result.returncode != 0
+        ), f"Expected failure but got success. Output:\n{result.stdout}\n{result.stderr}"
 
         # Should show error about missing statement CSV file
         combined_output = result.stdout + result.stderr
-        assert "Statement CSV file not found" in combined_output, \
-            f"Expected error about missing CSV file. Output:\n{combined_output}"
+        assert (
+            "Statement CSV file not found" in combined_output
+        ), f"Expected error about missing CSV file. Output:\n{combined_output}"
 
         # Should mention Library
-        assert "Library" in combined_output, \
-            f"Expected dataset name in error message. Output:\n{combined_output}"
+        assert (
+            "Library" in combined_output
+        ), f"Expected dataset name in error message. Output:\n{combined_output}"
 
     def test_invalid_missing_dataset_folder(self, tmp_path):
         """Test launcher fails when dataset folder is missing"""
         # Setup: OurAirports exists in real repo data dir, but NonExistentDataset doesn't
         # Create config with missing dataset
         config_file = tmp_path / "test_config.toml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 [general]
 output_path = "dataset.csv"
 attacks_ratio = 0.1
+normal_only_template_ratio = 0.1
 seed = 42
 
 [mysql]
@@ -215,15 +247,21 @@ select = "1/1"
 name = "NonExistentDataset"
 [datasets.statements]
 select = "1/1"
-""")
+"""
+        )
 
         # Run launcher from repo root (don't change directory)
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent / "launcher.py"),
-             "--config-file", str(config_file), "--testing"],
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+            ],
             capture_output=True,
             text=True,
-            cwd=str(Path(__file__).parent.parent)  # Run from repo root
+            cwd=str(Path(__file__).parent.parent),  # Run from repo root
         )
 
         # Should fail with non-zero exit code
@@ -240,7 +278,118 @@ select = "1/1"
 
         # Create config with no datasets
         config_file = tmp_path / "test_config.toml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
+[general]
+output_path = "dataset.csv"
+attacks_ratio = 0.1
+normal_only_template_ratio = 0.1
+seed = 42
+
+[mysql]
+user = "tata"
+password = "tata"
+host = "localhost"
+port = 61337
+priv_user = "root"
+priv_pwd = "root"
+"""
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        # Run launcher - should fail
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        # Should fail with non-zero exit code
+        assert result.returncode != 0
+        # Should show error about no datasets
+        assert "No datasets configured" in result.stderr
+
+    def test_invalid_missing_attacks_ratio(self, tmp_path, monkeypatch):
+        """Test launcher fails when attacks_ratio is missing from config"""
+        # Setup: Create minimal dataset structure
+        datasets_dir = tmp_path / "data" / "datasets" / "TestDataset"
+        datasets_dir.mkdir(parents=True)
+        (datasets_dir / "queries").mkdir()
+        (datasets_dir / "dicts").mkdir()
+
+        # Create minimal CSV file
+        (datasets_dir / "queries" / "select.csv").write_text("template,ID,description,payload_type\nSELECT 1,test-S1,Test query,none")
+
+        # Create config without attacks_ratio
+        config_file = tmp_path / "test_config.toml"
+        config_file.write_text(
+            """
+[general]
+output_path = "dataset.csv"
+normal_only_template_ratio = 0.1
+seed = 42
+
+[mysql]
+user = "tata"
+password = "tata"
+host = "localhost"
+port = 61337
+priv_user = "root"
+priv_pwd = "root"
+
+[[datasets]]
+name = "TestDataset"
+[datasets.statements]
+select = "1/1"
+"""
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        # Run launcher - should fail
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        # Should fail with non-zero exit code
+        assert (
+            result.returncode != 0
+        ), f"Expected failure but got success. Output:\n{result.stdout}\n{result.stderr}"
+
+        # Should show error about missing attacks_ratio
+        combined_output = result.stdout + result.stderr
+        assert (
+            "attacks_ratio" in combined_output
+        ), f"Expected error about missing attacks_ratio. Output:\n{combined_output}"
+        assert (
+            "Missing required" in combined_output or "ValueError" in combined_output
+        ), f"Expected ValueError about missing parameter. Output:\n{combined_output}"
+
+    def test_invalid_missing_normal_only_template_ratio(self, tmp_path):
+        """Test launcher fails when normal_only_template_ratio is missing from config"""
+        # Use real OurAirports data to simplify test - we only care about config validation
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create config without normal_only_template_ratio
+        config_file = tmp_path / "test_config.toml"
+        config_file.write_text(
+            """
 [general]
 output_path = "dataset.csv"
 attacks_ratio = 0.1
@@ -253,19 +402,39 @@ host = "localhost"
 port = 61337
 priv_user = "root"
 priv_pwd = "root"
-""")
 
-        monkeypatch.chdir(tmp_path)
+[[datasets]]
+name = "OurAirports"
+[datasets.statements]
+select = "1/1"
+"""
+        )
 
-        # Run launcher - should fail
+        # Run launcher - should fail during config validation
         result = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent / "launcher.py"),
-             "--config-file", str(config_file), "--testing"],
+            [
+                sys.executable,
+                str(Path(__file__).parent.parent / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+                "--output-dir",
+                str(output_dir),
+            ],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         # Should fail with non-zero exit code
-        assert result.returncode != 0
-        # Should show error about no datasets
-        assert "No datasets configured" in result.stderr
+        assert (
+            result.returncode != 0
+        ), f"Expected failure but got success. Output:\n{result.stdout}\n{result.stderr}"
+
+        # Should show error about missing normal_only_template_ratio
+        combined_output = result.stdout + result.stderr
+        assert (
+            "normal_only_template_ratio" in combined_output
+        ), f"Expected error about missing normal_only_template_ratio. Output:\n{combined_output}"
+        assert (
+            "Missing required" in combined_output or "ValueError" in combined_output
+        ), f"Expected ValueError about missing parameter. Output:\n{combined_output}"

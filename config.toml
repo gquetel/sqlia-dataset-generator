@@ -2,10 +2,16 @@
 # Generated dataset path
 output_path = "dataset.csv"
 
-# Ratio of attacks in the test set. This does not modify the final number of 
-# attack in the dataset but the number of generated normal samples to reach the 
+# Ratio of attacks in the test set. This does not modify the final number of
+# attack in the dataset but the number of generated normal samples to reach the
 # ratio value.
 attacks_ratio = 0.1
+
+# Ratio of query templates reserved for normal-only generation (never used to
+# generate attacks). These templates ensure diversity between attack and normal
+# samples, testing detection systems against unseen-during-attack query patterns.
+# Can be set to 0 to disable this behavior.
+normal_only_template_ratio = 0.1
 
 # Seed to have constance in template selection or normal values selection.
 seed = 42
@@ -37,8 +43,6 @@ admin = "1/100"
 
 # [[datasets]]
 # name = "dataset_2"
-# output_path = "dataset2.csv"
-# attacks_ratio = 0.3
 
 # [datasets.statements]
 # read_query = "5/10"

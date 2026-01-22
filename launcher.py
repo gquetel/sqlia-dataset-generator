@@ -92,6 +92,18 @@ def validate_datasets_config(config: dict):
         ValueError: If any dataset name doesn't have a corresponding folder,
                    or if any statement CSV file is missing or empty
     """
+    # Validate required general config fields
+    import src.config_parser as config_parser
+    try:
+        config_parser.get_attacks_ratio(config)
+    except (KeyError, ValueError) as e:
+        raise ValueError(f"Configuration validation failed: {e}")
+
+    try:
+        config_parser.get_normal_only_template_ratio(config)
+    except (KeyError, ValueError) as e:
+        raise ValueError(f"Configuration validation failed: {e}")
+
     datasets_dir = Path("data/datasets")
 
     if not datasets_dir.exists():
@@ -104,7 +116,6 @@ def validate_datasets_config(config: dict):
 
     configured_datasets = config.get("datasets", [])
 
-    # Check if any datasets are configured
     if not configured_datasets:
         raise ValueError("No datasets configured in configuration file")
 
@@ -112,7 +123,6 @@ def validate_datasets_config(config: dict):
     for dataset_config in configured_datasets:
         dataset_name = dataset_config.get("name")
 
-        # Check if dataset folder exists
         if dataset_name not in available_folders:
             raise ValueError(
                 f"Dataset folder not found in {datasets_dir}: {dataset_name}\n"
@@ -142,7 +152,7 @@ def validate_datasets_config(config: dict):
             try:
                 with open(csv_file, 'r') as f:
                     lines = f.readlines()
-                    if len(lines) < 2:  # Need at least header + one data row
+                    if len(lines) < 2: 
                         raise ValueError(
                             f"Statement CSV file is empty or has no entries for dataset '{dataset_name}': {csv_file}\n"
                             f"File must contain at least one query template (excluding header row)"

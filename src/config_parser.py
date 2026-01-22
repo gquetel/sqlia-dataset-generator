@@ -14,9 +14,6 @@ def get_mysql_info(config: dict):
 def get_seed(config: dict):
     return config["general"]["seed"]
 
-def get_attacks_ratio(config: dict):
-    return config["general"]["attacks_ratio"]
-
 def get_output_path(config: dict):
     return config["general"]["output_path"]
 
@@ -49,6 +46,16 @@ def get_statement_types_and_proportions(dataset_config: dict):
 
     return stmts
 
-def get_dataset_attacks_ratio(dataset_config: dict, general_config: dict):
-    """Get the attacks ratio for a dataset, with fallback to general config."""
-    return dataset_config.get("attacks_ratio", general_config.get("attacks_ratio", 0.1))
+def get_attacks_ratio(config: dict):
+    """Get the attacks ratio from general config."""
+    general_config = config["general"]
+    if "attacks_ratio" not in general_config:
+        raise ValueError("Missing required 'attacks_ratio' in general config")
+    return general_config["attacks_ratio"]
+
+def get_normal_only_template_ratio(config: dict):
+    """Get the normal-only template ratio from general config."""
+    general_config = config["general"]
+    if "normal_only_template_ratio" not in general_config:
+        raise ValueError("Missing required 'normal_only_template_ratio' in general config")
+    return general_config["normal_only_template_ratio"]
