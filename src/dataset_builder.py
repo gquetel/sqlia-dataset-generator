@@ -518,6 +518,9 @@ class DatasetBuilder:
         self.generate_attack_queries_sqlmapapi(
             testing_mode=testing_mode, debug_mode=debug_mode
         )
+        # Then, generate insider attacks.
+        df_ithreat = self.generate_ithreat(args)
+        self.df = pd.concat([self.df, df_ithreat])
 
         # List of templates to create normal queries from. Corresponds to :
         # - all templates used to generate attacks (self.templates)
@@ -534,8 +537,7 @@ class DatasetBuilder:
 
         self._remove_contradictions()
         self._remove_user_input_admin()
-        df_ithreat = self.generate_ithreat(args)
-        self.df = pd.concat([self.df, df_ithreat])
+
 
     def save(self, output_dir : str):
         os.makedirs(output_dir, exist_ok=True)
