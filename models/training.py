@@ -88,9 +88,7 @@ def init_device() -> torch.device:
     USE_CUDA = torch.cuda.is_available()
     device = torch.device("cuda:0" if USE_CUDA else "cpu")
     if USE_CUDA:
-        logger.info(
-            "Using device: %s for experiments.", torch.cuda.get_device_name()
-        )
+        logger.info("Using device: %s for experiments.", torch.cuda.get_device_name())
         torch.cuda.set_per_process_memory_fraction(0.99, 0)
     else:
         logger.info("Using CPU for experiments.")
@@ -198,9 +196,7 @@ def get_threshold_for_max_rate(s_val, max_rate=0.001):
 
 
 # --------------- Generic Evaluation Functions ---------------
-def decision_score_generic(
-    model: OCSVM_Li | LOF_Li | OCSVM_CV | LOF_CV, X: np.ndarray
-):
+def decision_score_generic(model: OCSVM_Li | LOF_Li | OCSVM_CV | LOF_CV, X: np.ndarray):
     # dists are a distance to the separating hyperplane.
     # Negative distance is an outlier (attack)
     # Positive distance is an inlier (normal)
@@ -389,9 +385,7 @@ def train_ocsvm_cv(
         max_iter=10000,
         use_scaler=use_scaler,
     )
-    model.train_model(
-        df=df_train, model_name=model_name, project_paths=project_paths
-    )
+    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
 
     return compute_metrics_generic(
         model=model,
@@ -595,9 +589,7 @@ def train_ae_li(
         use_scaler=use_scaler,
     )
 
-    model.train_model(
-        df=df_train, project_paths=project_paths, model_name=model_name
-    )
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
 
     return compute_metrics_generic(
         model=model,
@@ -639,9 +631,7 @@ def train_ae_cv(
         vectorizer_max_features=20000,
         use_scaler=use_scaler,
     )
-    model.train_model(
-        df=df_train, project_paths=project_paths, model_name=model_name
-    )
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
 
     return compute_metrics_generic(
         model=model,
@@ -656,9 +646,7 @@ def train_ae_cv(
     )
 
 
-def train_ae_sbert(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
-):
+def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame):
     set_global_seed()
     model_name = "SecureBERT and AE"
     logger.info(f"Training model: {model_name}")

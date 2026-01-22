@@ -9,6 +9,7 @@ from .db_cnt_manager import SQLConnector
 
 logger = logging.getLogger(__name__)
 
+
 class TemplatedSQLServer:
     def __init__(
         self,
@@ -33,7 +34,7 @@ class TemplatedSQLServer:
         server_thread.start()
         self.httpd = httpd
         logger.info(f"Endpoints available at http://localhost:{self.port}/")
-        # input() 
+        # input()
 
     def stop_server(self):
         self.httpd.shutdown()
@@ -110,8 +111,7 @@ class TemplatedSQLRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(bytes(str(results), "UTF-8"))
             except BrokenPipeError as e:
                 logger.critical(f"Broken Pipe error for query {query}")
-        
-    
+
         except mysql.connector.errors.ReadTimeoutError as e:
             # Mimic information leak. Required for several sqlmap techniques.
             # We want tracability on this. If all queries fails, there is something wrong
@@ -122,8 +122,7 @@ class TemplatedSQLRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(bytes(str(e), "UTF-8"))
             except BrokenPipeError as e:
                 logger.critical(f"Broken Pipe error for query {query}")
-        
-        
+
         except Exception as e:
             # Mimic information leak. Required for several sqlmap techniques.
             self._set_response()

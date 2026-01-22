@@ -28,8 +28,8 @@ port = 61337
 # Password for MySQL root user, required for : 
 # - `pt-kill` command executed between each attack campaign.
 # - `log-level command` to enable logging of queries.
-priv_user="root"
-priv_pwd="root"
+priv_user = "root"
+priv_pwd = "root"
 
 [[datasets]]
 name = "OurAirports"

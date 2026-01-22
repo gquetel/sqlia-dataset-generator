@@ -37,8 +37,8 @@ let
     if ersatz == "" then
       path
     else
-      # this turns the string into an actual Nix path (for both absolute and
-      # relative paths)
+    # this turns the string into an actual Nix path (for both absolute and
+    # relative paths)
       builtins.trace "Overriding path of \"${name}\" with \"${ersatz}\" due to set \"${envVarName}\"" (
         if builtins.substring 0 1 ersatz == "/" then
           /. + ersatz
@@ -48,71 +48,71 @@ let
 
   mkSource =
     name: spec:
-    assert spec ? type;
-    let
-      path =
-        if spec.type == "Git" then
-          mkGitSource spec
-        else if spec.type == "GitRelease" then
-          mkGitSource spec
-        else if spec.type == "PyPi" then
-          mkPyPiSource spec
-        else if spec.type == "Channel" then
-          mkChannelSource spec
-        else if spec.type == "Tarball" then
-          mkTarballSource spec
-        else
-          builtins.throw "Unknown source type ${spec.type}";
-    in
-    spec // { outPath = mayOverride name path; };
+      assert spec ? type;
+      let
+        path =
+          if spec.type == "Git" then
+            mkGitSource spec
+          else if spec.type == "GitRelease" then
+            mkGitSource spec
+          else if spec.type == "PyPi" then
+            mkPyPiSource spec
+          else if spec.type == "Channel" then
+            mkChannelSource spec
+          else if spec.type == "Tarball" then
+            mkTarballSource spec
+          else
+            builtins.throw "Unknown source type ${spec.type}";
+      in
+      spec // { outPath = mayOverride name path; };
 
   mkGitSource =
-    {
-      repository,
-      revision,
-      url ? null,
-      submodules,
-      hash,
-      branch ? null,
-      ...
+    { repository
+    , revision
+    , url ? null
+    , submodules
+    , hash
+    , branch ? null
+    , ...
     }:
-    assert repository ? type;
-    # At the moment, either it is a plain git repository (which has an url), or it is a GitHub/GitLab repository
-    # In the latter case, there we will always be an url to the tarball
-    if url != null && !submodules then
-      builtins.fetchTarball {
-        inherit url;
-        sha256 = hash; # FIXME: check nix version & use SRI hashes
-      }
-    else
-      let
-        url =
-          if repository.type == "Git" then
-            repository.url
-          else if repository.type == "GitHub" then
-            "https://github.com/${repository.owner}/${repository.repo}.git"
-          else if repository.type == "GitLab" then
-            "${repository.server}/${repository.repo_path}.git"
-          else
-            throw "Unrecognized repository type ${repository.type}";
-        urlToName =
-          url: rev:
-          let
-            matched = builtins.match "^.*/([^/]*)(\\.git)?$" url;
+      assert repository ? type;
+      # At the moment, either it is a plain git repository (which has an url), or it is a GitHub/GitLab repository
+      # In the latter case, there we will always be an url to the tarball
+      if url != null && !submodules then
+        builtins.fetchTarball
+          {
+            inherit url;
+            sha256 = hash; # FIXME: check nix version & use SRI hashes
+          }
+      else
+        let
+          url =
+            if repository.type == "Git" then
+              repository.url
+            else if repository.type == "GitHub" then
+              "https://github.com/${repository.owner}/${repository.repo}.git"
+            else if repository.type == "GitLab" then
+              "${repository.server}/${repository.repo_path}.git"
+            else
+              throw "Unrecognized repository type ${repository.type}";
+          urlToName =
+            url: rev:
+            let
+              matched = builtins.match "^.*/([^/]*)(\\.git)?$" url;
 
-            short = builtins.substring 0 7 rev;
+              short = builtins.substring 0 7 rev;
 
-            appendShort = if (builtins.match "[a-f0-9]*" rev) != null then "-${short}" else "";
-          in
-          "${if matched == null then "source" else builtins.head matched}${appendShort}";
-        name = urlToName url revision;
-      in
-      builtins.fetchGit {
-        rev = revision;
-        inherit name;
-        # hash = hash;
-        inherit url submodules;
-      };
+              appendShort = if (builtins.match "[a-f0-9]*" rev) != null then "-${short}" else "";
+            in
+            "${if matched == null then "source" else builtins.head matched}${appendShort}";
+          name = urlToName url revision;
+        in
+        builtins.fetchGit {
+          rev = revision;
+          inherit name;
+          # hash = hash;
+          inherit url submodules;
+        };
 
   mkPyPiSource =
     { url, hash, ... }:
@@ -129,11 +129,10 @@ let
     };
 
   mkTarballSource =
-    {
-      url,
-      locked_url ? url,
-      hash,
-      ...
+    { url
+    , locked_url ? url
+    , hash
+    , ...
     }:
     builtins.fetchTarball {
       url = locked_url;

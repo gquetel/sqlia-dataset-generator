@@ -11,14 +11,18 @@ def get_mysql_info(config: dict):
     priv_pwd = mysql["priv_pwd"]
     return user, pwd, host, port, priv_user, priv_pwd
 
+
 def get_seed(config: dict):
     return config["general"]["seed"]
+
 
 def get_output_path(config: dict):
     return config["general"]["output_path"]
 
+
 def get_used_datasets(config: dict):
     return [dataset["name"] for dataset in config.get("datasets", [])]
+
 
 def get_statement_types_and_proportions(dataset_config: dict):
     """Extract statement types and their proportions from a dataset configuration.
@@ -34,10 +38,7 @@ def get_statement_types_and_proportions(dataset_config: dict):
     statements = dataset_config.get("statements", {})
 
     for stmt_type, proportion_str in statements.items():
-        stmts.append({
-            "type": stmt_type,
-            "proportion": float(Fraction(proportion_str))
-        })
+        stmts.append({"type": stmt_type, "proportion": float(Fraction(proportion_str))})
 
     if abs(sum([stmt["proportion"] for stmt in stmts]) - 1.0) > 1e-10:
         raise ValueError(
@@ -46,6 +47,7 @@ def get_statement_types_and_proportions(dataset_config: dict):
 
     return stmts
 
+
 def get_attacks_ratio(config: dict):
     """Get the attacks ratio from general config."""
     general_config = config["general"]
@@ -53,9 +55,12 @@ def get_attacks_ratio(config: dict):
         raise ValueError("Missing required 'attacks_ratio' in general config")
     return general_config["attacks_ratio"]
 
+
 def get_normal_only_template_ratio(config: dict):
     """Get the normal-only template ratio from general config."""
     general_config = config["general"]
     if "normal_only_template_ratio" not in general_config:
-        raise ValueError("Missing required 'normal_only_template_ratio' in general config")
+        raise ValueError(
+            "Missing required 'normal_only_template_ratio' in general config"
+        )
     return general_config["normal_only_template_ratio"]

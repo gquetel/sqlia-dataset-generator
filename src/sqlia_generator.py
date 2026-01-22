@@ -218,9 +218,7 @@ class sqlmapGenerator:
                     for _ in range(10)
                 ]
             else:
-                ran_values = random.choices(
-                    self.pdl[param_no_sx], k=10
-                )
+                ran_values = random.choices(self.pdl[param_no_sx], k=10)
 
             values_str = str(ran_values).replace('"', '\\"')
             e_str += f"{param}=random.choice({values_str});"
@@ -404,9 +402,7 @@ class sqlmapGenerator:
         )
         return _df
 
-    def perform_attack(
-        self, technique: tuple, template_info: dict, debug_mode: bool
-    ):
+    def perform_attack(self, technique: tuple, template_info: dict, debug_mode: bool):
         """Orchestrates a full SQLI attack for a given technique and query template.
 
         This function runs both reconnaissance and exploitation phases of an SQL
@@ -442,9 +438,7 @@ class sqlmapGenerator:
                     secrets.choice(alphabet) for i in range(20)
                 )
             else:
-                random_param_value = random.choice(
-                    self.pdl[param_no_sx]
-                )
+                random_param_value = random.choice(self.pdl[param_no_sx])
 
             params[param] = random_param_value
 

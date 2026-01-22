@@ -41,9 +41,9 @@ def _extract_params(template):
 class DatasetBuilder:
     def __init__(self, config) -> None:
         # Object attributes initialisation
-        
-        # config is made of a "general" attribute containing information generic to 
-        # the whole app (such as seed info), and "dataset" that is specific to the 
+
+        # config is made of a "general" attribute containing information generic to
+        # the whole app (such as seed info), and "dataset" that is specific to the
         # dataset currently generated.
         self.config = config
         self.seed = config["general"]["seed"]
@@ -154,7 +154,7 @@ class DatasetBuilder:
         # Testing settings, simply test a single template.
         if testing_mode:
             # TODO, choose one of each statement type instead.
-            n_templates = 1 
+            n_templates = 1
 
             self.templates = self.templates.sample(n=n_templates)
             logger.warning(
@@ -162,9 +162,7 @@ class DatasetBuilder:
             )
 
         # Samples templates that will only be used for generating normal queries.
-        ratio_tno = config_parser.get_normal_only_template_ratio(
-            self.config
-        )
+        ratio_tno = config_parser.get_normal_only_template_ratio(self.config)
         n_tno = round(self.templates.shape[0] * ratio_tno)
         self.df_tno = self.templates.sample(n=n_tno)
 
@@ -193,9 +191,7 @@ class DatasetBuilder:
 
     def _augment_test_set_normal_queries(self, do_syn_check: bool):
         """We augment the number of normal queries in test set."""
-        atk_ratio = config_parser.get_attacks_ratio(
-            self.config
-        )
+        atk_ratio = config_parser.get_attacks_ratio(self.config)
 
         n_attack_test_set = self.df[
             (self.df["split"] == "test") & (self.df["label"] == 1)
@@ -512,8 +508,8 @@ class DatasetBuilder:
         return df_sqlmap
 
     def build(self, args):
-        # If testing_mode begins to be too annoying to pass around, 
-        # transform it into a class attribute. 
+        # If testing_mode begins to be too annoying to pass around,
+        # transform it into a class attribute.
         testing_mode = args.testing
         debug_mode = args.debug
         do_syn_check = not args.no_syn_check
@@ -543,8 +539,7 @@ class DatasetBuilder:
         self._remove_contradictions()
         self._remove_user_input_admin()
 
-
-    def save(self, output_dir : str):
+    def save(self, output_dir: str):
         os.makedirs(output_dir, exist_ok=True)
         outpath = os.path.join(output_dir, f"{self.dataset_name}.csv")
 

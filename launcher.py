@@ -9,7 +9,7 @@ from src.dataset_builder import DatasetBuilder
 logger = logging.getLogger(__name__)
 
 
-def init_logging(debug_mode : bool):
+def init_logging(debug_mode: bool):
     Path("./logs/").mkdir(exist_ok=True, parents=True)
 
     # We usually do not need the logs of previous generation
@@ -41,14 +41,13 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         help="Enable debug mode, output will be VERY verbose.",
     )
-    
 
     parser.add_argument(
         "--no-syn-check",
         action="store_true",
         help="The correct syntax of normal queries will not be verified, this speed up their generation.",
     )
-        
+
     parser.add_argument(
         "--ithreat-only",
         action="store_true",
@@ -60,17 +59,16 @@ def init_args() -> argparse.Namespace:
         type=str,
         dest="config_file",
         default="config.toml",
-        help="Filepath to the dataset generation configuration file."
+        help="Filepath to the dataset generation configuration file.",
     )
-    
+
     parser.add_argument(
         "--output-dir",
         type=str,
         dest="output_dir",
         default="./output/",
-        help="Filepath to the directory that will contain all generated datasets."
+        help="Filepath to the directory that will contain all generated datasets.",
     )
-
 
     return parser.parse_args()
 
@@ -94,6 +92,7 @@ def validate_datasets_config(config: dict):
     """
     # Validate required general config fields
     import src.config_parser as config_parser
+
     try:
         config_parser.get_attacks_ratio(config)
     except (KeyError, ValueError) as e:
@@ -110,8 +109,7 @@ def validate_datasets_config(config: dict):
         raise ValueError(f"Dataset directory not found.")
 
     available_folders = {
-        folder.name for folder in datasets_dir.iterdir()
-        if folder.is_dir()
+        folder.name for folder in datasets_dir.iterdir() if folder.is_dir()
     }
 
     configured_datasets = config.get("datasets", [])
@@ -136,7 +134,9 @@ def validate_datasets_config(config: dict):
 
         queries_dir = datasets_dir / dataset_name / "queries"
         if not queries_dir.exists():
-            raise ValueError(f"Queries directory not found for dataset '{dataset_name}': {queries_dir}")
+            raise ValueError(
+                f"Queries directory not found for dataset '{dataset_name}': {queries_dir}"
+            )
 
         for statement_name in statements.keys():
             csv_file = queries_dir / f"{statement_name}.csv"
@@ -150,9 +150,9 @@ def validate_datasets_config(config: dict):
 
             # Check if CSV file has at least one entry (excluding header)
             try:
-                with open(csv_file, 'r') as f:
+                with open(csv_file, "r") as f:
                     lines = f.readlines()
-                    if len(lines) < 2: 
+                    if len(lines) < 2:
                         raise ValueError(
                             f"Statement CSV file is empty or has no entries for dataset '{dataset_name}': {csv_file}\n"
                             f"File must contain at least one query template (excluding header row)"
@@ -162,6 +162,7 @@ def validate_datasets_config(config: dict):
                     raise
                 raise ValueError(f"Error reading statement CSV file '{csv_file}': {e}")
 
+
 def main():
     args = init_args()
     init_logging(args.debug)
@@ -169,7 +170,7 @@ def main():
     validate_datasets_config(config)
 
     datasets = config.get("datasets", [])
-    
+
     for dataset_config in datasets:
         dataset_name = dataset_config.get("name", "unknown")
         logger.info(f"Building dataset: {dataset_name}")
@@ -178,7 +179,7 @@ def main():
         dataset_specific_config = {
             "general": config["general"],
             "mysql": config["mysql"],
-            "dataset": dataset_config
+            "dataset": dataset_config,
         }
 
         db = DatasetBuilder(dataset_specific_config)
@@ -191,6 +192,7 @@ def main():
         db.save(args.output_dir)
         logger.info(f"Dataset {dataset_name} saved successfully")
     # TODO: Function call that merges all generated datasets.
+
 
 if __name__ == "__main__":
     main()

@@ -136,17 +136,13 @@ select = "1/1"
             ).all(), "Not all attack samples are in test set"
 
         with subtests.test(msg="insider attacks are present"):
-            assert (
-                "attack_technique" in df.columns
-            ), "Missing attack_technique column"
+            assert "attack_technique" in df.columns, "Missing attack_technique column"
             insider_attacks = df[df["attack_technique"] == "insider"]
             assert len(insider_attacks) > 0, "No insider attacks found in dataset"
 
         with subtests.test(msg="normal samples in both train and test"):
             normal = df[df["label"] == 0]
-            assert (
-                "train" in normal["split"].values
-            ), "No normal samples in train set"
+            assert "train" in normal["split"].values, "No normal samples in train set"
             assert "test" in normal["split"].values, "No normal samples in test set"
 
     def test_invalid_missing_statement_csv_files(self, tmp_path, monkeypatch):
@@ -325,7 +321,9 @@ priv_pwd = "root"
         (datasets_dir / "dicts").mkdir()
 
         # Create minimal CSV file
-        (datasets_dir / "queries" / "select.csv").write_text("template,ID,description,payload_type\nSELECT 1,test-S1,Test query,none")
+        (datasets_dir / "queries" / "select.csv").write_text(
+            "template,ID,description,payload_type\nSELECT 1,test-S1,Test query,none"
+        )
 
         # Create config without attacks_ratio
         config_file = tmp_path / "test_config.toml"

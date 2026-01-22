@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class iThreatGenerator:
     def __init__(
-        self, config: dict, sqlconnector: SQLConnector, testing_mode : bool = False
+        self, config: dict, sqlconnector: SQLConnector, testing_mode: bool = False
     ):
         self.sqlc = sqlconnector
         self.config = config
@@ -56,10 +56,8 @@ class iThreatGenerator:
         _, _, host, port, priv_user, priv_pwd = get_mysql_info(config=self.config)
 
         database = self.config["dataset"]["name"]
-        
-        connect_string = (
-            f"mysql://{priv_user}:{priv_pwd}@{host}:{str(port)}/{database}"
-        )
+
+        connect_string = f"mysql://{priv_user}:{priv_pwd}@{host}:{str(port)}/{database}"
         # We don't want to use session files, no interaction either.
         base_command = f"sqlmap --fresh-queries  --batch -d '{connect_string}' "
 
@@ -94,14 +92,14 @@ class iThreatGenerator:
 
             queries = self.collect_general_log()
             self.clear_general_log()
-            
+
             _df = pd.DataFrame(
                 {
                     "full_query": queries,
                     "label": 1,
                     "user_inputs": "",
                     "attack_stage": "exploit",
-                    # TODO, we could find a way to check whethe exploitation has been 
+                    # TODO, we could find a way to check whethe exploitation has been
                     # performed correctly. For now, there is no errors from the sqlmap
                     # logs so we hard code their status to "success"...
                     "attack_status": "success",
@@ -110,7 +108,7 @@ class iThreatGenerator:
                     "query_template_id": "",
                     "attack_id": f"ithreat-sqlmap-{cnt_obj}",
                     "attack_technique": "insider",
-                    "split" : "test"
+                    "split": "test",
                 }
             )
 

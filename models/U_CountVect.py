@@ -42,9 +42,7 @@ class OCSVM_CV:
         self.feature_columns = None
         self.use_scaler = use_scaler
 
-    def preprocess_for_train(
-        self, df: pd.DataFrame
-    ) -> tuple[csr_matrix, np.ndarray]:
+    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         # Fit Vectorizer and transform queries at the same time.
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
@@ -73,9 +71,7 @@ class OCSVM_CV:
         model.fit(f_matrix)
         self.clf = model
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         """Return preprocessed queries.
 
         Args:
@@ -110,9 +106,7 @@ class LOF_CV:
         self.feature_columns = None
         self.use_scaler = use_scaler
 
-    def preprocess_for_train(
-        self, df: pd.DataFrame
-    ) -> tuple[csr_matrix, np.ndarray]:
+    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         # Fit Vectorizer and transform queries at the same time.
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
@@ -135,9 +129,7 @@ class LOF_CV:
         model.fit(f_matrix)
         self.clf = model
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         """Return preprocessed queries.
 
         Args:
@@ -183,9 +175,7 @@ class AutoEncoder_CV:
 
         self.feature_columns = None
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         """Return preprocessed queries.
 
         Args:
@@ -199,9 +189,7 @@ class AutoEncoder_CV:
         pp_queries = self.vectorizer.transform(df["full_query"])
         return pd.DataFrame(pp_queries.toarray()), labels
 
-    def preprocess_for_train(
-        self, df: pd.DataFrame
-    ) -> tuple[csr_matrix, np.ndarray]:
+    def preprocess_for_train(self, df: pd.DataFrame) -> tuple[csr_matrix, np.ndarray]:
         df_pped = df.copy()
         pp_queries = self.vectorizer.fit_transform(df_pped["full_query"])
         self._scaler_min = pp_queries.min(axis=None)
@@ -273,9 +261,7 @@ class AutoEncoder_CV:
 
         if self.use_scaler:
             scaled_data = self._scaler.fit_transform(f_matrix)
-            train_data = self._sparse_to_tensor_batched(
-                scaled_data, batch_size=10000
-            )
+            train_data = self._sparse_to_tensor_batched(scaled_data, batch_size=10000)
         else:
             train_data = self._sparse_to_tensor_batched(f_matrix)
 

@@ -209,6 +209,7 @@ def pre_process_for_li(df: pd.DataFrame) -> pd.DataFrame:
     _df = df.apply(_get_ocsvm_li_features_from_query, axis=1)
     return _df
 
+
 class OCSVM_Li:
     def __init__(
         self,
@@ -231,9 +232,7 @@ class OCSVM_Li:
         self.max_iter = max_iter
         self.use_scaler = use_scaler
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
@@ -295,9 +294,7 @@ class LOF_Li:
         self.model_name = None
         self.use_scaler = use_scaler
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
@@ -359,14 +356,12 @@ class AutoEncoder_Li:
 
         self.feature_columns = None
 
-    def preprocess_for_preds(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, np.ndarray]:
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
         labels = np.array(df_pped["label"])
         df_pped = pre_process_for_li(df_pped)
         return df_pped, labels
-    
+
     def X_to_tensor(self, X) -> torch.Tensor:
         """
         Used during testing.
@@ -451,9 +446,7 @@ class AutoEncoder_Li:
             )
 
 
-def preprocess_li(
-    model: OCSVM_Li | LOF_Li, df: pd.DataFrame, use_scaler: bool = False
-):
+def preprocess_li(model: OCSVM_Li | LOF_Li, df: pd.DataFrame, use_scaler: bool = False):
     """Transform dataframe into features ready to be scored and their labels.
 
     Args:
