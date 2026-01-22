@@ -491,10 +491,15 @@ class DatasetBuilder:
         mask_admin_samples = self.df["query_template_id"].isin(admin_ids)
         self.df.loc[mask_admin_samples, "user_inputs"] = ""
 
-    def build_ithreat(self, args):
-        self.df = self.generate_ithreat(args)
-
     def generate_ithreat(self, args):
+        """Generate insider threat attack samples using sqlmap.
+
+        Args:
+            args: Command-line arguments containing testing mode flag
+
+        Returns:
+            pd.DataFrame: DataFrame containing insider threat attack samples
+        """
         sqlc = self._get_sql_connector()
 
         itg = iThreatGenerator(self.config, sqlc, args.testing)
@@ -502,7 +507,7 @@ class DatasetBuilder:
         # df_metasploit = itg.perform_insider_attack_metasploit()
         df_sqlmap = itg.perform_insider_attack_sqlmap()
 
-        return pd.concat([df_sqlmap])
+        return df_sqlmap
 
     def build(self, args):
         testing_mode = args.testing
