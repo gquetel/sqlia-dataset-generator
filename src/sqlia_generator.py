@@ -219,7 +219,7 @@ class sqlmapGenerator:
                 ]
             else:
                 ran_values = random.choices(
-                    self.pdl[(dataset_name, param_no_sx)], k=10
+                    self.pdl[param_no_sx], k=10
                 )
 
             values_str = str(ran_values).replace('"', '\\"')
@@ -443,7 +443,7 @@ class sqlmapGenerator:
                 )
             else:
                 random_param_value = random.choice(
-                    self.pdl[(self.dataset_name, param_no_sx)]
+                    self.pdl[param_no_sx]
                 )
 
             params[param] = random_param_value

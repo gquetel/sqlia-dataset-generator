@@ -51,8 +51,7 @@ class DatasetBuilder:
         self.dataset_config = self.config["dataset"]
         self.dataset_name = self.dataset_config["name"]
 
-        #  Dict holding all possible filler values, Keys are tuple of the form:
-        #  (dataset_name, dictionnary_name)
+        #  Dict holding all possible filler values, Keys are placeholder names
         self.dictionaries = {}
 
         # Connection wrapper to SQL server.
@@ -104,12 +103,12 @@ class DatasetBuilder:
         """Load dictionaries of legitimate values for placeholders.
 
         The function checks under data/datasets/$dataset/dicts and loads all
-        existing files into self.dictionaries[(dataset_name, placeholder_id)]
+        existing files into self.dictionaries[placeholder_id]
         """
         dicts_dir = f"./data/datasets/{self.dataset_name}/dicts/"
         for filename in os.listdir(dicts_dir):
             with open(dicts_dir + filename, "r") as f:
-                self.dictionaries[(self.dataset_name, filename)] = f.read().splitlines()
+                self.dictionaries[filename] = f.read().splitlines()
 
     def get_all_templates(self) -> pd.DataFrame:
         """Return all statements templates from generation settings."""
@@ -253,7 +252,7 @@ class DatasetBuilder:
             alphabet = string.ascii_letters + string.digits
             filler = "".join(secrets.choice(alphabet) for i in range(20))
         else:
-            filler = random.choice(self.dictionaries[(self.dataset_name, placeholder)])
+            filler = random.choice(self.dictionaries[placeholder])
         filler = str(filler).replace('"', '""')
         return (query.replace(f"{{{placeholder}}}", f"{filler}", 1), filler)
 
