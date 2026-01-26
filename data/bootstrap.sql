@@ -11,3 +11,4 @@ FLUSH PRIVILEGES;
 
 -- Load dataset-specific schemas (each creates its own database)
 SOURCE ./datasets/OurAirports/init_db.sql;
+SOURCE ./datasets/OHR/init_db.sql;

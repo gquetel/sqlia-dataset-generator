@@ -146,11 +146,13 @@ pkgs.mkShell rec {
     fi
 
     if [ "$MYSQL_STARTED" = true ]; then
-      # Initialize databases with bootstrap.sql
-      # Change to data directory so SOURCE commands work with relative paths
-      echo "Running bootstrap.sql..."
-      (cd data && mysql --socket="$MYSQL_UNIX_PORT" -u root < bootstrap.sql)
-      echo "Databases initialized!"
+      # Initialize databases with bootstrap.sql (only if we just started MySQL)
+      if [ "$MYSQL_ALREADY_RUNNING" = false ]; then
+        # Change to data directory so SOURCE commands work with relative paths
+        echo "Running bootstrap.sql..."
+        (cd data && mysql --socket="$MYSQL_UNIX_PORT" -u root < bootstrap.sql)
+        echo "Databases initialized!"
+      fi
 
       # List all databases (excluding system databases)
       DATABASES=$(mysql --socket="$MYSQL_UNIX_PORT" -u root -proot -N -e "SHOW DATABASES;" 2>/dev/null | grep -vE '^(information_schema|performance_schema|mysql|sys)$' | tr '\n' ', ' | sed 's/, $//')
@@ -168,6 +170,7 @@ pkgs.mkShell rec {
       echo "  Root user: root / Password: root"
       echo ""
       echo "To connect: mysql --socket=$MYSQL_UNIX_PORT -u tata -ptata"
+      echo "To validate schemas: pytest tests/test_database_schemas.py -v"
     else
       echo "Failed to start MySQL"
     fi

@@ -41,6 +41,12 @@ update = "1/10"
 insert = "1/10"
 admin = "1/100"
 
+# Commented until statements (and, thereof templates), are added.
+# [[datasets]]
+# name = "OHR"
+# [datasets.statements]
+
+
 # [[datasets]]
 # name = "dataset_2"
 

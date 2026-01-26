@@ -27,17 +27,17 @@ databases/
 ## Adding a New Dataset
 
 1. Create a directory: `databases/<dataset_name>/`
-2. Create `init_db.sql` that:
+1. Create `init_db.sql` that:
    - Drops and creates its own database
    - Grants privileges to the `tata` user
    - Defines all tables and schemas
-3. Add the schema to `data/bootstrap.sql`:
+1. Add the schema to `data/bootstrap.sql`:
    ```sql
    SOURCE databases/<dataset_name>/init_db.sql;
    ```
-4. Create query templates in `queries/` directory
-5. Create dictionary files in `dicts/` directory
-6. Update your TOML config to include the new dataset:
+1. Create query templates in `queries/` directory
+1. Create dictionary files in `dicts/` directory
+1. Update your TOML config to include the new dataset:
    ```toml
    [[datasets]]
    name = "<dataset_name>"  # This will also be the database name
@@ -45,14 +45,20 @@ databases/
    [datasets.statements]
    # ... statement proportions
    ```
+1. Add the dataset to test parametrization in `tests/test_database_schemas.py`:
+   - Update all `@pytest.mark.parametrize("dataset_name", [...])` decorators to include your new dataset name
+   - This ensures database schema validation tests run for your dataset
+   - Run `pytest tests/test_database_schemas.py -v` to verify all tests pass
 
 ## Example: Airport Dataset
 
 See `databases/airport/init_db.sql` for a complete example that:
+
 - Creates the `airport` database
 - Grants privileges to `tata` user
 - Defines 6 tables (airport, runways, navaids, countries, regions, airport_frequencies)
 
 The directory also contains:
+
 - Query templates for different SQL operations in `queries/`
 - Dictionary files for placeholder values in `dicts/`
