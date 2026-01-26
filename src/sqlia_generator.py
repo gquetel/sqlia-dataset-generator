@@ -26,6 +26,8 @@ class sqlmapGenerator:
         placeholders_dictionaries_list: list,
         port: int,
         seed: int,
+        debug_mode: bool = False,
+        testing_mode: bool = False,
     ):
         """Initialize data structures for payload generation."""
 
@@ -33,6 +35,9 @@ class sqlmapGenerator:
         self.dataset_config = dataset_config
         self.port = port
         self.sqlc = sqlconnector
+        self.debug_mode = debug_mode
+        self.testing_mode = testing_mode
+
         # List of dictionaries of values
         self.pdl = placeholders_dictionaries_list
 
@@ -97,14 +102,20 @@ class sqlmapGenerator:
         # letting it there incrementally increase the number of commands required to
         # dump data from the DBMS as we invoke more and more sqlmap.
 
-        tables = [
-            "regions",
-            "countries",
-            "navaids",
-            "runways",
-            "airport_frequencies",
-            "airport",
-        ]
+        # Dynamically discover tables (not views) in the current dataset's database
+        try:
+            result = self.sqlc.execute_query(
+                f"SHOW FULL TABLES WHERE Table_type = 'BASE TABLE';"
+            )
+            # execute_query returns a list of result sets, we need the first one
+            if result and len(result) > 0:
+                tables = [row[0] for row in result[0]]
+            else:
+                tables = []
+        except Exception as e:
+            logger.warning(f"Failed to retrieve table list from database: {str(e)}")
+            tables = []
+
         for table in tables:
             try:
                 self.sqlc.execute_query(
@@ -259,7 +270,6 @@ class sqlmapGenerator:
         settings_tech: str,
         params: list[str],
         dataset_name: str,
-        debug_mode: bool,
         template_info: dict,
     ) -> pd.DataFrame:
         """Executes the reconnaissance phase of an SQL injection attack using SQLMap.
@@ -290,6 +300,10 @@ class sqlmapGenerator:
         # Columns that are the same for all sqlmap calls for this template.
         label = 1
 
+        # When testing, only test a single parameter
+        if self.testing_mode:
+            params = [params[0]]
+
         for i, param in enumerate(params):
             # Iterate over existing params.
             _t_params = params.copy()
@@ -298,7 +312,7 @@ class sqlmapGenerator:
                 dataset_name=dataset_name, parameters=_t_params
             )
             tamper_script = random.choice(self._tamper_scripts)
-            settings_verbose = "-v 3 " if debug_mode else "-v 0 "
+            settings_verbose = "-v 3 " if self.debug_mode else "-v 0 "
 
             recon_settings = (
                 f"{settings_verbose} --skip-waf --level=5 --risk=1 --batch "
@@ -341,7 +355,7 @@ class sqlmapGenerator:
         return _df
 
     def perform_exploit(
-        self, url: str, settings_tech: str, debug_mode: bool, template_info: dict
+        self, url: str, settings_tech: str, template_info: dict
     ) -> pd.DataFrame:
         """Executes the exploitation phase of an SQL injection attack using SQLMap.
 
@@ -368,7 +382,7 @@ class sqlmapGenerator:
         # this is not the priority.
 
         tamper_script = random.choice(self._tamper_scripts)
-        settings_verbose = "-v 3 " if debug_mode else "-v 0 "
+        settings_verbose = "-v 3 " if self.debug_mode else "-v 0 "
 
         exploit_settings = (
             f"{settings_verbose} --skip-waf --level=5 --risk=1 --batch "
@@ -402,7 +416,7 @@ class sqlmapGenerator:
         )
         return _df
 
-    def perform_attack(self, technique: tuple, template_info: dict, debug_mode: bool):
+    def perform_attack(self, technique: tuple, template_info: dict):
         """Orchestrates a full SQLI attack for a given technique and query template.
 
         This function runs both reconnaissance and exploitation phases of an SQL
@@ -451,7 +465,6 @@ class sqlmapGenerator:
             settings_tech=settings_tech,
             params=template_info["placeholders"],
             dataset_name=self.dataset_name,
-            debug_mode=debug_mode,
             template_info=template_info,
         )
 
@@ -467,7 +480,6 @@ class sqlmapGenerator:
             _df_exploit = self.perform_exploit(
                 url=url,
                 settings_tech=settings_tech,
-                debug_mode=debug_mode,
                 template_info=template_info,
             )
 
@@ -490,7 +502,6 @@ class sqlmapGenerator:
             _df = _df_recon
 
             # Failure is already set to all samples of df.
-
         _df["statement_type"] = template_info["statement_type"]
         _df["query_template_id"] = template_id
         _df["attack_id"] = atk_id
@@ -499,7 +510,7 @@ class sqlmapGenerator:
         self.generated_attacks = pd.concat([self.generated_attacks, _df])
         self._scenario_id += 1
 
-    def generate_attacks(self, testing_mode: bool, debug_mode: bool):
+    def generate_attacks(self):
         """Generates SQL injection attacks for all templates using multiple techniques.
 
         This function iterates through all combinations of templates and SQLI
@@ -521,7 +532,7 @@ class sqlmapGenerator:
         Path("./.cache/").mkdir(parents=True, exist_ok=True)
 
         # Template's number is reduced, we also only consider the error technique.
-        if testing_mode:
+        if self.testing_mode:
             techniques = {"error": "--technique=E --users "}
 
         for template in self.templates:
@@ -541,7 +552,7 @@ class sqlmapGenerator:
                     self._scenario_id += 1
                     continue
 
-                self.perform_attack(i, template, debug_mode)
+                self.perform_attack(i, template)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
         return self.generated_attacks

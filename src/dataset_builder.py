@@ -57,15 +57,23 @@ class DatasetBuilder:
         # Connection wrapper to SQL server.
         self.sqlc = None
 
-        # Dataframe holding the sampled templates of normal queries to fill.
+        # Sampled templates of normal queries to fill.
         self._df_templates_n = None
-        # Dataframe holding sampled templates introduced in the test set (not present
-        # in the train set).
-        self.df_templates_test = None
-        # Dataframe holding the templates selected for being normal-only templates.
+
+        # TODO: Factorize this
+        # Templates selected for being normal-only templates.
         self.df_tno = None
-        # Dataframe holding the templates of administration queries
+        # Templates of administration queries
         self.df_tadmin = None
+        # Templates used to generate attacks
+        self.df_atk_templates = None
+        # Templates used to generate normal queries (atk, normal-only and admin)
+        self.df_norm_templates = None
+        # All templates
+        self._all_templates_original = None
+
+        # Dataframe holding SQL-sourced statements (for normal query generation only)
+        self.df_sql_statements = None
 
         # Initialisation code.
         random.seed(self.seed)
@@ -82,23 +90,6 @@ class DatasetBuilder:
             self.sqlc = SQLConnector(self.config, self.dataset_name)
         return self.sqlc
 
-    def _get_normal_template_ids(self):
-        """Get list of template IDs for normal query generation.
-
-        Combines:
-        - Templates used to generate attacks (self.templates)
-        - Templates selected for normal-only generation (self.df_tno)
-        - Administrative query templates (self.df_tadmin)
-
-        Returns:
-            list: Combined list of template IDs
-        """
-        return (
-            list(self.templates["ID"].unique())
-            + list(self.df_tno["ID"].unique())
-            + list(self.df_tadmin["ID"].unique())
-        )
-
     def populate_dictionaries(self):
         """Load dictionaries of legitimate values for placeholders.
 
@@ -110,32 +101,207 @@ class DatasetBuilder:
             with open(dicts_dir + filename, "r") as f:
                 self.dictionaries[filename] = f.read().splitlines()
 
-    def get_all_templates(self) -> pd.DataFrame:
-        """Return all statements templates from generation settings."""
+    def _load_statements_from_sql_script(
+        self, sql_file_path: str, statement_type: str
+    ) -> pd.DataFrame:
+        """Parse SQL script file and extract statements with template ID annotations.
+        We expect each line to end with a comment and the template-ID corresponding
+        to the query.
+
+        Args:
+            sql_file_path: Path to the SQL script file
+            statement_type: Type of statement (insert, select, update, delete, admin)
+
+        Returns:
+            DataFrame with columns: template, ID, description, payload_type, source
+        """
+        with open(sql_file_path, "r") as f:
+            content = f.read()
+
+        # Pattern to match: SQL statement ending with '; -- TEMPLATE-ID'
+        # Captures: (statement) ; -- (template_id)
+        # Supports formats: 'OHR-I-1', 'airport-S1', 'airport-admin1'
+        pattern = r"(.+?);[\s]*--[\s]*([A-Za-z]+-(?:[A-Z]-?|admin)\d+)"
+
+        matches = re.findall(pattern, content, re.MULTILINE | re.DOTALL)
+
+        statements = []
+        auto_id_counter = 1
+
+        for statement, template_id in matches:
+            statement = statement.strip()
+
+            if not statement or statement.startswith("--"):
+                continue
+
+            id_pattern = r"^[A-Za-z]+-(?:[A-Z]-?|admin)\d+$"
+            if not re.match(id_pattern, template_id):
+                logger.warning(
+                    f"Invalid template ID format in {sql_file_path}: '{template_id}'. "
+                    f"Expected format: {{dataset}}-{{Type}}[-]{{number}} (e.g., OHR-I-1, airport-S1, or airport-admin1). "
+                    f"Statement will be skipped."
+                )
+                continue
+
+            statements.append(
+                {
+                    "template": statement + ";",
+                    "ID": template_id,
+                    "description": f"SQL statement from {statement_type}.sql",
+                    "payload_type": "",
+                }
+            )
+        return pd.DataFrame(statements)
+
+    def _calculate_template_distribution(self, statement_type: str) -> dict:
+        """Calculate distribution of template types from SQL statements.
+
+        Groups statements by template ID and calculates the proportion of each
+        template type within the given statement type.
+
+        Args:
+            statement_type: Type of statement (used for filtering and logging)
+
+        Returns:
+            Dictionary mapping template_id -> proportion (e.g., {'OHR-I-1': 0.021})
+        """
+        # Filter to only SQL-sourced statements for this statement type
+        sql_statements = self.df_sql_statements
+
+        if sql_statements.empty:
+            return {}
+
+        # Count occurrences of each template ID
+        template_counts = sql_statements["ID"].value_counts()
+
+        # Calculate total number of SQL statements
+        total_statements = len(sql_statements)
+
+        # Calculate proportions
+        distribution = {}
+        for template_id, count in template_counts.items():
+            proportion = count / total_statements
+            distribution[template_id] = proportion
+
+        logger.info(f"Template distribution for {statement_type}:")
+        for template_id, proportion in sorted(
+            distribution.items(), key=lambda x: x[1], reverse=True
+        ):
+            count = template_counts[template_id]
+            logger.info(
+                f"  - {template_id}: {count} statements ({proportion*100:.1f}%)"
+            )
+
+        return distribution
+
+    def load_templates_and_stmts(self) -> pd.DataFrame:
+        """Load all templates from generation settings and optionnal SQL script statements.
+
+        Loads templates from either .sql files (with template annotations),
+        .csv template files, or both. For each statement type, at least one
+        source must exist.
+
+        Returns:
+            DataFrame with all templates from all sources
+        """
         statements_type = config_parser.get_statement_types_and_proportions(
             self.dataset_config
         )
         _all_templates = pd.DataFrame()
+        _all_sql_statement = pd.DataFrame()
 
-        dir_path = f"./data/datasets/{self.dataset_name}/queries/"
+        dataset_dir = f"./data/datasets/{self.dataset_name}"
+        queries_dir = f"{dataset_dir}/queries/"
+
         for stmt_type in statements_type:
-            # Iterate over statements_type, load relevant csv file
-            # And then add necessary fields.
-            _t = pd.read_csv(dir_path + stmt_type["type"] + ".csv")
+            statement_type = stmt_type["type"]
+            sql_file_path = f"{dataset_dir}/{statement_type}.sql"
+            csv_file_path = f"{queries_dir}{statement_type}.csv"
 
-            _t["proportion"] = stmt_type["proportion"]
-            _t["statement_type"] = stmt_type["type"]
-            _all_templates = pd.concat([_t, _all_templates])
+            sql_exists = os.path.exists(sql_file_path)
+            csv_exists = os.path.exists(csv_file_path)
 
-        _all_templates["placeholders"] = _all_templates["template"].apply(
-            _extract_params
-        )
-        return _all_templates
+            # TODO: Templates should always exists.
+            if not sql_exists and not csv_exists:
+                raise FileNotFoundError(
+                    f"No SQL file or template CSV found for statement type '{statement_type}'. "
+                    f"Expected either:\n"
+                    f"  - {sql_file_path} (with template annotations), or\n"
+                    f"  - {csv_file_path}\n"
+                    f"At least one must exist."
+                )
 
-    def select_templates(self, testing_mode: bool):
-        """Modify self.templates according to the generation settings.
+            if sql_exists:
+                sql_statements = self._load_statements_from_sql_script(
+                    sql_file_path, statement_type
+                )
+                logger.info(
+                    f"Loaded {len(sql_statements)} statements from {statement_type}.sql "
+                    f"with {sql_statements['ID'].nunique()} template types"
+                )
+                sql_statements["statement_type"] = stmt_type["type"]
 
-        - This function randomly samples templates that will only be present for testing.
+            templates = pd.read_csv(csv_file_path)
+            logger.info(f"Loaded {len(templates)} templates from {statement_type}.csv")
+
+            # TODO: Unsure about proportion here.
+            templates["proportion"] = stmt_type["proportion"]
+            templates["statement_type"] = stmt_type["type"]
+
+            # Extract placeholders from templates, later use to create sqlmap attacks
+            templates["placeholders"] = templates["template"].apply(_extract_params)
+
+            # If not an admin statement, we check that there is placeholders in queries
+            if statement_type != "admin":
+                templates_without_placeholders = templates[
+                    templates["placeholders"].apply(lambda x: len(x) == 0)
+                ]
+
+                if not templates_without_placeholders.empty:
+                    error_details = []
+                    for stmt_type in templates_without_placeholders[
+                        "statement_type"
+                    ].unique():
+                        count = len(
+                            templates_without_placeholders[
+                                templates_without_placeholders["statement_type"]
+                                == stmt_type
+                            ]
+                        )
+                        error_details.append(
+                            f"  - {stmt_type.upper()}: {count} templates"
+                        )
+
+                    raise ValueError(
+                        f"Found templates without placeholders. Templates must have at least one placeholder.\n"
+                        f"Templates without placeholders:\n"
+                        + "\n".join(error_details)
+                        + "\n"
+                    )
+
+            # Check for template ID mismatches if both exist
+            if sql_exists and csv_exists:
+                sql_ids = set(sql_statements["ID"].unique())
+                csv_ids = set(templates["ID"].unique())
+
+                missing_in_csv = sql_ids - csv_ids
+                if missing_in_csv:
+                    raise ValueError(
+                        f"Template IDs in SQL annotations don't match CSV template IDs for {statement_type}:\n"
+                        f"  - SQL references: {sorted(sql_ids)}\n"
+                        f"  - CSV contains: {sorted(csv_ids)}\n"
+                        f"  - Missing in CSV: {sorted(missing_in_csv)}\n"
+                    )
+                # Only concat if no issue are found
+                _all_sql_statement = pd.concat([_all_sql_statement, sql_statements])
+
+            _all_templates = pd.concat([_all_templates, templates])
+
+        return _all_templates, _all_sql_statement
+
+    def init_templates(self, testing_mode: bool):
+        """Initialize templates variables according to the generation settings.
+
         - This function randomly samples templates that will only be used to generate
         normal samples
         - If testing mode is enabled, this reduce the number of templates for generation.
@@ -144,99 +310,146 @@ class DatasetBuilder:
             testing_mode (bool): _description_
         """
 
-        self.templates = self.get_all_templates().reset_index(drop=True)
-        as23_template = self.templates[self.templates["ID"] == "airport-S23"]
+        templates, statements = self.load_templates_and_stmts()
+        self.df_sql_statements = statements
 
-        # First, remove administrator statements to not mess with ratios computations
-        self.df_tadmin = self.templates[self.templates["ID"].str.contains("admin")]
-        self.templates = self.templates[~self.templates["ID"].str.contains("admin")]
+        # First, identify and remove admin statements.
+        self.df_tadmin = templates[templates["ID"].str.contains("admin")]
+        templates = templates[~templates["ID"].str.contains("admin")]
 
-        # Testing settings, simply test a single template.
+        # TODO: Treat this case in another way now that we are generic.
+        as23_template = templates[templates["ID"] == "airport-S23"]
+
+        # Now, initialise df_atk_templates. Before we need to decide which templates
+        # are used for generating only attacks.
+        ratio_tno = config_parser.get_normal_only_template_ratio(self.config)
+        if ratio_tno > 0:
+            n_tno = round(templates.shape[0] * ratio_tno)
+            self.df_tno = templates.sample(n=n_tno)
+            self.df_atk_templates = templates.drop(self.df_tno.index)
+            self.df_tno = pd.concat([self.df_tno, as23_template])
+        else:
+            self.df_atk_templates = templates
+
+        # Now, populate templates used for normal only:
+        self.df_norm_templates = pd.concat(
+            [self.df_atk_templates, self.df_tno, self.df_tadmin]
+        )
         if testing_mode:
-            # TODO, choose one of each statement type instead.
             n_templates = 1
-
-            self.templates = self.templates.sample(n=n_templates)
+            # We want shorter atck time so we reduce the number of templates
+            self.df_atk_templates = templates.sample(n=n_templates)
+            # Other templates don't take so much time so we can let them as is.
             logger.warning(
-                f"Testing mode enabled, using {n_templates} templates and error technique"
+                f"Testing mode enabled, reduced the number of attack templates to {n_templates}."
             )
 
-        # Samples templates that will only be used for generating normal queries.
-        ratio_tno = config_parser.get_normal_only_template_ratio(self.config)
-        n_tno = round(self.templates.shape[0] * ratio_tno)
-        self.df_tno = self.templates.sample(n=n_tno)
+    def _assign_splits_to_dataset(self, n_normal_train: int):
+        """Assign train/test splits to the complete dataset.
 
-        # Also, a special case for template airport-S23,
-        # for which we do not generate attacks either.
-        self.df_tno = pd.concat([self.df_tno, as23_template])
-        self.templates = self.templates.drop(self.df_tno.index, errors="ignore")
-
-        # Sample templates for df_test: DEPRECATED, useless, but no time to
-        # properly remove stuff.
-        self.df_templates_test = self.templates.sample(n=0)
-
-    def _add_split_column(self):
-        """Add a split column information for unsupervised dataset generation
-
-        At the time this function is called. self.df contains the same number of attacks
-        as normal samples. Normal samples will be used for training. Attack samples for
-        testing.
+        All attacks go to the test set. Normal samples are split with the first
+        n_normal_train samples going to training and the rest to testing.
 
         Args:
-            train_size (float, optional): _description_. Defaults to 0.7.
+            n_normal_train: Number of normal samples to assign to training set
         """
+        # All attacks go to test set
         atk_mask = self.df["label"] == 1
         self.df.loc[atk_mask, "split"] = "test"
-        self.df.loc[~atk_mask, "split"] = "train"
 
-    def _augment_test_set_normal_queries(self, do_syn_check: bool):
-        """We augment the number of normal queries in test set."""
-        atk_ratio = config_parser.get_attacks_ratio(self.config)
+        # For normal samples: first n_normal_train go to train, rest to test
+        normal_mask = self.df["label"] == 0
+        normal_indices = self.df[normal_mask].index
 
-        n_attack_test_set = self.df[
-            (self.df["split"] == "test") & (self.df["label"] == 1)
-        ].shape[0]
+        train_indices = normal_indices[:n_normal_train]
+        test_indices = normal_indices[n_normal_train:]
 
-        target_n_normal_test = int(n_attack_test_set / atk_ratio) - n_attack_test_set
+        self.df.loc[train_indices, "split"] = "train"
+        self.df.loc[test_indices, "split"] = "test"
 
-        # Here, we upsample from:
-        # - all templates used to generate attacks (self.templates)
-        # - Plus those sampled by  self.select_templates to be considered as normal
-        #   only templates.
-        # - Plus the administrative queries
+    def populate_normal_templates(self, n_n: int):
+        """Sample n_n templates with distribution preservation from SQL files.
 
-        l_normal_templates = self._get_normal_template_ids()
-
-        self.populate_normal_templates(
-            n_n=target_n_normal_test, templates_list=l_normal_templates
-        )
-        self.generate_normal_queries(do_syn_check)
-        # Now all queries without a split value should go to test set
-        self.df.loc[self.df["split"].isna(), "split"] = "test"
-
-    def populate_normal_templates(self, n_n: int, templates_list: list):
-        """Randomly sample n_n templates with given the templates_list array
+        Behavior:
+        1. Use SQL statements from script first (if they exist)
+        2. Calculate remaining samples needed
+        3. Supplement using templates, maintaining SQL distribution proportions
+        4. If only templates exist, sample with normalized weights
 
         Args:
-            n_n (int): _description_
-            templates_list (list): _description_.
+            n_n: Number of normal samples to generate
+            templates_list: List of template IDs eligible for normal generation
         """
+        # df_norm_templates holds the templates from which to generate.
+        csv_templates = self.df_norm_templates
+        sql_statements = self.df_sql_statements
 
-        _df_all_templates = self.get_all_templates()
-        # Only keep those which match templates_list:
-        _dft = _df_all_templates[_df_all_templates["ID"].isin(templates_list)].copy()
+        normal_samples = pd.DataFrame()
+        # We iterate over statement types and:
+        # - compute how many statements must be generated
+        # - If we find statements from sql script we sampled from there
+        # - Else, or if there isn't enough statements in the script, we rely
+        #   on templates to generate samples.
+        for statement_type in csv_templates["statement_type"].unique():
+            stmt_proportion = csv_templates[
+                csv_templates["statement_type"] == statement_type
+            ]["proportion"].iloc[0]
+            target_samples = int(n_n * stmt_proportion)
+            if target_samples == 0:
+                continue
+            csv_tmpls = csv_templates[csv_templates["statement_type"] == statement_type]
 
-        # We should not sample given "proportion" directly, we should normalize based on
-        # the number of templates for that statement type (given by column statement_type)
+            if not sql_statements.empty:
+                sql_stmts = sql_statements[
+                    sql_statements["statement_type"] == statement_type
+                ]
+                normal_samples = pd.concat([normal_samples, sql_stmts])
+                remaining_samples = target_samples - len(sql_stmts)
+                if remaining_samples > 0:
+                    # We generate the next queries according to the template
+                    # distribution in the script (that we want to imitate).
+                    template_distribution = self._calculate_template_distribution(
+                        statement_type
+                    )
 
-        type_counts = _dft.groupby("statement_type").size()
-        _dft["normalized_weight"] = _dft.apply(
-            lambda row: row["proportion"] / type_counts[row["statement_type"]],
-            axis=1,
-        )
-        self._df_templates_n = _dft.sample(
-            n=n_n, replace=True, weights="normalized_weight"
-        )
+                    supplemented = pd.DataFrame()
+
+                    for template_id, proportion in template_distribution.items():
+                        target_count = int(remaining_samples * proportion)
+
+                        if target_count == 0:
+                            continue
+
+                        matching_csv = csv_tmpls[csv_tmpls["ID"] == template_id]
+
+                        # TODO: sample doesn't seem appropriate, we duplicate the same
+                        # entry target_count times. Some other function could be used ?
+                        sampled = matching_csv.sample(n=target_count, replace=True)
+                        supplemented = pd.concat([supplemented, sampled])
+
+                    normal_samples = pd.concat([normal_samples, supplemented])
+                    logger.info(
+                        f"Used {len(sql_stmts)} from SQL script file + {len(supplemented)} template-generated"
+                    )
+                elif remaining_samples < 0:
+                    logger.warning(
+                        f"Sampled {target_samples} {statement_type} from SQL script file."
+                    )
+                    # We keep other statement type but sample ours.
+                    normal_samples = normal_samples[
+                        normal_samples["statement_type"] != statement_type
+                    ]
+                    sampled = sql_stmts.sample(n=target_samples, replace=False)
+                    normal_samples = pd.concat([normal_samples, sampled])
+
+            else:
+                # Sample templates with equal probability within this statement type
+                sampled = csv_tmpls.sample(n=target_samples, replace=True)
+                normal_samples = pd.concat([normal_samples, sampled])
+
+        # It's ok to merge statements and templates here, no placeholders are present
+        # they will be ignored
+        self._df_templates_n = normal_samples.reset_index(drop=True)
 
     def fill_placeholder(
         self, query: str, placeholder: str, count: int = 1
@@ -370,17 +583,19 @@ class DatasetBuilder:
         return query, user_inputs
 
     def generate_normal_queries(self, do_syn_check: bool):
-        # Iterate over placeholders, and payload clause for type
-        # Randomly choose a value in dict for that placeholder
-        # And encapsulate based on type
+        """Generate normal queries from templates.
 
+        New behavior:
+        - SQL-sourced statements: Use as-is (already complete)
+        - Template-sourced statements: Fill placeholders with random values
+        """
         generated_normal_queries = []
         for template_row in tqdm(self._df_templates_n.itertuples()):
-            all_placeholders = _extract_params(template=template_row.template)
             query = template_row.template
             user_inputs = []
+            all_placeholders = _extract_params(template=template_row.template)
 
-            # Replace 1 by 1 all placeholders by a randomly choosen dict value
+            # Replace 1 by 1 all placeholders by a randomly chosen dict value
             for placeholder in all_placeholders:
                 # Remove placeholder's artificial int suffix:
                 placeholder = placeholder.rstrip("123456789")
@@ -400,9 +615,11 @@ class DatasetBuilder:
                     )
                     user_inputs.append(filler)
 
+            # Validate syntax if requested
             if do_syn_check:
                 if not self._verify_syntactic_validity_query(query=query):
                     raise ValueError("Failed normal query: ", query)
+
             user_inputs = [str(u) for u in user_inputs]
             generated_normal_queries.append(
                 {
@@ -433,26 +650,28 @@ class DatasetBuilder:
         generated_attack_queries = []
 
         # First, initialize all HTTP endpoints for each template.
-        # templates are already selected / sampled in self.templates
+        # templates are already selected in self.df_atk_templates
 
         sqlc = self._get_sql_connector()
         # Prune all sent_queries for attacks
         _ = sqlc.get_and_empty_sent_queries()
 
         server = TemplatedSQLServer(
-            templates=self.templates, sqlconnector=sqlc, port=server_port
+            templates=self.df_atk_templates, sqlconnector=sqlc, port=server_port
         )
         server.start_server()
         # Now iterate over templates and techniques to generate payloads.
         sqlg = sqlmapGenerator(
             dataset_config=self.dataset_config,
-            templates=self.templates,
+            templates=self.df_atk_templates,
             sqlconnector=sqlc,
             placeholders_dictionaries_list=self.dictionaries,
             port=server_port,
             seed=self.seed,
+            testing_mode=testing_mode,
+            debug_mode=debug_mode,
         )
-        generated_attack_queries = sqlg.generate_attacks(testing_mode, debug_mode)
+        generated_attack_queries = sqlg.generate_attacks()
         server.stop_server()
 
         self._n_attacks = len(generated_attack_queries)
@@ -460,17 +679,6 @@ class DatasetBuilder:
 
     def _clean_cache_folder(self):
         shutil.rmtree("./.cache/", ignore_errors=True)
-
-    def _add_template_split_info(self):
-        """Add a column which specify wether the sample comes from the 'original'
-        or the 'challenging' set of templates (the latter being those not seen during
-        training).
-        """
-        ids_challenging = self.df_templates_test["ID"].to_list()
-        self.df["template_split"] = "original"
-        self.df.loc[
-            self.df["query_template_id"].isin(ids_challenging), "template_split"
-        ] = "challenging"
 
     def _remove_contradictions(self):
         """Remove contradictory samples from the dataset."""
@@ -514,8 +722,8 @@ class DatasetBuilder:
         debug_mode = args.debug
         do_syn_check = not args.no_syn_check
 
-        # First, sample queries templates according to scenario.
-        self.select_templates(testing_mode=testing_mode)
+        # First, we identify all templates that should be used for generation.
+        self.init_templates(testing_mode=testing_mode)
         self.generate_attack_queries_sqlmapapi(
             testing_mode=testing_mode, debug_mode=debug_mode
         )
@@ -523,18 +731,20 @@ class DatasetBuilder:
         df_ithreat = self.generate_ithreat(args)
         self.df = pd.concat([self.df, df_ithreat])
 
-        # List of templates to create normal queries from. Corresponds to :
-        # - all templates used to generate attacks (self.templates)
-        # - Plus those sampled by  self.select_templates to be considered as normal
-        #   only templates.
-        # - Plus the administrative queries
-        l_normal_templates = self._get_normal_template_ids()
-        self.populate_normal_templates(self._n_attacks, l_normal_templates)
-        self.generate_normal_queries(do_syn_check)
-        self._add_split_column()
+        # Calculate all normal queries needed upfront
+        n_attacks = len(self.df[self.df["label"] == 1])
+        atk_ratio = config_parser.get_attacks_ratio(self.config)
 
-        self._augment_test_set_normal_queries(do_syn_check)
-        # self._add_template_split_info()
+        n_normal_train = n_attacks  # 1:1 ratio for training
+        n_normal_test = int(n_attacks / atk_ratio) - n_attacks
+        total_normal = n_normal_train + n_normal_test
+
+        # Generate all normal queries in one pass
+        self.populate_normal_templates(total_normal)
+        self.generate_normal_queries(do_syn_check)
+
+        # Assign train/test splits
+        self._assign_splits_to_dataset(n_normal_train)
 
         self._remove_contradictions()
         self._remove_user_input_admin()
