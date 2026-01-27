@@ -209,6 +209,21 @@ name = "{dataset_name}"
                     attack_count == 0
                 ), f"Template {template_id} marked as normal-only but found in {attack_count} attack samples"
 
+        with subtests.test(msg="merged dataset file exists"):
+            merged_file = output_dir / "dataset.csv"
+            assert merged_file.exists(), f"Merged dataset.csv not found in {output_dir}"
+
+        with subtests.test(
+            msg="merged dataset contains same data as individual dataset"
+        ):
+            merged_df = pd.read_csv(output_dir / "dataset.csv")
+            assert len(merged_df) == len(
+                df
+            ), f"Merged dataset has {len(merged_df)} samples but individual dataset has {len(df)} samples"
+            assert (
+                merged_df["label"] == df["label"]
+            ).all(), "Merged dataset labels don't match individual dataset"
+
     @pytest.mark.integration
     def test_invalid_missing_statement_csv_files(self, tmp_path, monkeypatch):
         """Test launcher fails when statement CSV files are missing for datasets"""

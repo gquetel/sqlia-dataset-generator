@@ -1,8 +1,11 @@
 import argparse
 import logging
+import os
 from pathlib import Path
 import sys
 import tomllib
+
+import pandas as pd
 
 from src.dataset_builder import DatasetBuilder
 
@@ -261,6 +264,47 @@ def validate_datasets_config(config: dict):
         logger.info(f"Validation successful for dataset '{dataset_name}'")
 
 
+def merge_datasets(config: dict, output_dir: str) -> None:
+    """Merge all generated individual datasets into a single combined dataset.
+
+    Args:
+        config: The loaded TOML configuration
+        output_dir: Directory containing individual dataset CSV files
+    """
+    datasets = config.get("datasets", [])
+
+    logger.info(f"Merging {len(datasets)} dataset(s) into a single file...")
+
+    merged_df = pd.DataFrame()
+
+    for dataset_config in datasets:
+        dataset_name = dataset_config.get("name", "unknown")
+        dataset_path = os.path.join(output_dir, f"{dataset_name}.csv")
+
+        if not os.path.exists(dataset_path):
+            logger.warning(f"Dataset file not found: {dataset_path}, skipping...")
+            continue
+
+        logger.info(f"Loading dataset: {dataset_name}")
+        df = pd.read_csv(dataset_path)
+        merged_df = pd.concat([merged_df, df], ignore_index=True)
+        logger.info(f"Added {len(df)} samples from {dataset_name}")
+
+    if merged_df.empty:
+        logger.warning("No datasets found to merge!")
+        return
+
+    # Save merged dataset
+    output_path = config["general"].get("output_path", "dataset.csv")
+    merged_path = os.path.join(output_dir, output_path)
+    merged_df.to_csv(merged_path, index=False)
+
+    logger.info(f"Merged dataset saved to: {merged_path}")
+    logger.info(f"Total samples: {len(merged_df)}")
+    logger.info(f"  - Normal samples: {len(merged_df[merged_df['label'] == 0])}")
+    logger.info(f"  - Attack samples: {len(merged_df[merged_df['label'] == 1])}")
+
+
 def main():
     args = init_args()
     init_logging(args.debug)
@@ -289,7 +333,9 @@ def main():
 
         db.save(args.output_dir)
         logger.info(f"Dataset {dataset_name} saved successfully")
-    # TODO: Function call that merges all generated datasets.
+
+    # Merge all generated datasets into a single file
+    merge_datasets(config, args.output_dir)
 
 
 if __name__ == "__main__":
