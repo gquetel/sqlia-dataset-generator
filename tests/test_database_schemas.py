@@ -314,35 +314,6 @@ def test_init_files_are_in_bootstrap(config):
         )
 
 
-def test_all_init_files_are_in_config():
-    """
-    Verify that all init_db.sql files have corresponding entries in config.toml.
-
-    This prevents orphaned dataset schemas that aren't being used.
-    """
-    config_path = Path("config.toml")
-    config = toml.load(config_path)
-
-    datasets_dir = Path("data/datasets")
-    config_datasets = {dataset["name"] for dataset in config["datasets"]}
-
-    # Find all directories with init_db.sql
-    init_file_datasets = set()
-    if datasets_dir.exists():
-        for item in datasets_dir.iterdir():
-            if item.is_dir() and (item / "init_db.sql").exists():
-                init_file_datasets.add(item.name)
-
-    # Allow init_db.sql files that aren't in config (might be in development)
-    # But warn about them
-    orphaned = init_file_datasets - config_datasets
-    if orphaned:
-        pytest.skip(
-            f"Found dataset(s) with init_db.sql but not in config.toml: {orphaned}\n"
-            f"This is OK if you're developing a new dataset, but consider adding to config.toml"
-        )
-
-
 # ============================================================================
 # Schema Sanity Checks
 # ============================================================================

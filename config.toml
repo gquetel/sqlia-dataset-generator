@@ -43,14 +43,9 @@ admin = "1/100"
 
 [[datasets]]
 name = "OHR"
+
 [datasets.statements]
-insert = "1/1"
-
-
-# [[datasets]]
-# name = "dataset_2"
-
-# [datasets.statements]
-# read_query = "5/10"
-# write_query = "3/10"
-# maintenance = "2/10"
+select = "7/10"
+delete = "1/10"
+update = "1/10"
+insert = "1/10"

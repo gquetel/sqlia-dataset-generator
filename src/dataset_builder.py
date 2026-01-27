@@ -61,8 +61,6 @@ class DatasetBuilder:
         self._df_templates_n = None
 
         # Template DataFrames partitioned by usage:
-        # Templates selected for being normal-only templates.
-        self.df_tno = None
         # Templates of administration queries
         self.df_tadmin = None
         # Templates used to generate attacks
@@ -163,7 +161,9 @@ class DatasetBuilder:
             Dictionary mapping template_id -> proportion (e.g., {'OHR-I-1': 0.021})
         """
         # Filter to only SQL-sourced statements for this statement type
-        sql_statements = self.df_sql_statements
+        sql_statements = self.df_sql_statements[
+            self.df_sql_statements["statement_type"] == statement_type
+        ]
 
         if sql_statements.empty:
             return {}
@@ -310,7 +310,10 @@ class DatasetBuilder:
         templates, statements = self.load_templates_and_stmts()
         self.df_sql_statements = statements
 
-        # First, identify and remove admin statements.
+        # First, save all templates as they all will be used to generate normal queries
+        self.df_norm_templates = templates
+
+        # Then, identify and remove admin statements.
         self.df_tadmin = templates[templates["ID"].str.contains("admin")]
         templates = templates[~templates["ID"].str.contains("admin")]
 
@@ -328,16 +331,11 @@ class DatasetBuilder:
         ratio_tno = config_parser.get_normal_only_template_ratio(self.config)
         if ratio_tno > 0:
             n_tno = round(templates.shape[0] * ratio_tno)
-            self.df_tno = templates.sample(n=n_tno)
-            self.df_atk_templates = templates.drop(self.df_tno.index)
-            self.df_tno = pd.concat([self.df_tno, as23_template])
+            df_tno = templates.sample(n=n_tno)
+            self.df_atk_templates = templates.drop(df_tno.index)
         else:
             self.df_atk_templates = templates
 
-        # Now, populate templates used for normal only:
-        self.df_norm_templates = pd.concat(
-            [self.df_atk_templates, self.df_tno, self.df_tadmin]
-        )
         if testing_mode:
             n_templates = 1
             # We want shorter atck time so we reduce the number of templates
@@ -399,12 +397,18 @@ class DatasetBuilder:
             target_samples = int(n_n * stmt_proportion)
             if target_samples == 0:
                 continue
+
             csv_tmpls = csv_templates[csv_templates["statement_type"] == statement_type]
 
+            # Check if SQL statements exist and filter by statement type
             if not sql_statements.empty:
                 sql_stmts = sql_statements[
                     sql_statements["statement_type"] == statement_type
                 ]
+            else:
+                sql_stmts = pd.DataFrame()
+
+            if not sql_stmts.empty:
                 normal_samples = pd.concat([normal_samples, sql_stmts])
                 remaining_samples = target_samples - len(sql_stmts)
                 if remaining_samples > 0:
@@ -423,7 +427,6 @@ class DatasetBuilder:
                             continue
 
                         matching_csv = csv_tmpls[csv_tmpls["ID"] == template_id]
-
                         # Note: Using replace=True allows duplicates when target_count exceeds available templates.
                         # This is intentional - we need to generate the target number of samples even with limited templates.
                         sampled = matching_csv.sample(n=target_count, replace=True)

@@ -49,16 +49,16 @@ class TestLauncherIntegration:
     """Integration tests for launcher.py with actual config files"""
 
     @pytest.mark.parametrize(
-        "dataset_name,statement_type,attack_ratio_tolerance",
+        "dataset_name,attack_ratio_tolerance",
         [
-            ("OurAirports", "select", 0.01),
-            ("OHR", "insert", 0.01),
+            ("OurAirports", 0.01),
+            ("OHR", 0.01),
         ],
     )
     @pytest.mark.slow
     @pytest.mark.integration
     def test_valid_single_dataset_config(
-        self, tmp_path, subtests, dataset_name, statement_type, attack_ratio_tolerance
+        self, tmp_path, subtests, dataset_name, attack_ratio_tolerance
     ):
         """Test launcher with valid single dataset configuration (parametrized for multiple datasets)"""
         # Use real dataset files from data/datasets/
@@ -69,6 +69,7 @@ class TestLauncherIntegration:
         output_dir.mkdir()
 
         # Create valid config file that outputs to tmp_path
+        # Using same proportions as config.toml (7/10, 1/10, 1/10, 1/10)
         config_file = tmp_path / "test_config.toml"
         config_file.write_text(
             f"""
@@ -90,7 +91,10 @@ priv_pwd = "root"
 name = "{dataset_name}"
 
 [datasets.statements]
-{statement_type} = "1/1"
+select = "7/10"
+delete = "1/10"
+update = "1/10"
+insert = "1/10"
 """
         )
 
@@ -223,6 +227,59 @@ name = "{dataset_name}"
             assert (
                 merged_df["label"] == df["label"]
             ).all(), "Merged dataset labels don't match individual dataset"
+
+        with subtests.test(msg="dataset size relationships are correct"):
+            # Count samples by split and label
+            n_attacks = len(df[df["label"] == 1])
+            n_train = len(df[df["split"] == "train"])
+            n_test = len(df[df["split"] == "test"])
+
+            # Check that attacks and train set are similar in size
+            # Allow for some variance since exact equality may not be achievable
+            size_ratio = n_attacks / n_train if n_train > 0 else float("inf")
+            assert (
+                0.9 <= size_ratio <= 1.1
+            ), f"Attacks ({n_attacks}) and train set ({n_train}) sizes are not similar (ratio: {size_ratio:.2f}, expected ~1.0)"
+
+            # Check that test set is approximately 10x the train set
+            test_train_ratio = n_test / n_train if n_train > 0 else float("inf")
+            assert (
+                9.0 <= test_train_ratio <= 11.0
+            ), f"Test set ({n_test}) should be ~10x train set ({n_train}), but ratio is {test_train_ratio:.2f}"
+
+        with subtests.test(msg="multiple statement types are present"):
+            assert (
+                "statement_type" in df.columns
+            ), "Missing statement_type column in generated dataset"
+
+            statement_types = df["statement_type"].unique()
+            expected_types = {"select", "delete", "update", "insert", "insider"}
+
+            # Check that all expected statement types are present
+            assert (
+                set(statement_types) == expected_types
+            ), f"Expected statement types {expected_types} but found {set(statement_types)}"
+
+            # Verify approximate proportions (allowing for some variance in testing mode)
+            total_samples = len(df)
+            select_ratio = len(df[df["statement_type"] == "select"]) / total_samples
+            delete_ratio = len(df[df["statement_type"] == "delete"]) / total_samples
+            update_ratio = len(df[df["statement_type"] == "update"]) / total_samples
+            insert_ratio = len(df[df["statement_type"] == "insert"]) / total_samples
+
+            # Allow significant tolerance in testing mode since we use reduced templates
+            assert (
+                0.5 <= select_ratio <= 0.9
+            ), f"SELECT proportion {select_ratio:.2f} is outside expected range [0.5, 0.9]"
+            assert (
+                0.05 <= delete_ratio <= 0.2
+            ), f"DELETE proportion {delete_ratio:.2f} is outside expected range [0.05, 0.2]"
+            assert (
+                0.05 <= update_ratio <= 0.2
+            ), f"UPDATE proportion {update_ratio:.2f} is outside expected range [0.05, 0.2]"
+            assert (
+                0.05 <= insert_ratio <= 0.2
+            ), f"INSERT proportion {insert_ratio:.2f} is outside expected range [0.05, 0.2]"
 
     @pytest.mark.integration
     def test_invalid_missing_statement_csv_files(self, tmp_path, monkeypatch):
