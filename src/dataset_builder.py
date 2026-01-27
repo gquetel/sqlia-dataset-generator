@@ -60,7 +60,7 @@ class DatasetBuilder:
         # Sampled templates of normal queries to fill.
         self._df_templates_n = None
 
-        # TODO: Factorize this
+        # Template DataFrames partitioned by usage:
         # Templates selected for being normal-only templates.
         self.df_tno = None
         # Templates of administration queries
@@ -69,8 +69,6 @@ class DatasetBuilder:
         self.df_atk_templates = None
         # Templates used to generate normal queries (atk, normal-only and admin)
         self.df_norm_templates = None
-        # All templates
-        self._all_templates_original = None
 
         # Dataframe holding SQL-sourced statements (for normal query generation only)
         self.df_sql_statements = None
@@ -193,15 +191,17 @@ class DatasetBuilder:
 
         return distribution
 
-    def load_templates_and_stmts(self) -> pd.DataFrame:
-        """Load all templates from generation settings and optionnal SQL script statements.
+    def load_templates_and_stmts(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Load all templates from generation settings and optional SQL script statements.
 
         Loads templates from either .sql files (with template annotations),
         .csv template files, or both. For each statement type, at least one
         source must exist.
 
         Returns:
-            DataFrame with all templates from all sources
+            tuple[pd.DataFrame, pd.DataFrame]: A tuple containing:
+                - DataFrame with all CSV templates
+                - DataFrame with all SQL-sourced statements
         """
         statements_type = config_parser.get_statement_types_and_proportions(
             self.dataset_config
@@ -220,7 +220,6 @@ class DatasetBuilder:
             sql_exists = os.path.exists(sql_file_path)
             csv_exists = os.path.exists(csv_file_path)
 
-            # TODO: Templates should always exists.
             if not sql_exists and not csv_exists:
                 raise FileNotFoundError(
                     f"No SQL file or template CSV found for statement type '{statement_type}'. "
@@ -243,7 +242,6 @@ class DatasetBuilder:
             templates = pd.read_csv(csv_file_path)
             logger.info(f"Loaded {len(templates)} templates from {statement_type}.csv")
 
-            # TODO: Unsure about proportion here.
             templates["proportion"] = stmt_type["proportion"]
             templates["statement_type"] = stmt_type["type"]
 
@@ -306,7 +304,7 @@ class DatasetBuilder:
         - If testing mode is enabled, this reduce the number of templates for generation.
 
         Args:
-            testing_mode (bool): _description_
+            testing_mode (bool): If True, reduces attack templates to 1 for faster testing
         """
 
         templates, statements = self.load_templates_and_stmts()
@@ -316,7 +314,13 @@ class DatasetBuilder:
         self.df_tadmin = templates[templates["ID"].str.contains("admin")]
         templates = templates[~templates["ID"].str.contains("admin")]
 
-        # TODO: Treat this case in another way now that we are generic.
+        # QUICKFIX: Special handling for airport-S23 template.
+        # This template uses the {conditions} placeholder which generates complex,
+        # variable-length WHERE clauses via fill_condition_randomly(). We ensure it's
+        # always in the normal-only set to avoid sqlmap complications with dynamic
+        # condition generation.
+        # WARNING: This is hardcoded for OurAirports dataset. Future datasets should
+        # NOT use such complex dynamic placeholders - use standard placeholders instead.
         as23_template = templates[templates["ID"] == "airport-S23"]
 
         # Now, initialise df_atk_templates. Before we need to decide which templates
@@ -377,7 +381,6 @@ class DatasetBuilder:
 
         Args:
             n_n: Number of normal samples to generate
-            templates_list: List of template IDs eligible for normal generation
         """
         # df_norm_templates holds the templates from which to generate.
         csv_templates = self.df_norm_templates
@@ -421,8 +424,8 @@ class DatasetBuilder:
 
                         matching_csv = csv_tmpls[csv_tmpls["ID"] == template_id]
 
-                        # TODO: sample doesn't seem appropriate, we duplicate the same
-                        # entry target_count times. Some other function could be used ?
+                        # Note: Using replace=True allows duplicates when target_count exceeds available templates.
+                        # This is intentional - we need to generate the target number of samples even with limited templates.
                         sampled = matching_csv.sample(n=target_count, replace=True)
                         supplemented = pd.concat([supplemented, sampled])
 
@@ -477,10 +480,10 @@ class DatasetBuilder:
 
         For now, templates allows this are: ['airport-S23']
         Args:
-            template_info (dict): _description_
+            template_info (dict): Template row information (currently unused, reserved for future generalization)
         Returns:
             tuple[str, list]: The string with all random conditions,
-                and the syntetics user inputs
+                and the synthetic user inputs
         """
         possible_fields = [
             "type",
@@ -715,6 +718,24 @@ class DatasetBuilder:
         return df_sqlmap
 
     def build(self, args):
+        """Build the complete dataset with attacks and normal samples.
+
+        Orchestrates the full dataset generation process:
+        1. Initialize and partition templates (attack vs normal-only)
+        2. Generate SQL injection attacks using sqlmap
+        3. Generate insider threat attacks
+        4. Calculate required normal samples to achieve target attack ratio
+        5. Generate normal queries from templates
+        6. Assign train/test splits (attacks to test, normal samples split)
+        7. Remove contradictory samples (queries appearing in both attack and normal)
+        8. Remove user inputs from admin queries
+
+        Args:
+            args: Command-line arguments containing:
+                - testing: Enable fast testing mode (reduced templates)
+                - debug: Enable debug output from sqlmap
+                - no_syn_check: Skip syntax validation of generated queries
+        """
         # If testing_mode begins to be too annoying to pass around,
         # transform it into a class attribute.
         testing_mode = args.testing
@@ -734,7 +755,9 @@ class DatasetBuilder:
         n_attacks = len(self.df[self.df["label"] == 1])
         atk_ratio = config_parser.get_attacks_ratio(self.config)
 
-        n_normal_train = n_attacks  # 1:1 ratio for training
+        # Train set: normal samples equal to total attack count (for balanced training)
+        n_normal_train = n_attacks
+        # Test set: remaining normal samples to achieve target attack ratio
         n_normal_test = int(n_attacks / atk_ratio) - n_attacks
         total_normal = n_normal_train + n_normal_test
 
