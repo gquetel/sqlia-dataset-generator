@@ -10,6 +10,7 @@ result
 cache/**
 venv-3.12.3
 CLAUDE.md
+.claude
 
 # MySQL local development
 .mysql/

@@ -55,6 +55,8 @@ class TestLauncherIntegration:
             ("OHR", "insert", 0.01),
         ],
     )
+    @pytest.mark.slow
+    @pytest.mark.integration
     def test_valid_single_dataset_config(
         self, tmp_path, subtests, dataset_name, statement_type, attack_ratio_tolerance
     ):
@@ -161,6 +163,14 @@ name = "{dataset_name}"
                 len(insider_attacks) > 0
             ), f"No insider attacks found in {dataset_name} dataset"
 
+        with subtests.test(msg="sqlmap-generated attacks are present"):
+            # sqlmap attacks have attack_technique != "insider" and label == 1
+            attacks = df[df["label"] == 1]
+            sqlmap_attacks = attacks[attacks["attack_technique"] != "insider"]
+            assert (
+                len(sqlmap_attacks) > 0
+            ), f"No sqlmap-generated attacks found in {dataset_name} dataset"
+
         with subtests.test(msg="normal samples in both train and test"):
             normal = df[df["label"] == 0]
             assert (
@@ -170,6 +180,36 @@ name = "{dataset_name}"
                 "test" in normal["split"].values
             ), f"No normal samples in test set for {dataset_name}"
 
+        with subtests.test(
+            msg="normal_only_template_ratio reserves templates correctly"
+        ):
+            assert (
+                "query_template_id" in df.columns
+            ), "Missing query_template_id column in generated dataset"
+
+            # Get templates used for attacks
+            attack_templates = set(df[df["label"] == 1]["query_template_id"].unique())
+
+            # Get templates used only for normal samples
+            normal_only_templates = (
+                set(df[df["label"] == 0]["query_template_id"].unique())
+                - attack_templates
+            )
+
+            assert (
+                len(normal_only_templates) > 0
+            ), f"No templates reserved for normal-only generation in {dataset_name}"
+
+            # Verify that normal-only templates never appear in attack samples
+            for template_id in normal_only_templates:
+                attack_count = len(
+                    df[(df["query_template_id"] == template_id) & (df["label"] == 1)]
+                )
+                assert (
+                    attack_count == 0
+                ), f"Template {template_id} marked as normal-only but found in {attack_count} attack samples"
+
+    @pytest.mark.integration
     def test_invalid_missing_statement_csv_files(self, tmp_path, monkeypatch):
         """Test launcher fails when statement CSV files are missing for datasets"""
         # Setup: Folders exists, but not the statement files.
@@ -238,6 +278,7 @@ select = "1/1"
             "Library" in combined_output
         ), f"Expected dataset name in error message. Output:\n{combined_output}"
 
+    @pytest.mark.integration
     def test_invalid_missing_dataset_folder(self, tmp_path):
         """Test launcher fails when dataset folder is missing"""
         # Setup: OurAirports exists in real repo data dir, but NonExistentDataset doesn't
@@ -291,6 +332,7 @@ select = "1/1"
         assert "NonExistentDataset" in result.stderr
         assert "Dataset folder not found" in result.stderr
 
+    @pytest.mark.integration
     def test_invalid_empty_datasets(self, tmp_path, monkeypatch):
         """Test launcher fails when no datasets are configured"""
         # Setup: Create datasets directory but no datasets
@@ -337,6 +379,7 @@ priv_pwd = "root"
         # Should show error about no datasets
         assert "No datasets configured" in result.stderr
 
+    @pytest.mark.integration
     def test_invalid_missing_attacks_ratio(self, tmp_path, monkeypatch):
         """Test launcher fails when attacks_ratio is missing from config"""
         # Setup: Create minimal dataset structure
@@ -403,6 +446,7 @@ select = "1/1"
             "Missing required" in combined_output or "ValueError" in combined_output
         ), f"Expected ValueError about missing parameter. Output:\n{combined_output}"
 
+    @pytest.mark.integration
     def test_invalid_missing_normal_only_template_ratio(self, tmp_path):
         """Test launcher fails when normal_only_template_ratio is missing from config"""
         # Use real OurAirports data to simplify test - we only care about config validation
