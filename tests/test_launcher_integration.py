@@ -405,7 +405,7 @@ priv_pwd = "root"
 
         # Create minimal CSV file
         (datasets_dir / "queries" / "select.csv").write_text(
-            "template,ID,description,payload_type\nSELECT 1,test-S1,Test query,none"
+            "template,ID,description\nSELECT 1,test-S1,Test query"
         )
 
         # Create config without attacks_ratio

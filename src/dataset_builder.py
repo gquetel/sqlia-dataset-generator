@@ -113,14 +113,14 @@ class DatasetBuilder:
             statement_type: Type of statement (insert, select, update, delete, admin)
 
         Returns:
-            DataFrame with columns: template, ID, description, payload_type, source
+            DataFrame with columns: template, ID, description
         """
         with open(sql_file_path, "r") as f:
             content = f.read()
 
         # Pattern to match: SQL statement ending with '; -- TEMPLATE-ID'
         # Captures: (statement) ; -- (template_id)
-        # Supports formats: 'OHR-I-1', 'airport-S1', 'airport-admin1'
+        # Supports formats: 'OHR-I1', 'airport-S1', 'airport-admin1'
         pattern = r"(.+?);[\s]*--[\s]*([A-Za-z]+-(?:[A-Z]-?|admin)\d+)"
 
         matches = re.findall(pattern, content, re.MULTILINE | re.DOTALL)
@@ -148,7 +148,6 @@ class DatasetBuilder:
                     "template": statement + ";",
                     "ID": template_id,
                     "description": f"SQL statement from {statement_type}.sql",
-                    "payload_type": "",
                 }
             )
         return pd.DataFrame(statements)

@@ -1,0 +1,6 @@
+## Templates
+
+- Insert templates are derived from the queries provided in the install script.
+- Select templates are derived from learning websites:
+  - https://www.w3resource.com/sql-exercises/joins-hr/index.php
+  -
