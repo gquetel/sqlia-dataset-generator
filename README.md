@@ -22,9 +22,9 @@ SELECT * FROM airport WHERE icao_code = '{airports_icao_code}'
 
 Each dataset requires:
 
-- **Query templates**: CSV files with columns:
-  - `template`: SQL query with placeholders in `{curly_braces}`
-  - `ID`: Unique identifier (e.g., `airport-S22`)
+- **Query templates**: CSV files (required) or raw SQL scripts (optional)
+  - CSV: `template`, `ID`, optional `description` columns with `{placeholders}`
+  - SQL: Annotated with `-- template-ID` at end of each statement
 - **Dictionaries**: Text files containing legitimate values, one per line
   - Filename must match the placeholder name (e.g., `airports_icao_code`)
 
@@ -184,18 +184,15 @@ To generate datasets with different database schemas, add a folder under `data/d
 data/datasets/<dataset_name>/
 ├── init_db.sql          # Database schema
 ├── dicts/               # Dictionary files (one per placeholder)
-│   ├── placeholder1
-│   └── placeholder2
-└── queries/             # CSV files with templates
-    ├── select.csv
-    ├── insert.csv
-    └── ...
+├── queries/*.csv        # CSV templates (required)
+└── *.sql                # Optional: Raw SQL with -- template-ID annotations
 ```
 
 **Requirements**:
 
-- Dictionary filenames must match placeholder names in templates
-- Query CSV files must include `template` and `ID` columns
+- Dictionary filenames must match placeholder names
+- CSV files must include `template` and `ID` columns
+- SQL scripts must annotate templates with `-- <dataset>-<type><number>` format
 
 ### Generating a Dataset
 

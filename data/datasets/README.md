@@ -11,54 +11,30 @@ Each dataset should have its own directory with the following structure:
 ```
 databases/
 └── <dataset_name>/
-    ├── init_db.sql          # Creates database and schema (tables)
-    ├── dicts/               # Dictionary files for placeholder values
-    │   ├── <placeholder1>
-    │   ├── <placeholder2>
-    │   └── ...
-    └── queries/             # Query templates
-        ├── select.csv
-        ├── insert.csv
-        ├── update.csv
-        ├── delete.csv
-        └── ...
+    ├── init_db.sql          # Creates database and schema
+    ├── dicts/               # Dictionary files for placeholders
+    ├── queries/*.csv        # CSV templates (required)
+    └── *.sql                # Optional: Raw SQL with -- template-ID annotations
 ```
 
 ## Adding a New Dataset
 
-1. Create a directory: `databases/<dataset_name>/`
-1. Create `init_db.sql` that:
-   - Drops and creates its own database
-   - Grants privileges to the `tata` user
-   - Defines all tables and schemas
-1. Add the schema to `data/bootstrap.sql`:
-   ```sql
-   SOURCE databases/<dataset_name>/init_db.sql;
-   ```
-1. Create query templates in `queries/` directory
-1. Create dictionary files in `dicts/` directory
-1. Update your TOML config to include the new dataset:
-   ```toml
-   [[datasets]]
-   name = "<dataset_name>"  # This will also be the database name
+1. Create `databases/<dataset_name>/` with `init_db.sql`, `queries/*.csv`, `dicts/`
+1. Optionally add `<statement_type>.sql` files with `-- template-ID` annotations (e.g., `INSERT INTO table VALUES (...); -- OHR-I1`)
+1. Add `SOURCE databases/<dataset_name>/init_db.sql;` to `data/bootstrap.sql`
+1. Add dataset to `config.toml` under `[[datasets]]`
+1. Update `tests/test_database_schemas.py` parametrize decorators
+1. Run `pytest tests/test_database_schemas.py -v` to verify
 
-   [datasets.statements]
-   # ... statement proportions
-   ```
-1. Add the dataset to test parametrization in `tests/test_database_schemas.py`:
-   - Update all `@pytest.mark.parametrize("dataset_name", [...])` decorators to include your new dataset name
-   - This ensures database schema validation tests run for your dataset
-   - Run `pytest tests/test_database_schemas.py -v` to verify all tests pass
+## Examples
 
-## Example: Airport Dataset
+**OurAirports**: CSV templates with placeholders
 
-See `databases/airport/init_db.sql` for a complete example that:
+- `queries/select.csv`, `queries/insert.csv`, etc.
+- Dictionary files in `dicts/`
 
-- Creates the `airport` database
-- Grants privileges to `tata` user
-- Defines 6 tables (airport, runways, navaids, countries, regions, airport_frequencies)
+**OHR**: Raw SQL script + CSV templates
 
-The directory also contains:
-
-- Query templates for different SQL operations in `queries/`
-- Dictionary files for placeholder values in `dicts/`
+- `insert.sql` with annotated statements: `INSERT INTO regions VALUES (10, 'Europe'); -- OHR-I1`
+- `queries/insert.csv` with template definitions
+- Dictionary files in `dicts/`
