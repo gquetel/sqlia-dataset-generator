@@ -207,7 +207,7 @@ def test_unprivileged_user_can_connect(unprivileged_connection):
     assert result[0] == 1, "Unprivileged user cannot execute basic queries"
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR"])
+@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
 def test_dataset_database_exists(mysql_connection, dataset_name):
     """Verify that the dataset database exists."""
     cursor = mysql_connection.cursor()
@@ -223,7 +223,7 @@ def test_dataset_database_exists(mysql_connection, dataset_name):
     )
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR"])
+@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
 def test_dataset_has_tables(mysql_connection, dataset_name):
     """Verify that the dataset database contains tables (not empty)."""
     cursor = mysql_connection.cursor()
@@ -236,7 +236,7 @@ def test_dataset_has_tables(mysql_connection, dataset_name):
     )
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR"])
+@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
 def test_unprivileged_user_has_access(
     mysql_connection, unprivileged_mysql_config, dataset_name
 ):
@@ -254,7 +254,7 @@ def test_unprivileged_user_has_access(
     )
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR"])
+@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
 def test_unprivileged_user_can_query_dataset(unprivileged_connection, dataset_name):
     """Verify that unprivileged user can execute queries on the dataset."""
     cursor = unprivileged_connection.cursor()
@@ -319,7 +319,7 @@ def test_init_files_are_in_bootstrap(config):
 # ============================================================================
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR"])
+@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
 def test_dataset_has_reasonable_table_count(mysql_connection, dataset_name):
     """
     Verify that the dataset database is not empty.

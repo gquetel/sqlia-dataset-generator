@@ -53,6 +53,7 @@ class TestLauncherIntegration:
         [
             ("OurAirports", 0.01),
             ("OHR", 0.01),
+            ("sakila", 0.01),
         ],
     )
     @pytest.mark.slow

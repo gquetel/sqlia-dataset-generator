@@ -1,0 +1,9 @@
+template,ID,description
+"UPDATE customer SET email = ""{customer_email}"" WHERE customer_id = {customer_customer_id}",sakila-U1,Update a customer's email address.
+"UPDATE film SET rental_rate = {film_rental_rate} WHERE film_id = {film_film_id}",sakila-U2,Update a film's rental rate.
+"UPDATE staff SET password = ""{rand_string}"" WHERE staff_id = {staff_staff_id}",sakila-U3,Update a staff member's password.
+"UPDATE customer SET active = {customer_active} WHERE customer_id = {customer_customer_id}",sakila-U4,Update a customer's active status.
+"UPDATE customer SET store_id = {store_store_id}, address_id = {address_address_id} WHERE customer_id = {customer_customer_id}",sakila-U5,Update a customer's store and address for relocation.
+"UPDATE staff SET email = ""{staff_email}"", username = ""{staff_username}"", active = {staff_active} WHERE staff_id = {staff_staff_id}",sakila-U6,Update staff profile details.
+"UPDATE address SET address = ""{address_line1}"", district = ""{address_district}"", postal_code = ""{address_postal_code}"", phone = ""{address_phone}"" WHERE address_id = {address_address_id}",sakila-U7,Update full address details.
+"UPDATE inventory SET store_id = {rand_small_pos_number} WHERE film_id = {film_film_id} AND store_id = {rand_small_pos_number}",sakila-U8,Move inventory copies between stores.

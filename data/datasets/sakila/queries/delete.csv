@@ -1,0 +1,8 @@
+template,ID,description
+"DELETE FROM payment WHERE payment_id = {payment_payment_id}",sakila-D1,Delete a payment record by ID.
+"DELETE FROM rental WHERE rental_id = {rental_rental_id}",sakila-D2,Delete a rental transaction by ID.
+"DELETE FROM film_actor WHERE actor_id = {film_actor_actor_id} AND film_id = {film_actor_film_id}",sakila-D3,Remove an actor from a film.
+"DELETE FROM film_category WHERE film_id = {film_category_film_id} AND category_id = {film_category_category_id}",sakila-D4,Remove a category from a film.
+"DELETE FROM inventory WHERE film_id = {inventory_film_id} AND store_id = {inventory_store_id}",sakila-D5,Remove inventory copies of a film from a store.
+"DELETE FROM payment WHERE customer_id = {payment_customer_id} AND amount < {payment_amount}",sakila-D6,Delete payments for a customer below a certain amount.
+"DELETE FROM rental WHERE customer_id = {rental_customer_id} AND rental_date < ""{rental_rental_date}""",sakila-D7,Delete old rentals for a customer before a specific date.

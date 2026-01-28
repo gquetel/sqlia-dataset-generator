@@ -1,0 +1,17 @@
+template,ID,description
+"INSERT INTO actor (first_name, last_name) VALUES (""{actor_first_name}"", ""{actor_last_name}"")",sakila-I1,Insert a new actor with first and last name.
+"INSERT INTO address (address, address2, district, city_id, postal_code, phone) VALUES (""{address_address}"", ""{address_address2}"", ""{address_district}"", {address_city_id}, ""{address_postal_code}"", ""{address_phone}"")",sakila-I2,Insert a new address with full location and contact details.
+"INSERT INTO category (name) VALUES (""{category_name}"")",sakila-I3,Insert a new film category.
+"INSERT INTO city (city, country_id) VALUES (""{city_city}"", {city_country_id})",sakila-I4,Insert a new city associated with a country.
+"INSERT INTO country (country) VALUES (""{country_country}"")",sakila-I5,Insert a new country record.
+"INSERT INTO customer (store_id, first_name, last_name, email, address_id, active, create_date) VALUES ({customer_store_id}, ""{customer_first_name}"", ""{customer_last_name}"", ""{customer_email}"", {address_address_id}, {customer_active}, ""{customer_create_date}"")",sakila-I6,Insert a new customer with personal and store information.
+"INSERT INTO film (title, description, release_year, language_id, original_language_id, rental_duration, rental_rate, length, replacement_cost, rating, special_features) VALUES (""{film_title}"", ""{film_description}"", {film_release_year}, {film_language_id}, {film_language_id}, {film_rental_duration}, {film_rental_rate}, {film_length}, {film_replacement_cost}, ""{film_rating}"", ""{film_special_features}"")",sakila-I7,Insert a new film with complete metadata and rental details.
+"INSERT INTO film_actor (actor_id, film_id) VALUES ({film_actor_actor_id}, {film_actor_film_id})",sakila-I8,Link an actor to a film.
+"INSERT INTO film_category (film_id, category_id) VALUES ({film_category_film_id}, {film_category_category_id})",sakila-I9,Assign a category to a film.
+"INSERT INTO film_text (film_id, title, description) VALUES ({film_text_film_id}, ""{film_text_title}"", ""{film_text_description}"")",sakila-I10,Insert film text entry for full-text search.
+"INSERT INTO inventory (film_id, store_id) VALUES ({inventory_film_id}, {inventory_store_id})",sakila-I11,Add a film copy to store inventory.
+"INSERT INTO language (name) VALUES (""{language_name}"")",sakila-I12,Insert a new language record.
+"INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date) VALUES ({payment_customer_id}, {payment_staff_id}, {payment_rental_id}, {payment_amount}, ""{payment_payment_date}"")",sakila-I13,Record a payment transaction for a rental.
+"INSERT INTO rental (rental_date, inventory_id, customer_id, return_date, staff_id) VALUES (""{rental_rental_date}"", {rental_inventory_id}, {rental_customer_id}, ""{rental_return_date}"", {rental_staff_id})",sakila-I14,Create a new rental transaction record.
+"INSERT INTO staff (first_name, last_name, address_id, picture, email, store_id, active, username, password) VALUES (""{staff_first_name}"", ""{staff_last_name}"", {address_address_id}, NULL, ""{staff_email}"", {staff_store_id}, {staff_active}, ""{staff_username}"", ""{staff_password}"")",sakila-I15,Insert a new staff member with account credentials.
+"INSERT INTO store (manager_staff_id, address_id) VALUES ({store_manager_staff_id}, {address_address_id})",sakila-I16,Create a new store with manager and location.
