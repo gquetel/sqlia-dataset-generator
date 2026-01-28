@@ -259,19 +259,18 @@ class DatasetBuilder:
                     for stmt_type in templates_without_placeholders[
                         "statement_type"
                     ].unique():
-                        count = len(
-                            templates_without_placeholders[
-                                templates_without_placeholders["statement_type"]
-                                == stmt_type
-                            ]
-                        )
+                        templates_of_type = templates_without_placeholders[
+                            templates_without_placeholders["statement_type"]
+                            == stmt_type
+                        ]
+                        template_ids = templates_of_type["ID"].tolist()
                         error_details.append(
-                            f"  - {stmt_type.upper()}: {count} templates"
+                            f"  - {stmt_type.upper()}: {template_ids}"
                         )
 
                     raise ValueError(
                         f"Found templates without placeholders. Templates must have at least one placeholder.\n"
-                        f"Templates without placeholders:\n"
+                        f"Problematic template IDs:\n"
                         + "\n".join(error_details)
                         + "\n"
                     )
