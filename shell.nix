@@ -80,6 +80,7 @@ pkgs.mkShell rec {
   packages = [
     pythonEnv
     pkgs.percona-toolkit
+    pkgs.perl # perl is required by pt-kill (missing Sys/Hostname.pm)
     pkgs.mysql84
     pkgs.metasploit
     sqlmap
