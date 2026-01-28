@@ -59,6 +59,8 @@ sqlmap -v 3 --skip-waf --level=5 --risk=1 --batch \
 
 All samples generated during campaigns are collected and included in the test set.
 
+**Note on data exfiltration scope**: To reduce generation time, exploit phases use targeted exfiltration flags (`--users`, `--banner`, `--schema`, `--current-user`) instead of `--all`.  To generate payloads that dump complete database contents (tables, columns, data), modify the techniques dictionary in the `generate_attacks` function in `src/sqlia_generator.py`.
+
 ##### Insider Threat Attacks
 
 Insider attack samples are generated using sqlmap's direct connection mode with various enumeration objectives, simulating [insider threat](https://doi.org/10.1007/978-3-030-93956-4_11) campaigns.

@@ -520,20 +520,38 @@ class sqlmapGenerator:
             pd.DataFrame: The complete generated_attacks DataFrame containing data
                 from all performed attacks across all templates and techniques.
         """
+        # Data exfiltration scope is limited to reduce generation time.
+        # The current configuration uses specific flags (--users, --banner,
+        # --schema, --current-user) instead of --all to reduce dataset generation 
+        # time, especially when databases are populated. 
+        #
+        # If you need to include payloads that dump all database information
+        # (tables, columns, data), replace the targeted flags below with --all for the
+        # desired techniques.
+
+        # techniques = {
+        #     "boolean": "--technique=B --all ",
+        #     "error": "--technique=E --all ",
+        #     "union": "--technique=U --all  ",
+        #     "stacked": "--technique=S --users --banner ",
+        #     "time": "--technique=T --current-user ",
+        #     "inline": "--technique=Q --all ",
+        # }
+
         techniques = {
-            "boolean": "--technique=B --all ",
-            "error": "--technique=E --all ",
-            "union": "--technique=U --all  ",
+            "boolean": "--technique=B --users --banner --schema ",
+            "error": "--technique=E --users --banner --schema ",
+            "union": "--technique=U --users --banner --schema  ",
             "stacked": "--technique=S --users --banner ",
             "time": "--technique=T --current-user ",
-            "inline": "--technique=Q --all ",
+            "inline": "--technique=Q --users --banner --schema ",
         }
 
         Path("./.cache/").mkdir(parents=True, exist_ok=True)
 
         # Template's number is reduced, we also only consider the error technique.
         if self.testing_mode:
-            techniques = {"error": "--technique=E --users "}
+            techniques = {"error": "--technique=E --schema "}
 
         for template in self.templates:
             for i in techniques.items():
