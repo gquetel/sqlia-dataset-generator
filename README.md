@@ -229,10 +229,9 @@ python3 ./launcher.py --config-file config.toml
 
 ### Testing
 
-The repository includes some integration tests:
+The repository includes some integration tests which can be run using:
 
 ```bash
-# Run all tests (requires nix-shell or equivalent environment)
 pytest
 ```
 

@@ -334,3 +334,110 @@ def test_dataset_has_reasonable_table_count(mysql_connection, dataset_name):
         f"Database '{dataset_name}' is empty (no tables). "
         f"Check if init_db.sql executed successfully."
     )
+
+
+# ============================================================================
+# Template Placeholder Validation
+# ============================================================================
+
+
+def extract_placeholders(template: str) -> List[str]:
+    """
+    Extract placeholder names from a template string.
+
+    Matches the logic from src/dataset_builder.py::_extract_params.
+    Returns unique placeholder names (without suffixes for duplicates).
+    """
+    import re
+    param_names = re.findall(r"\{([-a-zA-Z_]+)\}", template)
+    return list(set(param_names))  # Return unique placeholders
+
+
+@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+def test_template_placeholders_are_valid(dataset_name):
+    """
+    Verify that all placeholders in template CSV files are either:
+    1. Valid filenames in the dataset's dicts/ directory
+    2. Special placeholders: rand_string, rand_small_pos_number,
+       rand_medium_pos_number, rand_pos_number
+
+    This prevents typos and missing dictionary files that would cause
+    runtime errors during dataset generation.
+    """
+    import pandas as pd
+
+    # Define special placeholders (from src/dataset_builder.py::fill_placeholder)
+    SPECIAL_PLACEHOLDERS = {
+        "rand_string",
+        "rand_small_pos_number",
+        "rand_medium_pos_number",
+        "rand_pos_number",
+        "conditions"
+    }
+
+    dataset_dir = Path("data/datasets") / dataset_name
+    queries_dir = dataset_dir / "queries"
+    dicts_dir = dataset_dir / "dicts"
+
+    # Ensure directories exist
+    assert dataset_dir.exists(), f"Dataset directory not found: {dataset_dir}"
+    assert queries_dir.exists(), f"Queries directory not found: {queries_dir}"
+    assert dicts_dir.exists(), f"Dicts directory not found: {dicts_dir}"
+
+    # Get all dictionary files (without extension)
+    dict_files = {f.stem for f in dicts_dir.iterdir() if f.is_file()}
+
+    # Get all CSV template files
+    csv_files = list(queries_dir.glob("*.csv"))
+    assert len(csv_files) > 0, f"No CSV template files found in {queries_dir}"
+
+    # Collect all invalid placeholders
+    invalid_placeholders = {}
+
+    for csv_file in csv_files:
+        try:
+            df = pd.read_csv(csv_file)
+        except Exception as e:
+            assert False, f"Failed to read {csv_file}: {e}"
+
+        assert "template" in df.columns, (
+            f"CSV file {csv_file.name} missing 'template' column. "
+            f"Available columns: {df.columns.tolist()}"
+        )
+
+        for idx, row in df.iterrows():
+            template = row["template"]
+            template_id = row.get("ID", f"row_{idx}")
+
+            placeholders = extract_placeholders(template)
+
+            for placeholder in placeholders:
+                # Check if placeholder is valid
+                is_dict_file = placeholder in dict_files
+                is_special = placeholder in SPECIAL_PLACEHOLDERS
+
+                if not (is_dict_file or is_special):
+                    # Track invalid placeholder
+                    if placeholder not in invalid_placeholders:
+                        invalid_placeholders[placeholder] = []
+                    invalid_placeholders[placeholder].append(
+                        f"{csv_file.name}:{template_id}"
+                    )
+
+    # Assert no invalid placeholders found
+    if invalid_placeholders:
+        error_msg = (
+            f"Invalid placeholders found in {dataset_name} templates:\n\n"
+        )
+        for placeholder, locations in sorted(invalid_placeholders.items()):
+            error_msg += f"  '{placeholder}' used in:\n"
+            for loc in locations:
+                error_msg += f"    - {loc}\n"
+
+        error_msg += (
+            f"\nValid placeholders are:\n"
+            f"  - Files in {dicts_dir}/ (without extension)\n"
+            f"  - Special placeholders: {', '.join(sorted(SPECIAL_PLACEHOLDERS))}\n"
+        )
+
+        assert False, error_msg
