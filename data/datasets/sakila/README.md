@@ -9,3 +9,4 @@ The Sakila dataset was downloaded here https://dev.mysql.com/doc/index-other.htm
   - https://dev.mysql.com/doc/sakila/en/sakila-usage.html
   - https://gquercini.github.io/courses/databases/tutorials/sql-intro/
   - https://gist.github.com/tomsihap/cd9cbd35a3681c260a95653ca8d4e6bb
+- Other templates are made through human project analysis.
