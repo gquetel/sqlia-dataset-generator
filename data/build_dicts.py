@@ -25,17 +25,26 @@ MYSQL_HOST = "localhost"
 MYSQL_PORT = 61337
 MYSQL_USER = "tata"
 MYSQL_PASSWORD = "tata"
-MYSQL_DATABASE = "sakila"
+MYSQL_DATABASE = "AdventureWorks"
 
 OUTPUT_DIR = "./dicts/"
 
 # Column types to skip (binary/complex data not useful for SQL templates)
-DEFAULT_SKIP_TYPES = ['BLOB', 'BINARY', 'JSON', 'GEOMETRY', 'VARBINARY',
-                      'MEDIUMBLOB', 'LONGBLOB', 'TINYBLOB']
+DEFAULT_SKIP_TYPES = [
+    "BLOB",
+    "BINARY",
+    "JSON",
+    "GEOMETRY",
+    "VARBINARY",
+    "MEDIUMBLOB",
+    "LONGBLOB",
+    "TINYBLOB",
+]
 
 # ============================================================================
 # DATABASE FUNCTIONS
 # ============================================================================
+
 
 def get_all_tables(conn):
     """
@@ -143,7 +152,9 @@ def write_dict_file(output_dir, table, column, values, overwrite=False):
 
     # Check if file exists and overwrite is False
     if os.path.exists(filepath) and not overwrite:
-        logging.info(f"  - Skipping {table}.{column} (file exists, use --overwrite to replace)")
+        logging.info(
+            f"  - Skipping {table}.{column} (file exists, use --overwrite to replace)"
+        )
         return 0
 
     count = 0
@@ -159,7 +170,10 @@ def write_dict_file(output_dir, table, column, values, overwrite=False):
 # MAIN EXTRACTION LOGIC
 # ============================================================================
 
-def extract_dictionaries(conn, output_dir, skip_types, limit=None, overwrite=False, dry_run=False):
+
+def extract_dictionaries(
+    conn, output_dir, skip_types, limit=None, overwrite=False, dry_run=False
+):
     """
     Main function to extract all dictionaries from the database.
 
@@ -202,20 +216,30 @@ def extract_dictionaries(conn, output_dir, skip_types, limit=None, overwrite=Fal
 
             # Extract values
             try:
-                values_list = list(extract_column_values(conn, table, column_name, limit))
+                values_list = list(
+                    extract_column_values(conn, table, column_name, limit)
+                )
 
                 if not values_list:
-                    logging.info(f"  - {table}.{column_name}: 0 values (empty/NULL only)")
+                    logging.info(
+                        f"  - {table}.{column_name}: 0 values (empty/NULL only)"
+                    )
                     continue
 
                 # Write to file (unless dry run)
                 if dry_run:
-                    logging.info(f"  - {table}.{column_name}: {len(values_list)} values → {table}_{column_name} (DRY RUN)")
+                    logging.info(
+                        f"  - {table}.{column_name}: {len(values_list)} values → {table}_{column_name} (DRY RUN)"
+                    )
                     total_values += len(values_list)
                 else:
-                    count = write_dict_file(output_dir, table, column_name, values_list, overwrite)
+                    count = write_dict_file(
+                        output_dir, table, column_name, values_list, overwrite
+                    )
                     if count > 0:
-                        logging.info(f"  - {table}.{column_name}: {count} values → {table}_{column_name}")
+                        logging.info(
+                            f"  - {table}.{column_name}: {count} values → {table}_{column_name}"
+                        )
                         total_columns_extracted += 1
                         total_values += count
 
@@ -247,6 +271,7 @@ def extract_dictionaries(conn, output_dir, skip_types, limit=None, overwrite=Fal
 # MAIN ENTRY POINT
 # ============================================================================
 
+
 def main():
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
@@ -268,49 +293,42 @@ Examples:
 
   # Overwrite existing files
   python build_dicts.py --overwrite
-        """
+        """,
     )
 
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Maximum number of unique values per column (default: unlimited)"
+        help="Maximum number of unique values per column (default: unlimited)",
     )
 
     parser.add_argument(
         "--skip-types",
         type=str,
         default=None,
-        help=f"Comma-separated list of MySQL types to skip (default: {','.join(DEFAULT_SKIP_TYPES)})"
+        help=f"Comma-separated list of MySQL types to skip (default: {','.join(DEFAULT_SKIP_TYPES)})",
     )
 
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Overwrite existing dictionary files (default: skip existing)"
+        help="Overwrite existing dictionary files (default: skip existing)",
     )
 
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show what would be extracted without writing files"
+        help="Show what would be extracted without writing files",
     )
 
     args = parser.parse_args()
 
     # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format="%(levelname)s: %(message)s"
-    )
+    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
     # Parse skip types
     skip_types = DEFAULT_SKIP_TYPES
@@ -322,7 +340,9 @@ Examples:
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Connect to database
-    logging.info(f"Connecting to database '{MYSQL_DATABASE}' on {MYSQL_HOST}:{MYSQL_PORT}")
+    logging.info(
+        f"Connecting to database '{MYSQL_DATABASE}' on {MYSQL_HOST}:{MYSQL_PORT}"
+    )
 
     try:
         conn = mysql.connector.connect(
@@ -330,11 +350,13 @@ Examples:
             port=MYSQL_PORT,
             user=MYSQL_USER,
             password=MYSQL_PASSWORD,
-            database=MYSQL_DATABASE
+            database=MYSQL_DATABASE,
         )
     except mysql.connector.Error as e:
         logging.error(f"Failed to connect to database: {e}")
-        logging.error(f"Check that MySQL is running and database '{MYSQL_DATABASE}' exists")
+        logging.error(
+            f"Check that MySQL is running and database '{MYSQL_DATABASE}' exists"
+        )
         sys.exit(1)
 
     try:
@@ -345,7 +367,7 @@ Examples:
             skip_types=skip_types,
             limit=args.limit,
             overwrite=args.overwrite,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
         )
     finally:
         conn.close()

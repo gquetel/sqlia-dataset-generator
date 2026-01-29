@@ -207,7 +207,9 @@ def test_unprivileged_user_can_connect(unprivileged_connection):
     assert result[0] == 1, "Unprivileged user cannot execute basic queries"
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
 def test_dataset_database_exists(mysql_connection, dataset_name):
     """Verify that the dataset database exists."""
     cursor = mysql_connection.cursor()
@@ -223,7 +225,9 @@ def test_dataset_database_exists(mysql_connection, dataset_name):
     )
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
 def test_dataset_has_tables(mysql_connection, dataset_name):
     """Verify that the dataset database contains tables (not empty)."""
     cursor = mysql_connection.cursor()
@@ -236,7 +240,9 @@ def test_dataset_has_tables(mysql_connection, dataset_name):
     )
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
 def test_unprivileged_user_has_access(
     mysql_connection, unprivileged_mysql_config, dataset_name
 ):
@@ -254,7 +260,9 @@ def test_unprivileged_user_has_access(
     )
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
 def test_unprivileged_user_can_query_dataset(unprivileged_connection, dataset_name):
     """Verify that unprivileged user can execute queries on the dataset."""
     cursor = unprivileged_connection.cursor()
@@ -319,7 +327,9 @@ def test_init_files_are_in_bootstrap(config):
 # ============================================================================
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
 def test_dataset_has_reasonable_table_count(mysql_connection, dataset_name):
     """
     Verify that the dataset database is not empty.
@@ -349,11 +359,14 @@ def extract_placeholders(template: str) -> List[str]:
     Returns unique placeholder names (without suffixes for duplicates).
     """
     import re
+
     param_names = re.findall(r"\{([-a-zA-Z_]+)\}", template)
     return list(set(param_names))  # Return unique placeholders
 
 
-@pytest.mark.parametrize("dataset_name", ["OurAirports", "OHR", "sakila"])
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
 def test_template_placeholders_are_valid(dataset_name):
     """
     Verify that all placeholders in template CSV files are either:
@@ -372,7 +385,7 @@ def test_template_placeholders_are_valid(dataset_name):
         "rand_small_pos_number",
         "rand_medium_pos_number",
         "rand_pos_number",
-        "conditions"
+        "conditions",
     }
 
     dataset_dir = Path("data/datasets") / dataset_name
@@ -426,9 +439,7 @@ def test_template_placeholders_are_valid(dataset_name):
 
     # Assert no invalid placeholders found
     if invalid_placeholders:
-        error_msg = (
-            f"Invalid placeholders found in {dataset_name} templates:\n\n"
-        )
+        error_msg = f"Invalid placeholders found in {dataset_name} templates:\n\n"
         for placeholder, locations in sorted(invalid_placeholders.items()):
             error_msg += f"  '{placeholder}' used in:\n"
             for loc in locations:

@@ -1,10 +1,11 @@
 # Dataset
+
 The Sakila dataset was downloaded here https://dev.mysql.com/doc/index-other.html the 28 January 2026.
 
 ## Templates
 
 - Insert templates are derived from the install script (one template per table).
-- Select statements are derived from: 
+- Select statements are derived from:
   - https://datamastery.gitlab.io/exercises/sakila-queries.html
   - https://dev.mysql.com/doc/sakila/en/sakila-usage.html
   - https://gquercini.github.io/courses/databases/tutorials/sql-intro/

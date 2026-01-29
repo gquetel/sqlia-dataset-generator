@@ -1,0 +1,208 @@
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesFR-200A Instructions for Manufacturing LL Touring Frame Summary: This document contains manufacturing instructions for manufacturing the LL Touring Frame, Product Model 10. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="2" LotSize="100" MachineHours="2" SetupHours="0.1" LocationID="10">
+                    Work Center 10 - Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .10, Labor Hours = 2, Machine Hours = 2, Lot Sizing = 100)<step>
+                        Insert <material>aluminum sheet MS-6061</material> into tool <tool>T-99 framing tool</tool>.
+                    </step><step>
+                        Attach <tool>Trim Jig TJ-25</tool> to the upper and lower right corners of the aluminum sheet.
+                    </step><step>
+                        Using a <tool>router with a carbide tip 26</tool>, route the aluminum sheet following the jig carefully.
+                    </step><step>
+                        Insert the frame into <tool>Forming Tool FT-25</tool> and press Start.
+                    </step><step>
+                        When finished, inspect the form for defects per <specs>Inspection Specification INFS-110</specs>.
+                    </step><step>Remove the frame from the tool and place it in the Completed or Rejected bin as appropriate.</step></Location><Location LaborHours="1.5" LotSize="1" MachineHours="1.75" SetupHours="0.25" LocationID="20">
+                    Work Center 20 - Frame Welding. The following instructions pertain to Work Center 20. (Setup hours = .25, Labor Hours = 1.5, Machine Hours = 1.75, Lot Sizing = 1)<step>
+                        Assemble all frame components following blueprint <blueprint>12345</blueprint>.
+                    </step><step>
+                        Weld all frame components together as shown in illustration <diag>3</diag></step><step>
+                        Inspect all weld joints per Adventure Works Cycles Inspection Specification <specs>INFS-206</specs>.
+                    </step></Location><Location LaborHours="1" LotSize="1" LocationID="30">
+                    Work Center 30 - Debur and Polish. The following instructions pertain to Work Center 30. (Setup hours = 0, Labor Hours = 1, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Using the <tool>standard debur tool</tool>, remove all excess material from weld areas.
+                    </step><step>
+                        Using <material>Acme Polish Cream</material>, polish all weld areas.
+                    </step></Location><Location LaborHours="1.5" LotSize="20" LocationID="4">
+                    Work Center 40 - Paint. The following instructions pertain to Work Center 40. (Setup hours = 0, Labor Hours = 1.5, Machine Hours = 0, Lot Sizing = 20)<step>
+                        Attach a <material>maximum of 20 frames</material> to paint harness ensuring frames are not touching.
+                    </step><step>
+                        Mix <material>primer PA-345</material>. Test spray pattern on sample area and correct flow and pattern as required per engineering spec <specs>AWC-502</specs>.
+                    </step><step>Apply thin coat of primer to all surfaces.  </step><step>
+                        After 30 minutes, touch test for dryness. If dry to touch, lightly sand all surfaces. Remove all surface debris with <material>compressed air</material>.
+                    </step><step>
+                        Mix <material>paint</material> per manufacturer instructions.
+                    </step><step>
+                        Test spray pattern on sample area and correct flow and pattern as required per engineering specification<specs>AWC-503</specs>.
+                    </step><step>Apply thin coat of paint to all surfaces. </step><step>After 60 minutes, touch test for dryness. If dry to touch, reapply second coat. </step><step>
+                        Allow paint to cure for 24 hours and inspect per <specs>AWC-5010</specs>.
+                    </step></Location><Location LaborHours="3" LotSize="1" SetupHours="0.25" LocationID="50">
+                    Work Center 50 - SubAssembly. The following instructions pertain to Work Center 50. (Setup hours = .25, Labor Hours = 3, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Add <material>Seat Assembly</material>.
+                    </step><step>
+                        Add <material>Brake assembly</material>.
+                    </step><step>
+                        Add <material>Wheel Assembly</material>.
+                    </step><step>Inspect Front Derailleur. </step><step>Inspect Rear Derailleur.</step></Location><Location LaborHours="4" LotSize="1" LocationID="60">
+                    Work Center 60 - Final Assembly. The following instructions pertain to Work Center 60. (Setup hours = 0, Labor Hours = 4, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Perform final inspection per engineering specification <specs>AWC-910</specs>.
+                    </step><step>Complete all required certification forms.</step><step>Move to shipping.</step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesFR-210B Instructions for Manufacturing HL Touring Frame. Summary: This document contains manufacturing instructions for manufacturing the HL Touring Frame, Product Model 7. Instructions are work center specific and are identified by Work Center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="2.5" LotSize="100" MachineHours="3" SetupHours="0.5" LocationID="10">
+                    Work Center 10 - Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .5, Labor Hours = 2.5, Machine Hours = 3, Lot Sizing = 100)<step>
+                        Insert <material>aluminum sheet MS-2341</material> into the <tool>T-85A framing tool</tool>.
+                    </step><step>
+                        Attach <tool>Trim Jig TJ-26</tool> to the upper and lower right corners of the aluminum sheet.
+                    </step><step>
+                        Using a <tool>router with a carbide tip 15</tool>, route the aluminum sheet following the jig carefully.
+                    </step><step>
+                        Insert the frame into <tool>Forming Tool FT-15</tool> and press Start.
+                    </step><step>
+                        When finished, inspect the forms for defects per Inspection Specification <specs>INFS-111</specs>.
+                    </step><step>Remove the frames from the tool and place them in the Completed or Rejected bin as appropriate.</step></Location><Location LaborHours="1.75" LotSize="1" MachineHours="2" SetupHours="0.15" LocationID="20">
+                    Work Center 20 - Frame Welding. The following instructions pertain to Work Center 20. (Setup hours = .15, Labor Hours = 1.75, Machine Hours = 2, Lot Sizing = 1)<step>
+                        Assemble all frame components following blueprint <blueprint>1299</blueprint>.
+                    </step><step>
+                        Weld all frame components together as shown in illustration <diag>3</diag></step><step>
+                        Inspect all weld joints per Adventure Works Cycles Inspection Specification <specs>INFS-208</specs>.
+                    </step></Location><Location LaborHours="1" LotSize="1" LocationID="30">
+                    Work Center 30 - Debur and Polish. The following instructions pertain to Work Center 30. (Setup hours = 0, Labor Hours = 1, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Using the <tool>standard debur tool</tool>, remove all excess material from weld areas.
+                    </step><step>
+                        Using <material>Acme Polish Cream</material>, polish all weld areas.
+                    </step></Location><Location LaborHours="0.5" LotSize="20" MachineHours="0.65" LocationID="45">
+                    Work Center 45 - Specialized Paint. The following instructions pertain to Work Center 45. (Setup hours = 0, Labor Hours = .5, Machine Hours = .65, Lot Sizing = 20)<step>
+                        Attach <material>a maximum of 20 frames</material> to <tool>paint harness</tool> ensuring frames are not touching.
+                    </step><step>
+                        Mix <material>primer PA-529S</material>. Test spray pattern on sample area and correct flow and pattern as required per engineering spec <specs>AWC-501</specs>.
+                    </step><step>Apply thin coat of primer to all surfaces.  </step><step>After 30 minutes, touch test for dryness. If dry to touch, lightly sand all surfaces. Remove all surface debris with compressed air. </step><step>
+                        Mix <material>paint</material> per manufacturer instructions.
+                    </step><step>
+                        Test spray pattern on sample area and correct flow and pattern as required per engineering spec <specs>AWC-509</specs>.
+                    </step><step>Apply thin coat of paint to all surfaces. </step><step>After 60 minutes, touch test for dryness. If dry to touch, reapply second coat. </step><step>
+                        Allow paint to cure for 24 hours and inspect per <specs>AWC-5015</specs>.
+                    </step></Location><Location LaborHours="3" LotSize="1" SetupHours="0.25" LocationID="50">
+                    Work Center 50 - SubAssembly. The following instructions pertain to Work Center 50. (Setup hours = .25, Labor Hours = 3, Machine Hours = 0, Lot Sizing = 1)<step>Add Seat Assembly. </step><step>Add Brake assembly.   </step><step>Add Wheel Assembly. </step><step>Inspect Front Derailleur. </step><step>Inspect Rear Derailleur. </step></Location><Location LaborHours="4" LotSize="1" LocationID="60">
+                    Work Center 60 - Final Assembly. The following instructions pertain to Work Center 60. (Setup hours = 0, Labor Hours = 4, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Perform final inspection per engineering specification <specs>AWC-915</specs>.
+                    </step><step>Complete all required certification forms.</step><step>Move to shipping.</step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-150C Instructions for Assembling Touring Front Wheel Summary: This document contains manufacturing instructions for assembling the Touring Front Wheel, Product Model 43. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="3" LotSize="1" LocationID="50">
+                    Work Center - 50 Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .0, Labor Hours = 3, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Inspect the <material>rim</material> for dents, cracks or other damage.
+                    </step><step>
+                        Slide each <material>spoke</material> through the <material>hub flange</material> working in a clockwise direction.
+                    </step><step>
+                        For each spoke, screw on the <material>spoke nipple (NI-9522)</material>. Do not over tighten.
+                    </step><step>
+                        Place the <material>wheel</material> in the truing stand.
+                    </step><step>Pluck each spoke. The sound from each spoke should be consistent. Adjust as needed. </step><step>
+                        Inflate the <material>tire tube</material>to one-quarter pressure.
+                    </step><step>
+                        Insert the <material>valve stem</material> through <material>Rim RM-M823</material>.
+                    </step><step>Tuck the tube into the tire ensuring there are no wrinkles or kinks.</step><step>Inflate the tube to half pressure. </step><step>Spin the wheel and ensure the bead line is just above the rim. </step><step>Inflate the tube to 35 PSI.</step><step>
+                        Attach reflector as shown in illustration <diag>7</diag></step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-151C Instructions for Assembling Touring Rear Wheel Summary: This document contains manufacturing instructions for assembling the Touring Rear Wheel, Product Model 44. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="3" LotSize="1" LocationID="50">
+                    Work Center - 50 Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .0, Labor Hours = 3, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Inspect the <material>rim</material> for dents, cracks or other damage.
+                    </step><step>
+                        Slide each <material>spoke</material> through the <material>hub flange</material> working in a clockwise direction.
+                    </step><step>
+                        For each spoke, screw on the <material>spoke nipple (NI-9525)</material>. Do not over tighten.
+                    </step><step>
+                        Place the wheel in the <tool>truing stand</tool>.
+                    </step><step>Pluck each spoke. The sound from each spoke should be consistent. Adjust as needed.</step><step>Inflate the tire tube to one-quarter pressure.</step><step>
+                        Insert the <material>valve stem</material> through <material>Rim RM-M825</material>.
+                    </step><step>Tuck the tube into the tire ensuring there are no wrinkles or kinks.</step><step>Inflate the tube to half pressure. </step><step>Spin the wheel and ensure the bead line is just above the rim.</step><step>Inflate the tube to 35 PSI.</step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-190A Instructions for Manufacturing and Assembling the HL Touring Handlebars Summary: This document contains manufacturing instructions for manufacturing and assembling the HL Touring Handlebars, Product Model 48. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="1" LotSize="100" MachineHours="2.5" SetupHours="0.1" LocationID="10">
+                    Work Center 10 - Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .10, Labor Hours = 1, Machine Hours = 2.5, Lot Sizing = 100)<step>
+                        Insert <material>aluminum sheet MS-2259</material> into tool <tool>T-51 Tube Forming tool</tool>.
+                    </step><step>
+                        Attach <tool>Trim Jig TJ-9</tool> to the upper and lower right corners of the aluminum sheet.
+                    </step><step>Route the aluminum sheet following the jig carefully. </step><step>
+                        Insert the cut pieces into <tool>Tube Forming Tool FT-91</tool> and press Start.
+                    </step><step>
+                        When finished, inspect the form for defects per Inspection Specification <specs>INFS-90</specs>.
+                    </step><step>Remove the lengths of tube from the tool and place it in the Completed or Rejected bin as appropriate.</step></Location><Location LaborHours="1" LotSize="1" MachineHours="2" SetupHours="0.25" LocationID="20">
+                    Work Center 20 - Frame Welding. The following instructions pertain to Work Center 20. (Setup hours = .25, Labor Hours = 1.0, Machine Hours = 2, Lot Sizing = 1)<step>
+                        Assemble all handlebar components following blueprint <blueprint>1112</blueprint>.
+                    </step><step>
+                        Using <tool>weld torch</tool>, weld all components together as shown in illustration <diag>5</diag></step><step>
+                        Inspect all weld joints per Adventure Works Cycles Inspection Specification <specs>INFS-222</specs>.
+                    </step></Location><Location LaborHours="3.5" LotSize="1" LocationID="50">
+                    Work Center 50 - SubAssembly. The following instructions pertain to Work Center 50. (Setup hours = .0, Labor Hours = 3.5, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Slide the <material>stem</material> onto the <material>handlebar</material> centering it over the knurled section.
+                    </step><step>Take care not to scratch the handlebar.</step><step>The ends of the handlebar should turn toward the rear. </step><step>
+                        Attach the <material>Pinch Bolt (Product Number PB-6109)</material>, <material>Lock Washer 7 (Product Number LI-3800)</material>, and <material>Lock Nut 16 (Product Number LN-1213)</material> onto the stem.
+                    </step><step>Tighten the nut just enough to keep the handlebar from rotating in the stem. Do not over tighten. </step><step>
+                        Put a <material>Flat Washer 9 (Product Number FW-3400)</material> onto the <material>stem bolt</material>, and then insert the bolt down into the stem.
+                    </step><step>
+                        Thread the plug nut onto the stem bolt aligning it with the stem body as shown in illustration <diag>4</diag>. Insert the stem down into the lock nut until the minimum insertion line marked on the stem is hidden inside the nut.
+                    </step><step>
+                        Attach the <material>grips</material>.
+                    </step><step>
+                        Inspect per specification <specs>FI-225</specs>.
+                    </step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-190A Instructions for Manufacturing and Assembling the LL Touring Handlebars Summary: This document contains manufacturing instructions for manufacturing and assembling the LL Touring Handlebars, Product Model 47. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="1" LotSize="100" MachineHours="2" SetupHours="0.1" LocationID="10">
+                    Work Center 10 - Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .10, Labor Hours = 1, Machine Hours = 2, Lot Sizing = 100)<step>
+                        Insert <material>aluminum sheet MS-2259</material> into tool <tool>T-50 Tube Forming tool</tool>.
+                    </step><step>
+                        Attach <tool>Trim Jig TJ-8</tool> to the upper and lower right corners of the aluminum sheet.
+                    </step><step>Route the aluminum sheet following the jig carefully. </step><step>
+                        Insert the cut pieces into <tool>Tube Forming Tool FT-90</tool> and press Start.
+                    </step><step>
+                        When finished, inspect the form for defects per Inspection Specification <specs>INFS-90</specs>.
+                    </step><step>Remove the lengths of tube from the tool and place it in the Completed or Rejected bin as appropriate.</step></Location><Location LaborHours="1" LotSize="1" MachineHours="1.75" SetupHours="0.25" LocationID="20">
+                    Work Center 20 - Frame Welding. The following instructions pertain to Work Center 20. (Setup hours = .25, Labor Hours = 1.0, Machine Hours = 1.75, Lot Sizing = 1)<step>
+                        Assemble all <material>handlebar components</material> following blueprint <blueprint>1111</blueprint>.
+                    </step><step>
+                        Weld all components together as shown in illustration <diag>5</diag></step><step>
+                        Inspect all weld joints per Adventure Works Cycles Inspection Specification <specs>INFS-222</specs>.
+                    </step></Location><Location LaborHours="3.5" LotSize="1" LocationID="50">
+                    Work Center - 50 Frame Forming. The following instructions pertain to Work Center 10. (Setup hours = .0, Labor Hours = 3.5, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Slide the <material>stem</material> onto the <material>handlebar</material> centering it over the knurled section.
+                    </step><step>Take care not to scratch the handlebar.</step><step>The ends of the handlebar should turn toward the rear. </step><step>
+                        Attach the <material>Pinch Bolt (Product Number PB-6109)</material>, <material>Lock Washer 10 (Product Number LW-1210)</material>, and <material>Lock Nut 7 (Product Number LN-1224)</material> onto the stem.
+                    </step><step>Tighten the nut just enough to keep the handlebar from rotating in the stem. Do not over tighten. </step><step>
+                        Put a <material>Flat Washer 1 (Product Number FW-1000)</material> onto the stem bolt, and then insert the bolt down into the stem.
+                    </step><step>
+                        Thread the plug nut onto the stem bolt aligning it with the stem body as shown in illustration <diag>4</diag>. Insert the stem down into the lock nut until the minimum insertion line marked on the stem is hidden inside the nut.
+                    </step><step>
+                        Attach the <material>grips</material>.
+                    </step><step>
+                        Inspect per specification <specs>FI-225</specs>.
+                    </step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-500 Instructions Assembling the Touring Pedal Summary: This document contains manufacturing instructions for assembling the Touring Pedal, Product Model 53. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="0.5" LotSize="1" LocationID="50">
+                    Work Center 50 - SubAssembly. The following instructions pertain to Work Center 50. (Setup hours = .0, Labor Hours = .5, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Visually examine the pedal spindles to determine <material>left and right pedals</material>. The left and right pedals have different threading directions. It is important you identify them correctly.
+                    </step><step>
+                        Apply a small amount of <material>grease</material> to the left pedal and thread the pedal onto the <material>left crank arm</material> by hand.
+                    </step><step>If the threads do not turn easily, back the spindle out and re-start.</step><step>
+                        Securely tighten the spindle against the crank arm using a <tool>small wrench</tool>.
+                    </step><step>Apply a small amount of grease to the right pedal and thread the pedal onto the right crank arm by hand.</step><step>If the threads do not turn easily, back the spindle out and re-start.</step><step>Securely tighten the spindle against the crank arm using a small wrench.</step><step>
+                        Inspect per specification <specs>FI-520</specs>.
+                    </step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-620 Instructions Assembling the HL Touring Seat Summary: This document contains manufacturing instructions for assembling the HL Touring Seat, Product Model 67. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="1" LotSize="1" SetupHours="0.25" LocationID="50">
+                    Work Center 50 - SubAssembly. The following instructions pertain to Work Center 50. (Setup hours = .25, Labor Hours = 1, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Put the <material>Seatpost Lug (Product Number SL-0932)</material> on the <material>Seat Post (Product Number SP-3981)</material>.
+                    </step><step>
+                        Insert the <material>Pinch Bolt (Product Number PB-6109)</material> and tighten until it is secure but still able to slide up or down the post. See illustration <diag>6</diag>.
+                    </step><step>
+                        Attach the <material>HL Seat (Product Number SE-T315)</material> to the top of the Seat Post and tighten securely.
+                    </step><step>
+                        Inspect per specification <specs>FI-625</specs>.
+                    </step></Location></root>
+<root xmlns="http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/ProductModelManuInstructions">
+                Adventure Works CyclesWA-620 Instructions Assembling the LL Touring Seat Summary: This document contains manufacturing instructions for assembling the LL Touring Seat, Product Model 63. Instructions are work center specific and are identified by work center ID. These instructions must be followed in the order presented. Deviation from the instructions is not permitted unless an authorized Change Order detailing the deviation is provided by the Engineering Manager.<Location LaborHours="1.5" LotSize="1" LocationID="50">
+                    Work Center 50 - SubAssembly. The following instructions pertain to Work Center 50. (Setup hours = .0, Labor Hours = 1.5, Machine Hours = 0, Lot Sizing = 1)<step>
+                        Put the <material>Seat post Lug (Product Number SL-0931)</material> on the <material>Seat Post (Product Number SP-2981)</material>.
+                    </step><step>
+                        Insert the <material>Pinch Bolt (Product Number PB-6109)</material> and tighten until it is secure but still able to slide up or down the post as shown in illustration <diag>6</diag>.
+                    </step><step>
+                        Attach the <material>LL Seat (Product Number SE-T312)</material> to the top of the Seat Post and tighten securely.
+                    </step><step>
+                        Inspect per specification <specs>FI-620</specs>.
+                    </step></Location></root>

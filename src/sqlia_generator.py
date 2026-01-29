@@ -522,8 +522,8 @@ class sqlmapGenerator:
         """
         # Data exfiltration scope is limited to reduce generation time.
         # The current configuration uses specific flags (--users, --banner,
-        # --schema, --current-user) instead of --all to reduce dataset generation 
-        # time, especially when databases are populated. 
+        # --schema, --current-user) instead of --all to reduce dataset generation
+        # time, especially when databases are populated.
         #
         # If you need to include payloads that dump all database information
         # (tables, columns, data), replace the targeted flags below with --all for the

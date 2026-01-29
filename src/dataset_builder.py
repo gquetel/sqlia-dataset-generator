@@ -264,15 +264,11 @@ class DatasetBuilder:
                             == stmt_type
                         ]
                         template_ids = templates_of_type["ID"].tolist()
-                        error_details.append(
-                            f"  - {stmt_type.upper()}: {template_ids}"
-                        )
+                        error_details.append(f"  - {stmt_type.upper()}: {template_ids}")
 
                     raise ValueError(
                         f"Found templates without placeholders. Templates must have at least one placeholder.\n"
-                        f"Problematic template IDs:\n"
-                        + "\n".join(error_details)
-                        + "\n"
+                        f"Problematic template IDs:\n" + "\n".join(error_details) + "\n"
                     )
 
             # Check for template ID mismatches if both exist
