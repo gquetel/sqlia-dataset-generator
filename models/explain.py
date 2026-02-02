@@ -18,10 +18,11 @@ from sklearn.metrics import (
 
 logger = logging.getLogger(__name__)
 
+
 def get_ci(score, n):
-    """ 
+    """
     From: https://machinelearningmastery.com/confidence-intervals-for-machine-learning/
-    
+
     Args:
         score (_type_): _description_
         n (_type_): _description_
@@ -88,6 +89,7 @@ def get_metrics_treshold(
         preds,
     )
 
+
 def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
     """Display Recall score per technique from a dataframe with preds."""
     techniques = df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
@@ -104,6 +106,7 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
         d_res[f"recall{technique}"] = srecall
 
     return d_res
+
 
 def plot_pr_curves_plt_from_scores(
     labels, l_scores: list, l_model_names: list, project_paths, suffix: str = ""

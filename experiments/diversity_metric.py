@@ -53,9 +53,7 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
                 # Replace all literals or identifier to get a canonical representation.
                 # "Normalize" parse trees.
                 for i in glot_tree.find_all(
-                    sqlglot.exp.Identifier
-                    | sqlglot.exp.Literal
-                    | sqlglot.exp.Comment
+                    sqlglot.exp.Identifier | sqlglot.exp.Literal | sqlglot.exp.Comment
                 ):
                     i.set("this", "I")
 
@@ -72,8 +70,8 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
             cnt_prserr += 1
         except sqlglot.errors.TokenError as e:
             cnt_prserr += 1
-        except KeyError as e: 
-            cnt_prserr+=1
+        except KeyError as e:
+            cnt_prserr += 1
 
     logging.disable(logging.NOTSET)
 
@@ -301,7 +299,7 @@ def main():
     # From: https://www.kaggle.com/datasets/sajid576/sql-injection-dataset
     kaggle_path = "../Modified_SQL_Dataset.csv"
 
-    # From: 
+    # From:
     anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v7/dataset.csv"
 
     # Diversity metrics to measure:
@@ -309,7 +307,6 @@ def main():
     compute_parse_trees = True
     compute_div_sem = True
 
-    
     df_anubis = pd.read_csv(
         anubis_path,
         # dtype is specified to prevent a DtypeWarning

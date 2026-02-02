@@ -1,0 +1,14 @@
+template,ID,description
+"SELECT e.first_name, e.last_name, e.department_id, d.department_name FROM employees e JOIN departments d ON e.department_id = d.department_id WHERE e.department_id = {departments_department_id}",OHR-S1,Find employees by department ID with department name
+"SELECT * FROM employees WHERE first_name LIKE '{rand_string}'",OHR-S2,Find employees whose first name contains a string
+"SELECT first_name, last_name, salary FROM employees WHERE salary < (SELECT salary FROM employees WHERE employee_id = {employees_employee_id})",OHR-S3,Find employees earning less than a given employee
+"SELECT m.first_name FROM employees e JOIN employees m ON e.manager_id = m.employee_id WHERE e.employee_id = {employees_employee_id}",OHR-S4,Find the first name of an employee's manager
+"SELECT * FROM employees WHERE hire_date > '{job_history_start_date}'",OHR-S5,Find all employees who joined after a given date
+"SELECT AVG(e.salary) FROM employees e JOIN jobs j ON e.job_id = j.job_id WHERE j.job_title = '{jobs_job_title}'",OHR-S6,Calculate average salary for a given job title
+"SELECT jh.employee_id, jh.start_date, jh.end_date, jh.job_id, jh.department_id FROM job_history jh JOIN employees e ON jh.employee_id = e.employee_id WHERE e.salary >= {employees_salary}",OHR-S7,Find employees earning X or more with job history details
+"SELECT jh.employee_id, SUM(DATEDIFF(jh.end_date, jh.start_date)) AS days_worked FROM job_history jh WHERE jh.department_id = {departments_department_id} GROUP BY jh.employee_id",OHR-S8,Calculate total days worked for each employee in a department
+"SELECT employee_id, first_name, last_name FROM employees WHERE employee_id IN (SELECT employee_id FROM employees WHERE salary > {employees_salary})",OHR-S9,Find employees earning more than a given salary using subquery
+"SELECT * FROM departments d JOIN locations l ON d.location_id = l.location_id WHERE l.city = '{locations_city}'",OHR-S10,Find departments located in a given city
+"SELECT city FROM locations WHERE location_id = (SELECT location_id FROM departments WHERE department_id = (SELECT department_id FROM employees WHERE employee_id = {employees_employee_id}))",OHR-S11,Find the city of an employee by ID using subqueries
+"SELECT first_name, last_name, employee_id, job_id FROM employees WHERE department_id IN (SELECT department_id FROM departments WHERE location_id IN (SELECT location_id FROM locations WHERE city = '{locations_city}'))",OHR-S12,Find employees in departments located in a given city
+"SELECT * FROM employees WHERE salary BETWEEN {jobs_min_salary} AND {jobs_max_salary}",OHR-S13,Find employees whose salary falls between two values

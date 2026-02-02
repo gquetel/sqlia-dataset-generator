@@ -1,0 +1,7 @@
+template,ID,description
+"UPDATE employees SET salary = {employees_salary} WHERE employee_id = {employees_employee_id}",OHR-U1,Update an employee's salary
+"UPDATE employees SET department_id = {departments_department_id} WHERE employee_id = {employees_employee_id}",OHR-U2,Transfer an employee to a different department
+"UPDATE departments SET manager_id = {employees_employee_id} WHERE department_id = {departments_department_id}",OHR-U3,Assign or change a department manager
+"UPDATE employees SET salary = salary * (1 + {employees_commission_pct}) WHERE department_id = {departments_department_id}",OHR-U4,Give all employees in a department a percentage-based raise
+"UPDATE employees SET job_id = '{jobs_job_id}', salary = {employees_salary}, department_id = {departments_department_id} WHERE employee_id = {employees_employee_id}",OHR-U5,Update employee job and salary and department (promotion/transfer)
+"UPDATE departments SET location_id = {locations_location_id} WHERE department_id = {departments_department_id}",OHR-U6,Move a department to a new location

@@ -193,8 +193,7 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
 
         self.clf.eval()
         logger.info(f"Loaded AutoEncoder model from {model_path}")
-    
-    
+
     def save_model(self):
         save_dir = self.project_paths.models_path
         model_path = f"{save_dir}{self.model_name}.pth"

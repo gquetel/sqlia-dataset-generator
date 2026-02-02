@@ -54,8 +54,8 @@ let
 
   sqlmap = pkgs.python3Packages.sqlmap.overridePythonAttrs (oldAttrs: {
     propagatedBuildInputs = (oldAttrs.propagatedBuildInputs or [ ]) ++ [
-      pkgs.python3Packages.sqlalchemy 
-      pkgs.python3Packages.pymysql 
+      pkgs.python3Packages.sqlalchemy
+      pkgs.python3Packages.pymysql
     ];
   });
 

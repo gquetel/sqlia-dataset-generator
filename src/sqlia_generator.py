@@ -1,4 +1,3 @@
-import configparser
 import logging
 from pathlib import Path
 from subprocess import STDOUT, Popen, PIPE
@@ -14,7 +13,6 @@ import secrets
 import random
 
 from .db_cnt_manager import SQLConnector
-from .config_parser import get_seed
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +20,29 @@ logger = logging.getLogger(__name__)
 class sqlmapGenerator:
     def __init__(
         self,
-        config: configparser.ConfigParser,
+        dataset_config: dict,
         templates: pd.DataFrame,
         sqlconnector: SQLConnector,
         placeholders_dictionaries_list: list,
         port: int,
+        seed: int,
+        debug_mode: bool = False,
+        testing_mode: bool = False,
     ):
         """Initialize data structures for payload generation."""
 
         self.templates = templates.to_dict("records")
-        self.config = config
+        self.dataset_config = dataset_config
         self.port = port
         self.sqlc = sqlconnector
+        self.debug_mode = debug_mode
+        self.testing_mode = testing_mode
+
         # List of dictionaries of values
         self.pdl = placeholders_dictionaries_list
+
+        # Extract dataset name from dataset-specific config
+        self.dataset_name = dataset_config["name"]
 
         # List of tamper scripts that can be used during the attack, 1 is choosen at
         # random for each sqlmap invocation amongst this attribute.
@@ -54,7 +61,7 @@ class sqlmapGenerator:
         #  space2dash tamper script lead to sqlmap being unable to identify injections
         # let's not use it for generation.
 
-        self.seed = get_seed(self.config)
+        self.seed = seed
 
         self.generated_attacks = pd.DataFrame()
         self._scenario_id = 0
@@ -95,14 +102,20 @@ class sqlmapGenerator:
         # letting it there incrementally increase the number of commands required to
         # dump data from the DBMS as we invoke more and more sqlmap.
 
-        tables = [
-            "regions",
-            "countries",
-            "navaids",
-            "runways",
-            "airport_frequencies",
-            "airport",
-        ]
+        # Dynamically discover tables (not views) in the current dataset's database
+        try:
+            result = self.sqlc.execute_query(
+                f"SHOW FULL TABLES WHERE Table_type = 'BASE TABLE';"
+            )
+            # execute_query returns a list of result sets, we need the first one
+            if result and len(result) > 0:
+                tables = [row[0] for row in result[0]]
+            else:
+                tables = []
+        except Exception as e:
+            logger.warning(f"Failed to retrieve table list from database: {str(e)}")
+            tables = []
+
         for table in tables:
             try:
                 self.sqlc.execute_query(
@@ -112,12 +125,12 @@ class sqlmapGenerator:
             # sometimes hang, so we also added  'connection_timeout': 10,  to the
             # connection settings. We need to catch that exception.
             except mysql.connector.errors.ReadTimeoutError:
-                logger.warning(
+                logger.critical(
                     f"TRUNCATE call hanged for more than 10 seconds, the database might"
                     f" not be clean."
                 )
             except mysql.connector.errors.DatabaseError as e:
-                logger.warning(f"TRUNCATE call failed: {str(e.msg)}")
+                logger.critical(f"TRUNCATE call failed: {str(e.msg)}")
 
         # Clear query cache
         _ = self.sqlc.get_and_empty_sent_queries()
@@ -165,11 +178,11 @@ class sqlmapGenerator:
             return queries[-1]
         return []
 
-    def _construct_eval_option(self, schema_name: str, parameters: list[str]) -> str:
+    def _construct_eval_option(self, dataset_name: str, parameters: list[str]) -> str:
         """_summary_
 
         Args:
-            schema_name (str): _description_
+            dataset_name (str): _description_
             parameters (list[str]): _description_
 
         Returns:
@@ -216,9 +229,7 @@ class sqlmapGenerator:
                     for _ in range(10)
                 ]
             else:
-                ran_values = random.choices(
-                    self.pdl[(schema_name, param_no_sx)], k=10
-                )
+                ran_values = random.choices(self.pdl[param_no_sx], k=10)
 
             values_str = str(ran_values).replace('"', '\\"')
             e_str += f"{param}=random.choice({values_str});"
@@ -258,8 +269,7 @@ class sqlmapGenerator:
         url: str,
         settings_tech: str,
         params: list[str],
-        schema_name: str,
-        debug_mode: bool,
+        dataset_name: str,
         template_info: dict,
     ) -> pd.DataFrame:
         """Executes the reconnaissance phase of an SQL injection attack using SQLMap.
@@ -290,18 +300,22 @@ class sqlmapGenerator:
         # Columns that are the same for all sqlmap calls for this template.
         label = 1
 
+        # When testing, only test a single parameter
+        if self.testing_mode:
+            params = [params[0]]
+
         for i, param in enumerate(params):
             # Iterate over existing params.
             _t_params = params.copy()
             _t_params.remove(param)
             settings_eval = self._construct_eval_option(
-                schema_name=schema_name, parameters=_t_params
+                dataset_name=dataset_name, parameters=_t_params
             )
             tamper_script = random.choice(self._tamper_scripts)
-            settings_verbose = "-v 3 " if debug_mode else "-v 0 "
+            settings_verbose = "-v 3 " if self.debug_mode else "-v 0 "
 
             recon_settings = (
-                f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=1 --batch "
+                f"{settings_verbose} --skip-waf --level=5 --risk=1 --batch "
                 f"--skip='user-agent,referer,host' {settings_eval} "
                 f" -p '{param}' "
                 f' -tamper="{tamper_script}" '
@@ -341,7 +355,7 @@ class sqlmapGenerator:
         return _df
 
     def perform_exploit(
-        self, url: str, settings_tech: str, debug_mode: bool, template_info: dict
+        self, url: str, settings_tech: str, template_info: dict
     ) -> pd.DataFrame:
         """Executes the exploitation phase of an SQL injection attack using SQLMap.
 
@@ -368,10 +382,10 @@ class sqlmapGenerator:
         # this is not the priority.
 
         tamper_script = random.choice(self._tamper_scripts)
-        settings_verbose = "-v 3 " if debug_mode else "-v 0 "
+        settings_verbose = "-v 3 " if self.debug_mode else "-v 0 "
 
         exploit_settings = (
-            f"{settings_verbose} --skip-waf -D dataset --level=5 --risk=1 --batch "
+            f"{settings_verbose} --skip-waf --level=5 --risk=1 --batch "
             f"--skip='user-agent,referer,host'"
             f' -tamper="{tamper_script}" '
             f'{settings_tech} -u "{url}"'
@@ -402,9 +416,7 @@ class sqlmapGenerator:
         )
         return _df
 
-    def perform_attack(
-        self, technique: tuple, template_info: dict, debug_mode: bool
-    ):
+    def perform_attack(self, technique: tuple, template_info: dict):
         """Orchestrates a full SQLI attack for a given technique and query template.
 
         This function runs both reconnaissance and exploitation phases of an SQL
@@ -424,7 +436,6 @@ class sqlmapGenerator:
         """
         # Load all information to build the sqlmap command.
         name_tech, settings_tech = technique
-        schema_name = template_info["ID"].split("-")[0]
         params = {}
         for i, param in enumerate(template_info["placeholders"]):
             param_no_sx = param.rstrip("123456789")
@@ -441,9 +452,7 @@ class sqlmapGenerator:
                     secrets.choice(alphabet) for i in range(20)
                 )
             else:
-                random_param_value = random.choice(
-                    self.pdl[(schema_name, param_no_sx)]
-                )
+                random_param_value = random.choice(self.pdl[param_no_sx])
 
             params[param] = random_param_value
 
@@ -455,8 +464,7 @@ class sqlmapGenerator:
             url=url,
             settings_tech=settings_tech,
             params=template_info["placeholders"],
-            schema_name=schema_name,
-            debug_mode=debug_mode,
+            dataset_name=self.dataset_name,
             template_info=template_info,
         )
 
@@ -472,7 +480,6 @@ class sqlmapGenerator:
             _df_exploit = self.perform_exploit(
                 url=url,
                 settings_tech=settings_tech,
-                debug_mode=debug_mode,
                 template_info=template_info,
             )
 
@@ -495,7 +502,6 @@ class sqlmapGenerator:
             _df = _df_recon
 
             # Failure is already set to all samples of df.
-
         _df["statement_type"] = template_info["statement_type"]
         _df["query_template_id"] = template_id
         _df["attack_id"] = atk_id
@@ -504,7 +510,7 @@ class sqlmapGenerator:
         self.generated_attacks = pd.concat([self.generated_attacks, _df])
         self._scenario_id += 1
 
-    def generate_attacks(self, testing_mode: bool, debug_mode: bool):
+    def generate_attacks(self):
         """Generates SQL injection attacks for all templates using multiple techniques.
 
         This function iterates through all combinations of templates and SQLI
@@ -514,25 +520,43 @@ class sqlmapGenerator:
             pd.DataFrame: The complete generated_attacks DataFrame containing data
                 from all performed attacks across all templates and techniques.
         """
+        # Data exfiltration scope is limited to reduce generation time.
+        # The current configuration uses specific flags (--users, --banner,
+        # --schema, --current-user) instead of --all to reduce dataset generation
+        # time, especially when databases are populated.
+        #
+        # If you need to include payloads that dump all database information
+        # (tables, columns, data), replace the targeted flags below with --all for the
+        # desired techniques.
+
+        # techniques = {
+        #     "boolean": "--technique=B --all ",
+        #     "error": "--technique=E --all ",
+        #     "union": "--technique=U --all  ",
+        #     "stacked": "--technique=S --users --banner ",
+        #     "time": "--technique=T --current-user ",
+        #     "inline": "--technique=Q --all ",
+        # }
+
         techniques = {
-            "boolean": "--technique=B --all ",
-            "error": "--technique=E --all ",
-            "union": "--technique=U --all  ",
+            "boolean": "--technique=B --users --banner --schema ",
+            "error": "--technique=E --users --banner --schema ",
+            "union": "--technique=U --users --banner --schema  ",
             "stacked": "--technique=S --users --banner ",
             "time": "--technique=T --current-user ",
-            "inline": "--technique=Q --all ",
+            "inline": "--technique=Q --users --banner --schema ",
         }
 
-        Path("./cache/").mkdir(parents=True, exist_ok=True)
+        Path("./.cache/").mkdir(parents=True, exist_ok=True)
 
         # Template's number is reduced, we also only consider the error technique.
-        if testing_mode:
-            techniques = {"error": "--technique=E --users "}
+        if self.testing_mode:
+            techniques = {"error": "--technique=E --schema "}
 
         for template in self.templates:
             for i in techniques.items():
-                # example of cache file: ./cache/airport-I1-union
-                cache_filepath = f"./cache/{template['ID']}-{i[0]}"
+                # example of cache file: ./.cache/airport-I1-union
+                cache_filepath = f"./.cache/{template['ID']}-{i[0]}"
                 if Path(cache_filepath).is_file():
                     self.generated_attacks = pd.read_csv(cache_filepath)
                     last_atkid = self.generated_attacks.iloc[-1]["attack_id"]
@@ -546,7 +570,7 @@ class sqlmapGenerator:
                     self._scenario_id += 1
                     continue
 
-                self.perform_attack(i, template, debug_mode)
+                self.perform_attack(i, template)
                 self.generated_attacks.to_csv(cache_filepath, index=False)
 
         return self.generated_attacks

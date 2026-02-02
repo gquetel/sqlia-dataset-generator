@@ -1,0 +1,6 @@
+template,ID,description
+"DELETE FROM employees WHERE employee_id = {employees_employee_id}",OHR-D1,Delete a specific employee by ID
+"DELETE FROM job_history WHERE end_date < '{job_history_end_date}'",OHR-D2,Delete old job history records before a specific date
+"DELETE FROM employees WHERE department_id = {departments_department_id}",OHR-D3,Delete all employees from a specific department
+"DELETE FROM locations WHERE location_id = {locations_location_id}",OHR-D4,Delete a location that has been closed
+"DELETE FROM job_history WHERE employee_id IN (SELECT employee_id FROM employees WHERE last_name = '{employees_last_name}')",OHR-D5,Delete all job history for employees with a given last name

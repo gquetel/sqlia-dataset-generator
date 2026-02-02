@@ -25,11 +25,11 @@ class ProjectPaths:
         base_path: str,
     ):
         self.base_path = base_path
-        self.subfolder = None 
+        self.subfolder = None
 
-    def set_subfolder_output_path(self, subfolder : str): 
+    def set_subfolder_output_path(self, subfolder: str):
         self.subfolder = subfolder
-        
+
     @property
     def dataset_path(self) -> str:
         return f"{self.base_path}/../dataset.csv"
@@ -37,19 +37,19 @@ class ProjectPaths:
     @property
     def output_path(self) -> str:
         path = f"{self.base_path}/output/"
-        
-        if self.subfolder: 
+
+        if self.subfolder:
             path += f"{self.subfolder}/"
 
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
-    
+
     @property
     def embeddings_path(self) -> str:
         path = f"{self.base_path}/cache/embeddings/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
-    
+
     @property
     def logs_path(self) -> str:
         path = f"{self.base_path}../logs/"
@@ -119,6 +119,7 @@ class MyAutoEncoder(nn.Module):
         scores = -recon_errors
         return scores
 
+
 class MyAutoEncoderRelu(nn.Module):
     # From: https://github.com/udacity/deep-learning-v2-pytorch/blob/master/autoencoder/linear-autoencoder/Simple_Autoencoder_Solution.ipynb
     def __init__(self, input_dim):
@@ -143,7 +144,7 @@ class MyAutoEncoderRelu(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         encoded = F.relu(self.fc2(x))
-        
+
         x = F.relu(self.fc3(encoded))
         decoded = F.relu(self.fc4(x))
         # decoded = F.sigmoid(self.fc4(x))
@@ -175,7 +176,7 @@ class MyAutoEncoderRelu(nn.Module):
             recon_errors = mse_per_sample.cpu().numpy()
         scores = -recon_errors
         return scores
-    
+
 
 class MyAutoEncoderTanh(nn.Module):
     # From: https://github.com/udacity/deep-learning-v2-pytorch/blob/master/autoencoder/linear-autoencoder/Simple_Autoencoder_Solution.ipynb

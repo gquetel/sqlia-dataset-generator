@@ -1,12 +1,11 @@
 import mysql.connector
-import configparser
 import mysql
 
 from .config_parser import get_mysql_info
 
 
 class SQLConnector:
-    def __init__(self, config: configparser.ConfigParser):
+    def __init__(self, config: dict, database: str = None):
         user, pwd, host, port, priv_user, priv_pwd = get_mysql_info(config=config)
         self.user = user
         self.pwd = pwd
@@ -14,7 +13,7 @@ class SQLConnector:
         self.port = port
         self.priv_user = priv_user
         self.priv_pwd = priv_pwd
-        self.database = "dataset"
+        self.database = database if database else "dataset"
         self.init_new_cnx()
 
         # Array of sent queries by self.execute_query
