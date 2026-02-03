@@ -31,33 +31,33 @@ port = 61337
 priv_user = "root"
 priv_pwd = "root"
 
-# [[datasets]]
-# name = "OurAirports"
+[[datasets]]
+name = "OurAirports"
 
-# [datasets.statements]
-# select = "7/10"
-# delete = "9/100"
-# update = "1/10"
-# insert = "1/10"
-# admin = "1/100"
+[datasets.statements]
+select = "7/10"
+delete = "9/100"
+update = "1/10"
+insert = "1/10"
+admin = "1/100"
 
-# [[datasets]]
-# name = "OHR"
+[[datasets]]
+name = "OHR"
 
-# [datasets.statements]
-# select = "7/10"
-# delete = "1/10"
-# update = "1/10"
-# insert = "1/10"
+[datasets.statements]
+select = "7/10"
+delete = "1/10"
+update = "1/10"
+insert = "1/10"
 
-# [[datasets]]
-# name = "sakila"
+[[datasets]]
+name = "sakila"
 
-# [datasets.statements]
-# select = "7/10"
-# delete = "1/10"
-# update = "1/10"
-# insert = "1/10"
+[datasets.statements]
+select = "7/10"
+delete = "1/10"
+update = "1/10"
+insert = "1/10"
 
 [[datasets]]
 name = "OurAirports"
