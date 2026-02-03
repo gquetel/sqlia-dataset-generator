@@ -55,6 +55,7 @@ let
         # Notebooks
         ps.ipykernel
         ps.jupyter
+        ps.plotly
         ps.matplotlib-venn
         # Diversity metric + WAFAMOLE loading.
         ps.sqlglot
