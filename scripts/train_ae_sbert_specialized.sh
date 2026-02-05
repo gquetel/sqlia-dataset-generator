@@ -18,10 +18,10 @@ source venv-3.12.3/bin/activate
 cd models/
 
 # Train ae_sbert on specialised datasets
-srun python3 ./training.py --dataset=../datasets/specialised-OurAirports.csv --models ae_sbert --subfolder=ae_sbert-specialised-OurAirports
-srun python3 ./training.py --dataset=../datasets/specialised-sakila.csv --models ae_sbert --subfolder=ae_sbert-specialised-sakila
-srun python3 ./training.py --dataset=../datasets/specialised-AdventureWorks.csv --models ae_sbert --subfolder=ae_sbert-specialised-AdventureWorks
-srun python3 ./training.py --dataset=../datasets/specialised-OHR.csv --models ae_sbert --subfolder=ae_sbert-specialised-OHR
+srun python3 ./training.py --dataset=../datasets/specialised-OurAirports.csv --models ae_sbert --subfolder=specialised-OurAirports-ae_sbert
+srun python3 ./training.py --dataset=../datasets/specialised-sakila.csv --models ae_sbert --subfolder=specialised-sakila-ae_sbert
+srun python3 ./training.py --dataset=../datasets/specialised-AdventureWorks.csv --models ae_sbert --subfolder=specialised-AdventureWorks-ae_sbert
+srun python3 ./training.py --dataset=../datasets/specialised-OHR.csv --models ae_sbert --subfolder=specialised-OHR-ae_sbert
 
 # Print job completion time
 echo "Job finished at: $(date)"
