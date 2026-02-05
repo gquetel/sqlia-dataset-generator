@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# mysql-stop: Stop the local MySQL development server.
+# Usage: mysql-stop [--clean]
+#   --clean   Also remove the entire .mysql/ directory (wipes all data).
+#
+# Requires MYSQL_HOME environment variable (set by the nix shell hook).
+
+CLEAN=false
+for arg in "$@"; do
+    case "$arg" in
+        --clean) CLEAN=true ;;
+        *)
+            echo "Usage: mysql-stop [--clean]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "${MYSQL_HOME:-}" ]; then
+    echo "Error: MYSQL_HOME is not set. Run this from within nix-shell." >&2
+    exit 1
+fi
+
+PID_FILE="$MYSQL_HOME/mysqld.pid"
+
+if [ ! -f "$PID_FILE" ]; then
+    echo "No PID file found at $PID_FILE. MySQL may not be running."
+else
+    PID=$(cat "$PID_FILE")
+
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Stopping MySQL (PID $PID)..."
+        kill "$PID"
+
+        # Wait for graceful shutdown
+        for i in {1..30}; do
+            if ! kill -0 "$PID" 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+
+        # Force kill if still running
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "MySQL did not stop gracefully, sending SIGKILL..."
+            kill -9 "$PID" 2>/dev/null || true
+            sleep 1
+        fi
+
+        echo "MySQL stopped."
+    else
+        echo "MySQL process $PID is not running."
+    fi
+
+    rm -f "$PID_FILE"
+fi
+
+if [ "$CLEAN" = true ]; then
+    if [ -d "$MYSQL_HOME" ]; then
+        echo "Cleaning up $MYSQL_HOME..."
+        rm -rf "$MYSQL_HOME"
+        echo "MySQL data removed."
+    fi
+fi

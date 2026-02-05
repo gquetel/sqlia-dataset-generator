@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# mysql-start: Initialize and start the local MySQL development server.
+# Requires MYSQL_HOME, MYSQL_DATADIR, MYSQL_UNIX_PORT, and MYSQL_PORT
+# environment variables (set by the nix shell hook).
+
+for var in MYSQL_HOME MYSQL_DATADIR MYSQL_UNIX_PORT MYSQL_PORT; do
+    if [ -z "${!var:-}" ]; then
+        echo "Error: $var is not set. Run this from within nix-shell." >&2
+        exit 1
+    fi
+done
+
+# Resolve the project root (one level up from this script's directory)
+# Required to find database initialisation scripts. 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+MYSQL_CONNECT="--port=$MYSQL_PORT --protocol=tcp"
+
+# Create MySQL directories
+mkdir -p "$MYSQL_DATADIR" "$MYSQL_HOME/tmp" "$MYSQL_HOME/log"
+
+# Initialize MySQL database if not already done
+FRESH_INIT=false
+if [ ! -d "$MYSQL_DATADIR/mysql" ]; then
+    echo "Initializing MySQL database..."
+    mysqld --initialize-insecure \
+        --datadir="$MYSQL_DATADIR" \
+        --user="$USER"
+    FRESH_INIT=true
+fi
+
+# Check if MySQL is already running
+if mysqladmin $MYSQL_CONNECT ping &>/dev/null; then
+    echo "MySQL is already running on port $MYSQL_PORT."
+    exit 0
+fi
+
+# Start MySQL
+echo "Starting MySQL on port $MYSQL_PORT..."
+mysqld \
+    --datadir="$MYSQL_DATADIR" \
+    --socket="$MYSQL_UNIX_PORT" \
+    --port="$MYSQL_PORT" &
+MYSQL_PID=$!
+echo "$MYSQL_PID" > "$MYSQL_HOME/mysqld.pid"
+
+# Wait for MySQL to become ready
+STARTED=false
+for i in {1..30}; do
+    if mysqladmin $MYSQL_CONNECT ping &>/dev/null; then
+        STARTED=true
+        break
+    fi
+    sleep 1
+done
+
+if [ "$STARTED" = false ]; then
+    echo "Error: MySQL failed to start within 30 seconds." >&2
+    exit 1
+fi
+
+echo "MySQL started successfully (PID $MYSQL_PID)."
+
+# Run bootstrap only on fresh init
+if [ "$FRESH_INIT" = true ] && [ ! -f "$MYSQL_HOME/.bootstrapped" ]; then
+    echo "Running bootstrap.sql..."
+    (cd "$PROJECT_ROOT/data" && mysql $MYSQL_CONNECT -u root < bootstrap.sql)
+    touch "$MYSQL_HOME/.bootstrapped"
+    echo "Databases initialized!"
+fi
+
+# Print connection info
+DATABASES=$(mysql $MYSQL_CONNECT -u root -proot -N -e "SHOW DATABASES;" 2>/dev/null \
+    | grep -vE '^(information_schema|performance_schema|mysql|sys)$' \
+    | tr '\n' ', ' | sed 's/, $//')
+
+echo ""
+echo "MySQL development environment ready!"
+echo "  Port: $MYSQL_PORT"
+if [ -n "${DATABASES:-}" ]; then
+    echo "  Databases: $DATABASES"
+else
+    echo "  Databases: (none)"
+fi
+echo "  User: tata / Password: tata"
+echo "  Root user: root / Password: root"
+echo ""
+echo "To connect: mysql --port=$MYSQL_PORT --protocol=tcp -u tata -ptata"
+echo "To validate schemas: pytest tests/test_database_schemas.py -v"

@@ -135,12 +135,15 @@ bash-5.2$
 
 ## Development
 
-For development, or generating a dataset given other dataset specifications, we provide a Nix shell environment. Enter it using `nix-shell`. The environment contains all the runtime dependencies to generate such dataset and automatically:
+For development, or generating a dataset given other dataset specifications, we provide a Nix shell environment. Enter it using `nix-shell`. The environment contains all the runtime dependencies to generate such dataset and adds the `scripts/` directory to your `PATH`.
 
-- Sets up a local MySQL server on port **61337**
-- Initializes databases with `data/bootstrap.sql`
-- Starts the MySQL server in the background
-- Creates dataset-specific databases with the `tata` user
+MySQL can then be managed with the provided helper scripts:
+
+```bash
+mysql-start        # Initialize and start the local MySQL dev server (port 61337)
+mysql-stop         # Stop the MySQL dev server
+mysql-stop --clean # Stop MySQL and remove all data
+```
 
 Alternatively, an equivalent environment can be manually created by using the following software versions:
 

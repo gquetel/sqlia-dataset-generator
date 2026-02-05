@@ -97,120 +97,16 @@ pkgs.mkShell rec {
   shellHook = ''
     export CUSTOM_INTERPRETER_PATH="${pythonEnv}/bin/python"
 
-    # The dataset generation requires a MySQL Server running. We start one using the
-    # following code.
-    export MYSQL_HOME="$PWD/.mysql"
+    # MySQL environment variables used by mysql-start / mysql-stop scripts.
+    # Data lives in /tmp (local to each machine) to avoid NFS conflicts.
+    export MYSQL_HOME="/tmp/mysql-dev-sqlia"
     export MYSQL_DATADIR="$MYSQL_HOME/data"
     export MYSQL_UNIX_PORT="$MYSQL_HOME/mysql.sock"
     export MYSQL_PORT=61337
 
-    # Create MySQL directories
-    mkdir -p "$MYSQL_DATADIR"
-    mkdir -p "$MYSQL_HOME/tmp"
-    mkdir -p "$MYSQL_HOME/log"
+    # Put project scripts on PATH
+    export PATH="$PWD/scripts:$PATH"
 
-    # Initialize MySQL database if not already done
-    if [ ! -d "$MYSQL_DATADIR/mysql" ]; then
-      echo "Initializing MySQL database..."
-      mysqld --initialize-insecure \
-        --datadir="$MYSQL_DATADIR" \
-        --basedir="${pkgs.mysql84}" \
-        --user=$USER
-    fi
-
-    # Check if MySQL is already running
-    MYSQL_STARTED=false
-    MYSQL_ALREADY_RUNNING=false
-    if mysqladmin --socket="$MYSQL_UNIX_PORT" ping &>/dev/null; then
-      echo "MySQL already running on port $MYSQL_PORT"
-      MYSQL_STARTED=true
-      MYSQL_ALREADY_RUNNING=true
-    else
-      # Start MySQL
-      echo "Starting MySQL on port $MYSQL_PORT..."
-      mysqld \
-        --datadir="$MYSQL_DATADIR" \
-        --socket="$MYSQL_UNIX_PORT" \
-        --port=$MYSQL_PORT &
-      MYSQL_PID=$!
-      echo $MYSQL_PID > "$MYSQL_HOME/mysqld.pid"
-
-      # Wait for MySQL to start
-      for i in {1..30}; do
-        if mysqladmin --socket="$MYSQL_UNIX_PORT" ping &>/dev/null; then
-          echo "MySQL started successfully!"
-          MYSQL_STARTED=true
-          break
-        fi
-        sleep 1
-      done
-    fi
-
-    if [ "$MYSQL_STARTED" = true ]; then
-      # Initialize databases with bootstrap.sql (only if we just started MySQL)
-      if [ "$MYSQL_ALREADY_RUNNING" = false ]; then
-        # Change to data directory so SOURCE commands work with relative paths
-        echo "Running bootstrap.sql..."
-        (cd data && mysql --socket="$MYSQL_UNIX_PORT" -u root < bootstrap.sql)
-        echo "Databases initialized!"
-      fi
-
-      # List all databases (excluding system databases)
-      DATABASES=$(mysql --socket="$MYSQL_UNIX_PORT" -u root -proot -N -e "SHOW DATABASES;" 2>/dev/null | grep -vE '^(information_schema|performance_schema|mysql|sys)$' | tr '\n' ', ' | sed 's/, $//')
-
-      echo ""
-      echo "MySQL development environment ready!"
-      echo "  Port: $MYSQL_PORT"
-      echo "  Socket: $MYSQL_UNIX_PORT"
-      if [ -n "$DATABASES" ]; then
-        echo "  Databases: $DATABASES"
-      else
-        echo "  Databases: (none)"
-      fi
-      echo "  User: tata / Password: tata"
-      echo "  Root user: root / Password: root"
-      echo ""
-      echo "To connect: mysql --socket=$MYSQL_UNIX_PORT -u tata -ptata"
-      echo "To validate schemas: pytest tests/test_database_schemas.py -v"
-    else
-      echo "Failed to start MySQL"
-    fi
-
-    # Setup cleanup trap for shell exit
-    cleanup_mysql() {
-      # Only clean up if we started MySQL ourselves
-      if [ "$MYSQL_ALREADY_RUNNING" = false ]; then
-        if [ -f "$MYSQL_HOME/mysqld.pid" ]; then
-          PID=$(cat "$MYSQL_HOME/mysqld.pid")
-          echo ""
-          echo "Stopping MySQL..."
-          kill $PID 2>/dev/null || true
-
-          # Wait for MySQL to fully stop
-          for i in {1..30}; do
-            if ! kill -0 $PID 2>/dev/null; then
-              break
-            fi
-            sleep 1
-          done
-
-          # Force kill if still running
-          if kill -0 $PID 2>/dev/null; then
-            kill -9 $PID 2>/dev/null || true
-            sleep 1
-          fi
-        fi
-
-        # Clean up MySQL directory
-        if [ -d "$MYSQL_HOME" ]; then
-          echo "Cleaning up MySQL data..."
-          rm -rf "$MYSQL_HOME"
-          echo "MySQL cleanup complete"
-        fi
-      fi
-    }
-
-    trap cleanup_mysql EXIT
-    echo ""
+    echo "Run 'mysql-start' to start MySQL, 'mysql-stop' to stop it."
   '';
 }
