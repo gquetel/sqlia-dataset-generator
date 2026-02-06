@@ -5,7 +5,7 @@ echo "Job started at: $(date)"
 
 # Activate the environment (CPU)
 cd ~/repos/sqlia-dataset/
-source venv-3.13.11/bin/activate
+source venv-3.12.3/bin/activate
 cd models/
 
 DATASET_PATH=$HOME/datasets/100k-training/
