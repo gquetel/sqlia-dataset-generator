@@ -59,6 +59,7 @@ project_paths = ProjectPaths(GENERIC.BASE_PATH)
 # project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
 logger = logging.getLogger(__name__)
 training_results = []
+save_model_path = None  # Set via --save-model-path argument
 
 n_jobs = min(64, int(os.cpu_count() * 0.8))
 
@@ -123,7 +124,6 @@ def init_args() -> argparse.Namespace:
         help="Train algorithm on user inputs rather than full query",
     )
 
-    # TODO
     parser.add_argument(
         "--capture-insider",
         action="store_true",
@@ -147,6 +147,13 @@ def init_args() -> argparse.Namespace:
         "--testing",
         action="store_true",
         help="Reduce dataset size to test correct code execution",
+    )
+
+    parser.add_argument(
+        "--save-model-path",
+        type=str,
+        dest="save_model_path",
+        help="Path to save trained model (without extension). Only works with ae_li and ae_sbert.",
     )
 
     args = parser.parse_args()
@@ -361,7 +368,7 @@ def compute_metrics_generic(
     d_res.update(get_recall_per_attack(df=_df, model_name=model_name))
     training_results.append(d_res)
 
-    return l_test, s_test
+    return l_test, s_test, threshold
 
 
 def train_ocsvm_cv(
@@ -387,7 +394,7 @@ def train_ocsvm_cv(
     )
     model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -398,6 +405,7 @@ def train_ocsvm_cv(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 def train_ocsvm_li(
@@ -427,7 +435,7 @@ def train_ocsvm_li(
         project_paths=project_paths,
     )
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -438,6 +446,7 @@ def train_ocsvm_li(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 def train_ocsvm_sbert(
@@ -455,7 +464,7 @@ def train_ocsvm_sbert(
 
     model.train_model(df=df_train, model_name=model_name)
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -466,6 +475,7 @@ def train_ocsvm_sbert(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 def train_lof_cv(
@@ -492,7 +502,7 @@ def train_lof_cv(
         project_paths=project_paths,
     )
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -503,6 +513,7 @@ def train_lof_cv(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 def train_lof_li(
@@ -523,7 +534,7 @@ def train_lof_li(
         project_paths=project_paths,
     )
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -534,6 +545,7 @@ def train_lof_li(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 def train_lof_sbert(
@@ -551,7 +563,7 @@ def train_lof_sbert(
         batch_size=1024,
     )
     model.train_model(df=df_train, model_name=model_name)
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -562,6 +574,7 @@ def train_lof_sbert(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 # -- Autoencoders --
@@ -571,6 +584,7 @@ def train_ae_li(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    global save_model_path
     set_global_seed()
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
@@ -591,7 +605,7 @@ def train_ae_li(
 
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -602,6 +616,11 @@ def train_ae_li(
         insider_as_fn=False,
         use_batches=True,
     )
+
+    if save_model_path:
+        model.save_model(save_model_path, threshold=threshold)
+
+    return labels, scores, threshold
 
 
 def train_ae_cv(
@@ -633,7 +652,7 @@ def train_ae_cv(
     )
     model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
 
-    return compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -644,9 +663,11 @@ def train_ae_cv(
         insider_as_fn=False,
         use_batches=True,
     )
+    return labels, scores, threshold
 
 
 def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame):
+    global save_model_path
     set_global_seed()
     model_name = "SecureBERT and AE"
     logger.info(f"Training model: {model_name}")
@@ -659,7 +680,8 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     )
 
     model.train_model(df=df_train, model_name=model_name)
-    return compute_metrics_generic(
+
+    labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
@@ -670,6 +692,11 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
         insider_as_fn=False,
         use_batches=True,
     )
+
+    if save_model_path:
+        model.save_model(save_path=save_model_path, threshold=threshold)
+
+    return labels, scores, threshold
 
 
 def save_results(args):
@@ -757,7 +784,7 @@ def train_models(
     models_output = {}
 
     for model_name, model_fn in selected_models.items():
-        labels, scores = model_fn(df_train, df_test, df_val)
+        labels, scores, threshold = model_fn(df_train, df_test, df_val)
         models_output[model_name] = (labels, scores)
         save_results(args=args)
 
@@ -818,6 +845,9 @@ if __name__ == "__main__":
 
     if args.subfolder:
         project_paths.set_subfolder_output_path(args.subfolder)
+
+    if args.save_model_path:
+        save_model_path = args.save_model_path
 
     if args.on_user_inputs:
         preprocess_for_user_inputs_training(df=df)

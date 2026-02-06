@@ -164,17 +164,34 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
         super().__init__(device, project_paths, bert_model, batch_size)
         self.learning_rate = learning_rate
         self.epochs = epochs
+        self.threshold = None
 
-    def load_model(self, model_name: str):
-        self.model_name = model_name
-        save_dir = self.project_paths.models_path
-        model_path = f"{save_dir}{self.model_name}.pth"
-        meta_path = f"{save_dir}{self.model_name}_meta.pth"
+    def load_model(self, model_name: str = None, load_path: str = None):
+        """Load model from saved checkpoint.
 
-        if not Path(model_path).exists():
+        Args:
+            model_name: Model name (uses project_paths to find the file).
+            load_path: Explicit path to model file (overrides model_name).
+        """
+        if load_path:
+            load_path = Path(load_path)
+            if load_path.suffix != ".pth":
+                load_path = load_path.with_suffix(".pth")
+            model_path = load_path
+            meta_path = load_path.parent / f"{load_path.stem}_meta.pkl"
+            self.model_name = load_path.stem
+        elif model_name:
+            self.model_name = model_name
+            save_dir = self.project_paths.models_path
+            model_path = Path(f"{save_dir}{self.model_name}.pth")
+            meta_path = Path(f"{save_dir}{self.model_name}_meta.pth")
+        else:
+            raise ValueError("Either model_name or load_path must be provided")
+
+        if not model_path.exists():
             raise FileNotFoundError(f"Model weights not found: {model_path}")
 
-        if not Path(meta_path).exists():
+        if not meta_path.exists():
             raise FileNotFoundError(f"Model metadata not found: {meta_path}")
 
         with open(meta_path, "rb") as f:
@@ -183,6 +200,7 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
         self.learning_rate = metadata.get("learning_rate", self.learning_rate)
         self.epochs = metadata.get("epochs", self.epochs)
         self.batch_size = metadata.get("batch_size", self.batch_size)
+        self.threshold = metadata.get("threshold", None)
         input_dim = metadata["input_dim"]
 
         self.clf = MyAutoEncoderTanh(input_dim=input_dim)
@@ -193,11 +211,26 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
 
         self.clf.eval()
         logger.info(f"Loaded AutoEncoder model from {model_path}")
+        if self.threshold is not None:
+            logger.info(f"Loaded threshold: {self.threshold}")
 
-    def save_model(self):
-        save_dir = self.project_paths.models_path
-        model_path = f"{save_dir}{self.model_name}.pth"
-        meta_path = f"{save_dir}{self.model_name}_meta.pth"
+    def save_model(self, save_path: str = None, threshold: float = None):
+        """Save model weights, threshold, and metadata.
+
+        Args:
+            save_path: Explicit path to save the model (without extension).
+                       If None, uses project_paths and model_name.
+            threshold: Decision threshold computed on validation set.
+        """
+        if save_path:
+            save_path = Path(save_path)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            model_path = save_path.with_suffix(".pth")
+            meta_path = save_path.parent / f"{save_path.stem}_meta.pkl"
+        else:
+            save_dir = self.project_paths.models_path
+            model_path = Path(f"{save_dir}{self.model_name}.pth")
+            meta_path = Path(f"{save_dir}{self.model_name}_meta.pkl")
 
         torch.save(self.clf.state_dict(), model_path)
         metadata = {
@@ -205,9 +238,14 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
             "epochs": self.epochs,
             "batch_size": self.batch_size,
             "input_dim": next(self.clf.parameters()).shape[1],
+            "threshold": threshold,
         }
         with open(meta_path, "wb") as f:
             pickle.dump(metadata, f)
+
+        logger.info(f"Saved AutoEncoder_SecureBERT model to {model_path}")
+        if threshold is not None:
+            logger.info(f"Saved threshold: {threshold}")
 
     # TODO: Rename preprocess_for_preds into preprocess ?
     # Wrapper to fit to preprocessing_generic_ae function call.

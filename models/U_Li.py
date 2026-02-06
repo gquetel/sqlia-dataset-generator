@@ -1,5 +1,7 @@
 import logging
+import pickle
 import re
+from pathlib import Path
 import pandas as pd
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.neighbors import LocalOutlierFactor
@@ -355,6 +357,7 @@ class AutoEncoder_Li:
         self.device = device
 
         self.feature_columns = None
+        self.threshold = None
 
     def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         df_pped = df.copy()
@@ -444,6 +447,84 @@ class AutoEncoder_Li:
             logger.debug(
                 f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
             )
+
+    def save_model(self, save_path: str, threshold: float = None):
+        """Save model weights, scaler, threshold, and metadata.
+
+        Args:
+            save_path: Path to save the model (without extension).
+                       Creates {save_path}.pth for weights and {save_path}_meta.pkl for metadata.
+            threshold: Decision threshold computed on validation set.
+        """
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        model_path = save_path.with_suffix(".pth")
+        meta_path = save_path.parent / f"{save_path.stem}_meta.pkl"
+
+        torch.save(self.clf.state_dict(), model_path)
+
+        metadata = {
+            "learning_rate": self.learning_rate,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "input_dim": len(self.feature_columns),
+            "use_scaler": self.use_scaler,
+            "feature_columns": self.feature_columns,
+            "scaler": self._scaler if self.use_scaler else None,
+            "threshold": threshold,
+        }
+        with open(meta_path, "wb") as f:
+            pickle.dump(metadata, f)
+
+        logger.info(f"Saved AutoEncoder_Li model to {model_path}")
+        if threshold is not None:
+            logger.info(f"Saved threshold: {threshold}")
+
+    def load_model(self, load_path: str):
+        """Load model from saved checkpoint.
+
+        Args:
+            load_path: Path to the model file (with or without .pth extension).
+        """
+        load_path = Path(load_path)
+        if load_path.suffix != ".pth":
+            load_path = load_path.with_suffix(".pth")
+
+        meta_path = load_path.parent / f"{load_path.stem}_meta.pkl"
+
+        if not load_path.exists():
+            raise FileNotFoundError(f"Model weights not found: {load_path}")
+        if not meta_path.exists():
+            raise FileNotFoundError(f"Model metadata not found: {meta_path}")
+
+        with open(meta_path, "rb") as f:
+            metadata = pickle.load(f)
+
+        self.learning_rate = metadata.get("learning_rate", self.learning_rate)
+        self.epochs = metadata.get("epochs", self.epochs)
+        self.batch_size = metadata.get("batch_size", self.batch_size)
+        self.use_scaler = metadata.get("use_scaler", self.use_scaler)
+        self.feature_columns = metadata.get("feature_columns", None)
+        self.threshold = metadata.get("threshold", None)
+        input_dim = metadata["input_dim"]
+
+        if self.use_scaler and metadata.get("scaler") is not None:
+            self._scaler = metadata["scaler"]
+
+        if self.use_scaler:
+            self.clf = MyAutoEncoder(input_dim=input_dim)
+        else:
+            self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+
+        self.clf.to(self.device)
+        state_dict = torch.load(load_path, map_location=self.device)
+        self.clf.load_state_dict(state_dict)
+        self.clf.eval()
+
+        logger.info(f"Loaded AutoEncoder_Li model from {load_path}")
+        if self.threshold is not None:
+            logger.info(f"Loaded threshold: {self.threshold}")
 
 
 def preprocess_li(model: OCSVM_Li | LOF_Li, df: pd.DataFrame, use_scaler: bool = False):
