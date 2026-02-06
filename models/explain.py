@@ -108,6 +108,24 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
     return d_res
 
 
+def get_recall_per_statement_type(df: pd.DataFrame, model_name: str, suffix: str = ""):
+    """Display Recall score per statement type from a dataframe with preds."""
+    statement_types = df.loc[df["label"] == 1, "statement_type"].unique().tolist()
+    logger.info(f"Computing recall per statement type for model: {model_name}{suffix}")
+
+    d_res = {}
+
+    for statement_type in statement_types:
+        mask = df["statement_type"] == statement_type
+        preds = df.loc[mask, "preds"]
+        labels = df.loc[mask, "label"]
+        srecall = f"{recall_score(labels, preds, average='binary')* 100:.2f}%"
+        logger.info(f"Recall for statement type {statement_type}: {srecall}")
+        d_res[f"recall_{statement_type}"] = srecall
+
+    return d_res
+
+
 def plot_pr_curves_plt_from_scores(
     labels, l_scores: list, l_model_names: list, project_paths, suffix: str = ""
 ):
