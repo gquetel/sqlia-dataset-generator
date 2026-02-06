@@ -1,0 +1,270 @@
+"""
+Evaluate saved models on test datasets.
+
+Loads a trained model (with saved threshold) and evaluates it on a test dataset,
+computing ROC-AUC, PR-AUC, and other metrics.
+"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import random
+import torch
+
+# Add models directory to path
+SCRIPT_DIR = Path(__file__).parent.absolute()
+REPO_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(REPO_ROOT / "models"))
+
+from constants import DotDict, ProjectPaths
+from explain import (
+    get_metrics_treshold,
+    plot_pr_curves_plt_from_scores,
+    plot_roc_curves_plt_from_scores,
+)
+from training import (
+    decision_score_ae,
+    get_scores_generic,
+    preprocessing_generic_ae,
+)
+from U_Li import AutoEncoder_Li
+from U_Sentence_BERT import AutoEncoder_SecureBERT
+
+logger = logging.getLogger(__name__)
+
+GENERIC = DotDict(
+    {
+        "RANDOM_SEED": 7,
+        "BASE_PATH": str(REPO_ROOT / "models"),
+        "METRICS_AVERAGE_METHOD": "binary",
+    }
+)
+
+
+def set_global_seed(seed: int = 7):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def init_device() -> torch.device:
+    USE_CUDA = torch.cuda.is_available()
+    device = torch.device("cuda:0" if USE_CUDA else "cpu")
+    if USE_CUDA:
+        logger.info("Using device: %s", torch.cuda.get_device_name())
+    else:
+        logger.info("Using CPU")
+    return device
+
+
+def load_test_data(test_path: str, test_size: int = None) -> pd.DataFrame:
+    """Load test data from CSV file."""
+    logger.info(f"Loading test data from {test_path}")
+
+    chunks = []
+    for chunk in pd.read_csv(test_path, chunksize=500_000, low_memory=False):
+        filtered = chunk[chunk["split"] == "test"]
+        if len(filtered) > 0:
+            chunks.append(filtered)
+
+    df = pd.concat(chunks, ignore_index=True)
+    logger.info(f"Loaded {len(df)} test samples")
+
+    if test_size and len(df) > test_size:
+        df = df.sample(n=test_size, random_state=GENERIC.RANDOM_SEED)
+        logger.info(f"Sampled down to {len(df)} samples")
+
+    return df
+
+
+def load_model(
+    model_type: str,
+    model_path: str,
+    device: torch.device,
+    embeddings_cache_dir: str = None,
+):
+    """Load a model from disk.
+
+    Args:
+        model_type: Type of model ("ae_li" or "ae_sbert").
+        model_path: Path to the saved model.
+        device: Torch device to use.
+        embeddings_cache_dir: Optional cache directory for SBERT embeddings.
+
+    Returns:
+        Loaded model instance.
+    """
+    if model_type == "ae_li":
+        model = AutoEncoder_Li(
+            GENERIC=GENERIC,
+            device=device,
+            use_scaler=True,
+        )
+        model.load_model(model_path)
+    elif model_type == "ae_sbert":
+        project_paths = ProjectPaths(GENERIC.BASE_PATH)
+        if embeddings_cache_dir:
+            Path(embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
+            project_paths._embeddings_override = embeddings_cache_dir
+
+        model = AutoEncoder_SecureBERT(
+            device=device,
+            project_paths=project_paths,
+        )
+        model.load_model(load_path=model_path)
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+
+    if model.threshold is None:
+        raise ValueError(
+            f"Model at {model_path} does not have a saved threshold. "
+            "Please retrain the model to save the threshold."
+        )
+
+    return model
+
+
+def evaluate_model(
+    model,
+    df_test: pd.DataFrame,
+    model_name: str,
+) -> tuple[dict, np.ndarray, np.ndarray]:
+    """Evaluate a model on test data using the same structure as compute_metrics_generic.
+
+    Args:
+        model: Loaded model instance (AutoEncoder_Li or AutoEncoder_SecureBERT).
+        df_test: Test dataset.
+        model_name: Name for logging and results.
+
+    Returns:
+        Tuple of (metrics_dict, labels, scores).
+    """
+    threshold = model.threshold
+    logger.info(f"Using saved threshold: {threshold:.6f}")
+
+    labels, scores = get_scores_generic(
+        df=df_test,
+        batch_size=4096,
+        model=model,
+        preprocess_fn=preprocessing_generic_ae,
+        score_fn=decision_score_ae,
+        use_scaler=False,  # Scaler is handled internally by the model
+    )
+
+    metrics_dict, preds = get_metrics_treshold(
+        labels=labels,
+        scores=scores,
+        threshold=threshold,
+        model_name=model_name,
+    )
+
+    return metrics_dict, labels, scores
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Evaluate saved models on test datasets"
+    )
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        required=True,
+        help="Path to the saved model (.pth file)",
+    )
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        required=True,
+        choices=["ae_li", "ae_sbert"],
+        help="Type of model",
+    )
+    parser.add_argument(
+        "--test-dataset",
+        type=str,
+        required=True,
+        help="Path to test dataset CSV file",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        required=True,
+        help="Directory to save evaluation results",
+    )
+    parser.add_argument(
+        "--test-size",
+        type=int,
+        default=None,
+        help="Maximum number of test samples (default: all)",
+    )
+    parser.add_argument(
+        "--embeddings-cache",
+        type=str,
+        default=None,
+        help="Directory to cache SecureBERT embeddings",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=2,
+        help="Random seed",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    # Initialization code
+    args = parser.parse_args()
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(message)s",
+    )
+    set_global_seed(args.seed)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load test data and model
+    df_test = load_test_data(args.test_dataset, args.test_size)
+    logger.info(f"Test set: {len(df_test)} samples")
+
+    device = init_device()
+    model_name = Path(args.model_path).stem
+    model = load_model(
+        model_type=args.model_type,
+        model_path=args.model_path,
+        device=device,
+        embeddings_cache_dir=args.embeddings_cache,
+    )
+
+    # Evaluate model and save results
+    metrics, labels, scores = evaluate_model(model, df_test, model_name)
+    results_df = pd.DataFrame([metrics])
+    results_path = output_dir / "results.csv"
+    results_df.to_csv(results_path, index=False)
+    logger.info(f"Saved results to {results_path}")
+
+    # We save curves using existing function in explain.py
+    # For compatibility, we create a dummy object with output_path
+    eval_paths = DotDict({"output_path": str(output_dir) + "/"})
+    plot_roc_curves_plt_from_scores(
+        labels=labels,
+        l_scores=[scores],
+        l_model_names=[model_name],
+        project_paths=eval_paths,
+    )
+    plot_pr_curves_plt_from_scores(
+        labels=labels,
+        l_scores=[scores],
+        l_model_names=[model_name],
+        project_paths=eval_paths,
+    )
+
+
+if __name__ == "__main__":
+    main()
