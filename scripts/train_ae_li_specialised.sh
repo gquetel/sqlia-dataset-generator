@@ -11,9 +11,9 @@ cd models/
 DATASET_PATH=$HOME/datasets/100k-training/
 MODELS_DIR=./output/models/
 
-python3 training.py --dataset=$DATASET_PATH/specialised-OurAirports.csv --models ae_li --subfolder=specialised-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCDs                                                                         
-python3 training.py --dataset=$DATASET_PATH/specialised-sakila.csv --models ae_li --subfolder=specialised-sakila-ae_li  --save-model-path=$MODELS_DIR/ae_li_ACDs                                                                            
-python3 training.py --dataset=$DATASET_PATH/specialised-AdventureWorks.csv --models ae_li --subfolder=specialised-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_ABDs                                                                           
-python3 training.py --dataset=$DATASET_PATH/specialised-OHR.csv --models ae_li --subfolder=specialised-OHR-ae_li    --save-model-path=$MODELS_DIR/ae_li_ABCs                                                                                         
+python3 training.py --dataset=$DATASET_PATH/specialised-OurAirports.csv --models ae_li --subfolder=specialised-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_A
+python3 training.py --dataset=$DATASET_PATH/specialised-sakila.csv --models ae_li --subfolder=specialised-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_B
+python3 training.py --dataset=$DATASET_PATH/specialised-AdventureWorks.csv --models ae_li --subfolder=specialised-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_C
+python3 training.py --dataset=$DATASET_PATH/specialised-OHR.csv --models ae_li --subfolder=specialised-OHR-ae_li --save-model-path=$MODELS_DIR/ae_li_D                                                                                         
 # Print job completion timecd 
 echo "Job finished at: $(date)"
