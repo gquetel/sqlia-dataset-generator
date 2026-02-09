@@ -843,6 +843,7 @@ if __name__ == "__main__":
             "split": str,
         },
     )
+    logger.info(f"Training on model: {args.dataset}")
     if args.testing:
         df = df.sample(5000)
 
