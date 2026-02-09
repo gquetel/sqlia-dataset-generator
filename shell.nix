@@ -39,6 +39,54 @@ let
       doCheck = false;
     };
 
+  # Kaleido runtime dependency.
+  logistro = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "logistro";
+    version = "2.0.1";
+    format = "wheel";
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/54/20/6aa79ba3570bddd1bf7e951c6123f806751e58e8cce736bad77b2cf348d7/logistro-2.0.1-py3-none-any.whl";
+      sha256 = "sha256-Bv+hJ7n7SsixlyrmsqnX/eV1mL9ZOc1wj0PsW7otMes=";
+    };
+    doCheck = false;
+  };
+
+  # Kaleido runtime dependency.
+  choreographer = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "choreographer";
+    version = "1.2.1";
+    format = "wheel";
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/b7/9f/d73dfb85d7a5b1a56a99adc50f2074029468168c970ff5daeade4ad819e4/choreographer-1.2.1-py3-none-any.whl";
+      sha256 = "sha256-mvU4Xv+jwgTbwzer96x0/YkIztMmoVZF3DHd51cYx34=";
+    };
+    propagatedBuildInputs = [
+      logistro
+      pkgs.python313Packages.simplejson
+    ];
+    doCheck = false;
+  };
+
+  # This lib is used by plotly to export figures. It is very cursed, IT WILL REQUIRE
+  # GOOGLE CHROME TO EXPORT THE FIGURE!!! I hate it, but I hate manually saving
+  # figures more.
+  kaleido = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "kaleido";
+    version = "1.2.0";
+    format = "wheel";
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/4b/97/f6de8d4af54d6401d6581a686cce3e3e2371a79ba459a449104e026c08bc/kaleido-1.2.0-py3-none-any.whl";
+      sha256 = "sha256-wn7YK1Hfa5I9DmVv6sIhNDoNvNL7m8fmsduX9h6aFRM=";
+    };
+    propagatedBuildInputs = [
+      choreographer
+      logistro
+      pkgs.python313Packages.orjson
+      pkgs.python313Packages.packaging
+    ];
+    doCheck = false;
+  };
+
   pythonEnv = (
     (pkgs.python313.withPackages (
       ps:
@@ -70,6 +118,7 @@ let
       ++ [
         mysql-connector
         pytest
+        kaleido
       ]
     )).override
       (args: {
@@ -85,6 +134,7 @@ pkgs.mkShell rec {
     pkgs.mysql84
     pkgs.metasploit
     sqlmap
+    pkgs.chromium # Required by kaleido for plotly figure export... #cursed
     # Formatting tools
     pkgs.treefmt
     pkgs.black
