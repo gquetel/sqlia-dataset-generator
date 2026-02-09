@@ -30,10 +30,10 @@ DATASETS="\
   --dataset specialised-sakila $DATASET_DIR/specialised-sakila.csv"
 
 # We run lexical and syntactic metrics on entire datasets
-srun python3 ./diversity_metric.py $DATASETS --vocab --parse-trees
+srun python3 ./diversity_metric.py $DATASETS --vocab --parse-trees --output-dir ../output/diversity_metrics_lex_syn
 
 # We run semantic diversity on 5k samples
-srun python3 ./diversity_metric.py $DATASETS --samples 5000 --div-sem
+srun python3 ./diversity_metric.py $DATASETS --samples 5000 --div-sem --output-dir ../output/diversity_metrics_sem
 
 # Print job completion time
 echo "Job finished at: $(date)"
