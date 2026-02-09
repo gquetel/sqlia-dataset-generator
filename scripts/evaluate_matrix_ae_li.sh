@@ -11,7 +11,7 @@ MODELS_DIR=./models/output/models/
 RESULTS_DIR=./models/output/
 
 # Evaluate ae_li_ABC on all test datasets
-python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-AdventureWorks.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_A/ 
+python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-OurAirports.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_A/ 
 python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-sakila.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_B/  
 python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-AdventureWorks.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_C/ 
 python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-OHR.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_D/ 
