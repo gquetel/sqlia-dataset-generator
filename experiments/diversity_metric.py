@@ -24,7 +24,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 CACHE_DIR = SCRIPT_DIR / ".cache" / "diversity_metric"
 
 
-def print_vocab_size(queries, type: str, name: str, output_dir: Path):
+def print_vocab_size(queries, type: str, name: str, output_dir: Path) -> dict:
     v = CountVectorizer()
     X = v.fit_transform(queries)
     vocab_size = len(v.vocabulary_)
@@ -37,6 +37,8 @@ def print_vocab_size(queries, type: str, name: str, output_dir: Path):
     with open(output_dir / f"vocab-{name}-{type}.txt", "w") as f:
         for word, idx in sorted(v.vocabulary_.items(), key=lambda x: x[1]):
             f.write(f"{idx}: {word}\n")
+
+    return {"vocab_size": vocab_size, "ttr": float(ttr)}
 
 
 def print_unique_pts(queries: list, type: str, name: str, output_dir: Path) -> dict:
@@ -85,6 +87,8 @@ def print_unique_pts(queries: list, type: str, name: str, output_dir: Path) -> d
         for e in s_keys:
             f.write(f"{e}: {pts[e]}\n")
     print(f"Number of unique parse trees for {name} {type} queries: {len(pts)}")
+
+    return {"unique_parse_trees": len(pts), "parse_errors": cnt_prserr}
 
 
 def compute_and_save_embeddings(df: pd.DataFrame, output_dir: Path):
@@ -210,7 +214,7 @@ def print_dataset_tsne(
     print(f"Visualization saved to {output_dir / f'tsne-{name}-{type}.png'}")
 
 
-def print_div_sem(df: pd.DataFrame, type: str, name: str, output_dir: Path):
+def print_div_sem(df: pd.DataFrame, type: str, name: str, output_dir: Path) -> dict:
     """Diversity metric from: https://aclanthology.org/2024.findings-naacl.228.pdf
 
     Args:
@@ -227,6 +231,8 @@ def print_div_sem(df: pd.DataFrame, type: str, name: str, output_dir: Path):
     print(
         f"Semantic Diversity of {type} for dataset {name} using cosine distance: {div_sem}"
     )
+
+    return {"div_sem": float(div_sem)}
 
 
 def load_wafamole_samples():
@@ -307,7 +313,7 @@ def process_dataset(
     vocab: bool = False,
     parse_trees: bool = False,
     div_sem: bool = False,
-):
+) -> list[dict]:
     df_0 = df[df["label"] == 0]
     df_1 = df[df["label"] == 1]
 
@@ -318,16 +324,21 @@ def process_dataset(
     queries_0 = df_0["full_query"].tolist()
     queries_1 = df_1["full_query"].tolist()
 
-    if vocab:
-        print_vocab_size(queries_0, "normal", name, output_dir)
-        print_vocab_size(queries_1, "attack", name, output_dir)
-    if parse_trees:
-        print_unique_pts(queries_0, "normal", name, output_dir)
-        print_unique_pts(queries_1, "attack", name, output_dir)
+    rows = []
+    for label, queries, sub_df in [
+        ("normal", queries_0, df_0),
+        ("attack", queries_1, df_1),
+    ]:
+        row = {"dataset": name, "type": label, "n_samples": len(queries)}
+        if vocab:
+            row.update(print_vocab_size(queries, label, name, output_dir))
+        if parse_trees:
+            row.update(print_unique_pts(queries, label, name, output_dir))
+        if div_sem:
+            row.update(print_div_sem(sub_df, label, name, output_dir))
+        rows.append(row)
 
-    if div_sem:
-        print_div_sem(df_0, "normal", name, output_dir)
-        print_div_sem(df_1, "attack", name, output_dir)
+    return rows
 
 
 def main():
@@ -413,8 +424,9 @@ def main():
             "No datasets provided. Use --dataset, --with-wafamole, or --with-kaggle."
         )
 
+    all_rows = []
     for name, df in datasets:
-        process_dataset(
+        rows = process_dataset(
             df=df,
             name=name,
             output_dir=output_dir,
@@ -423,6 +435,14 @@ def main():
             parse_trees=args.parse_trees,
             div_sem=args.div_sem,
         )
+        all_rows.extend(rows)
+
+    if all_rows:
+        results_df = pd.DataFrame(all_rows)
+        csv_path = output_dir / "diversity_metrics.csv"
+        results_df.to_csv(csv_path, index=False)
+        print(f"\nResults saved to {csv_path}")
+        print(results_df.to_string(index=False))
 
 
 if __name__ == "__main__":
