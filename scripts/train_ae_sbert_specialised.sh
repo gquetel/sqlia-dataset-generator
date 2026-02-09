@@ -18,12 +18,13 @@ source venv-3.12.3/bin/activate
 cd models/
 
 DATASET_PATH=$HOME/datasets/100k-training/
+MODELS_DIR=./output/models/
 
 # Train ae_sbert on specialised datasets
-srun python3 ./training.py --dataset=$DATASET_PATH/specialised-OurAirports.csv --models ae_sbert --subfolder=specialised-OurAirports-ae_sbert
-srun python3 ./training.py --dataset=$DATASET_PATH/specialised-sakila.csv --models ae_sbert --subfolder=specialised-sakila-ae_sbert
-srun python3 ./training.py --dataset=$DATASET_PATH/specialised-AdventureWorks.csv --models ae_sbert --subfolder=specialised-AdventureWorks-ae_sbert
-srun python3 ./training.py --dataset=$DATASET_PATH/specialised-OHR.csv --models ae_sbert --subfolder=specialised-OHR-ae_sbert
+srun python3 ./training.py --dataset=$DATASET_PATH/specialised-OurAirports.csv --models ae_sbert --subfolder=specialised-OurAirports-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_A
+srun python3 ./training.py --dataset=$DATASET_PATH/specialised-sakila.csv --models ae_sbert --subfolder=specialised-sakila-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_B
+srun python3 ./training.py --dataset=$DATASET_PATH/specialised-AdventureWorks.csv --models ae_sbert --subfolder=specialised-AdventureWorks-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_C
+srun python3 ./training.py --dataset=$DATASET_PATH/specialised-OHR.csv --models ae_sbert --subfolder=specialised-OHR-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_D
 
 # Print job completion time
 echo "Job finished at: $(date)"
