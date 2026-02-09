@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 import logging
 import os
@@ -19,8 +20,11 @@ from tqdm import tqdm
 from sklearn.manifold import TSNE
 from sklearn.feature_extraction.text import CountVectorizer
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+CACHE_DIR = SCRIPT_DIR / ".cache" / "diversity_metric"
 
-def print_vocab_size(queries, type: str, name: str):
+
+def print_vocab_size(queries, type: str, name: str, output_dir: Path):
     v = CountVectorizer()
     X = v.fit_transform(queries)
     vocab_size = len(v.vocabulary_)
@@ -30,12 +34,12 @@ def print_vocab_size(queries, type: str, name: str):
     ttr = vocab_size / token_count if token_count else 0
     print(f"Type-Token Ratio (TTR) for {name} {type} queries: {ttr:.4f}")
 
-    with open(f"vocab-{name}-{type}.txt", "w") as f:
+    with open(output_dir / f"vocab-{name}-{type}.txt", "w") as f:
         for word, idx in sorted(v.vocabulary_.items(), key=lambda x: x[1]):
             f.write(f"{idx}: {word}\n")
 
 
-def print_unique_pts(queries: list, type: str, name: str) -> dict:
+def print_unique_pts(queries: list, type: str, name: str, output_dir: Path) -> dict:
     pts = {}
     cnt_prserr = 0
 
@@ -60,7 +64,6 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
                 for i in glot_tree.find_all(sqlglot.exp.HexString):
                     i.set("this", "0")
 
-                # print(repr(glot_tree))
                 canon_tree = glot_tree.sql(comments=False)
                 if canon_tree not in pts:
                     pts[canon_tree] = 1
@@ -78,24 +81,25 @@ def print_unique_pts(queries: list, type: str, name: str) -> dict:
     if cnt_prserr > 0:
         print(f"There were {cnt_prserr} parsing errors during processing.")
     s_keys = sorted(pts)
-    with open(f"parse-trees-{name}-{type}.txt", "w") as f:
+    with open(output_dir / f"parse-trees-{name}-{type}.txt", "w") as f:
         for e in s_keys:
             f.write(f"{e}: {pts[e]}\n")
     print(f"Number of unique parse trees for {name} {type} queries: {len(pts)}")
 
 
-def compute_and_save_embeddings(df: pd.DataFrame):
+def compute_and_save_embeddings(df: pd.DataFrame, output_dir: Path):
     """Compute embeddings of queries (column 'full_query') and cache them.
 
     Args:
-        df (pd.DataFrame): _description_
+        df (pd.DataFrame): DataFrame with a 'full_query' column.
+        output_dir (Path): Directory for caching embedding files.
     """
     # Use caching mechanism.
     str_hash_df = hashlib.sha256(
         pd.util.hash_pandas_object(df, index=True).values
     ).hexdigest()
 
-    fp_cache = "".join(["../output/", "embeddings-", str_hash_df, ".pkl"])
+    fp_cache = output_dir / f"embeddings-{str_hash_df}.pkl"
     queries = df["full_query"].to_list()
 
     if os.path.isfile(fp_cache):
@@ -141,13 +145,17 @@ def compute_and_save_embeddings(df: pd.DataFrame):
 
 
 def print_dataset_tsne(
-    df: pd.DataFrame, type: str, name: str, n_sampling: None | int = None
+    df: pd.DataFrame,
+    type: str,
+    name: str,
+    output_dir: Path,
+    n_sampling: None | int = None,
 ):
     if n_sampling:
         df = df.sample(n_sampling, random_state=42)
 
     queries = df["full_query"].to_list()
-    embeddings = compute_and_save_embeddings(df)
+    embeddings = compute_and_save_embeddings(df, output_dir)
 
     # https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html
     # Let's use default params as much as possible.
@@ -173,7 +181,7 @@ def print_dataset_tsne(
 
     print(f"t-SNE results saved to tsne-{name}-{type}.pkl")
 
-    with open(f"../output/tsne-{name}-{type}.pkl", "wb") as f:
+    with open(output_dir / f"tsne-{name}-{type}.pkl", "wb") as f:
         pickle.dump(results, f)
 
     # Now plot individual results.
@@ -196,43 +204,63 @@ def print_dataset_tsne(
     plt.legend([scatter], [legend_label])
 
     plt.tight_layout()
-    plt.savefig(f"../output/tsne-{name}-{type}.png", dpi=300, bbox_inches="tight")
+    plt.savefig(output_dir / f"tsne-{name}-{type}.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"Visualization saved to ../output/tsne-{name}-{type}.png")
+    print(f"Visualization saved to {output_dir / f'tsne-{name}-{type}.png'}")
 
 
-def print_div_sem(df: pd.DataFrame, type: str, name: str):
+def print_div_sem(df: pd.DataFrame, type: str, name: str, output_dir: Path):
     """Diversity metric from: https://aclanthology.org/2024.findings-naacl.228.pdf
 
     Args:
-        df (pd.DataFrame): _description_
-        type (str): _description_
-        name (str): _description_
+        df (pd.DataFrame): DataFrame with a 'full_query' column.
+        type (str): Query type (e.g. "normal" or "attack").
+        name (str): Dataset name.
+        output_dir (Path): Directory for caching embedding files.
     """
 
-    _embeddings = compute_and_save_embeddings(df=df)
+    _embeddings = compute_and_save_embeddings(df=df, output_dir=output_dir)
     pairwise_distances = pdist(_embeddings, metric="cosine")
     div_sem = np.mean(pairwise_distances)
 
     print(
-        f"Semantic Diversity of {type} for dataset {name} using cosing distance: {div_sem}"
+        f"Semantic Diversity of {type} for dataset {name} using cosine distance: {div_sem}"
     )
 
 
-def load_wafamole_samples(fp_sane: str, fp_attacks: str):
-    # This is too long to parse each time, let's also save them as pickles.
-    fp_patks = "../output/parsed-wafamole-attacks.pkl"
-    fp_psane = "../output/parsed-wafamole-sane.pkl"
+def load_wafamole_samples():
+    """Load WAFAMOLE dataset from cache directory.
 
-    if os.path.isfile(fp_patks):
+    Expects .cache/diversity_metric/wafamole/attacks.sql and sane.sql.
+    Returns None with download instructions if files are missing.
+    """
+    wafamole_dir = CACHE_DIR / "wafamole"
+    fp_attacks = wafamole_dir / "attacks.sql"
+    fp_sane = wafamole_dir / "sane.sql"
+
+    if not fp_attacks.is_file() or not fp_sane.is_file():
+        print("WAFAMOLE dataset not found in cache. To use WAFAMOLE, run:")
+        print(
+            f"  git clone https://github.com/zangobot/wafamole_dataset {wafamole_dir}"
+        )
+        print(f"  cd {wafamole_dir}")
+        print("  cat attacks.sql.* > attacks.sql")
+        print("  cat sane.sql.* > sane.sql")
+        return None
+
+    # Parsing the SQL files is slow, so cache the parsed results as pickles.
+    fp_patks = CACHE_DIR / "parsed-wafamole-attacks.pkl"
+    fp_psane = CACHE_DIR / "parsed-wafamole-sane.pkl"
+
+    if fp_patks.is_file():
         attacks = pd.read_pickle(fp_patks)
     else:
         attack = open(fp_attacks, "r").read()
         attacks = sqlparse.split(attack)
         pd.to_pickle(attacks, fp_patks)
 
-    if os.path.isfile(fp_psane):
+    if fp_psane.is_file():
         sanes = pd.read_pickle(fp_psane)
     else:
         sane = open(fp_sane, "r").read()
@@ -248,117 +276,153 @@ def load_wafamole_samples(fp_sane: str, fp_attacks: str):
     return pd.concat([df_sane, df_attack])
 
 
+def load_kaggle_dataset():
+    """Load Kaggle SQL injection dataset from cache directory.
+
+    Expects .cache/diversity_metric/kaggle/Modified_SQL_Dataset.csv.
+    Returns None with download instructions if file is missing.
+    """
+    kaggle_dir = CACHE_DIR / "kaggle"
+    kaggle_path = kaggle_dir / "Modified_SQL_Dataset.csv"
+
+    if not kaggle_path.is_file():
+        print("Kaggle dataset not found in cache. To use Kaggle, run:")
+        print("  pip install kaggle")
+        print(
+            f"  kaggle datasets download -d sajid576/sql-injection-dataset -p {kaggle_dir}/"
+        )
+        print(f"  unzip {kaggle_dir}/sql-injection-dataset.zip -d {kaggle_dir}/")
+        return None
+
+    df = pd.read_csv(kaggle_path)
+    df = df.rename(columns={"Query": "full_query", "Label": "label"})
+    return df
+
+
 def process_dataset(
     df: pd.DataFrame,
     name: str,
-    query_column: str = "full_query",
-    label_column: str = "label",
-    samples_0: int = None,
-    samples_1: int = None,
+    output_dir: Path,
+    samples: int = None,
     vocab: bool = False,
     parse_trees: bool = False,
     div_sem: bool = False,
 ):
-    df_0 = df[df[label_column] == 0]
-    df_1 = df[df[label_column] == 1]
+    df_0 = df[df["label"] == 0]
+    df_1 = df[df["label"] == 1]
 
-    if samples_0:
-        df_0 = df_0.sample(n=samples_0, random_state=42)
-    if samples_1:
-        df_1 = df_1.sample(n=samples_1, random_state=42)
+    if samples:
+        df_0 = df_0.sample(n=samples, random_state=42)
+        df_1 = df_1.sample(n=samples, random_state=42)
 
-    queries_0 = df_0[query_column].tolist()
-    queries_1 = df_1[query_column].tolist()
+    queries_0 = df_0["full_query"].tolist()
+    queries_1 = df_1["full_query"].tolist()
 
     if vocab:
-        print_vocab_size(queries_0, "normal", name)
-        print_vocab_size(queries_1, "attack", name)
+        print_vocab_size(queries_0, "normal", name, output_dir)
+        print_vocab_size(queries_1, "attack", name, output_dir)
     if parse_trees:
-        print_unique_pts(queries_0, "normal", name)
-        print_unique_pts(queries_1, "attack", name)
-
-    df_0 = df_0.rename(columns={query_column: "full_query"})
-    df_1 = df_1.rename(columns={query_column: "full_query"})
+        print_unique_pts(queries_0, "normal", name, output_dir)
+        print_unique_pts(queries_1, "attack", name, output_dir)
 
     if div_sem:
-        print_div_sem(df_0, "normal", name)
-        print_div_sem(df_1, "attack", name)
+        print_div_sem(df_0, "normal", name, output_dir)
+        print_div_sem(df_1, "attack", name, output_dir)
 
 
 def main():
-    samples_0 = 5000
-    samples_1 = 5000
-    Path("../output").mkdir(exist_ok=True, parents=True)
-
-    # From: https://github.com/zangobot/wafamole_dataset
-    # cat attacks.sql.* > attacks.sqls
-    # cat sane.sql.* > sane.sql
-    wafamole_sane_path = "../../original_wafamole_dataset/sane.sql"
-    wafamole_attacks_path = "../../original_wafamole_dataset/attacks.sql"
-
-    # From: https://www.kaggle.com/datasets/sajid576/sql-injection-dataset
-    kaggle_path = "../Modified_SQL_Dataset.csv"
-
-    # From:
-    anubis_path = "/home/gquetel/experiences-results/dataset-generation/unsupervized-v7/dataset.csv"
-
-    # Diversity metrics to measure:
-    compute_vocab = True
-    compute_parse_trees = True
-    compute_div_sem = True
-
-    df_anubis = pd.read_csv(
-        anubis_path,
-        # dtype is specified to prevent a DtypeWarning
-        dtype={
-            "full_query": str,
-            "label": int,
-            "statement_type": str,
-            "query_template_id": str,
-            "attack_payload": str,
-            "attack_id": str,
-            "attack_technique": str,
-            "attack_desc": str,
-            "split": str,
-            "attack_status": str,
-            "attack_stage": str,
-        },
+    parser = argparse.ArgumentParser(
+        description="Compute diversity metrics on SQL datasets"
     )
-    process_dataset(
-        df=df_anubis,
-        name="ANUBIS",
-        # samples_0=samples_0,
-        # samples_1=samples_1,
-        vocab=compute_vocab,
-        parse_trees=compute_parse_trees,
-        # div_sem=compute_div_sem,
+    parser.add_argument(
+        "--dataset",
+        nargs=2,
+        action="append",
+        metavar=("NAME", "PATH"),
+        help="Dataset name and path to its CSV file (repeatable)",
     )
+    parser.add_argument(
+        "--with-wafamole",
+        action="store_true",
+        help="Include WAFAMOLE baseline comparison",
+    )
+    parser.add_argument(
+        "--with-kaggle",
+        action="store_true",
+        help="Include Kaggle baseline comparison",
+    )
+    parser.add_argument(
+        "--vocab", action="store_true", help="Compute vocabulary metrics"
+    )
+    parser.add_argument(
+        "--parse-trees", action="store_true", help="Compute unique parse trees"
+    )
+    parser.add_argument(
+        "--div-sem", action="store_true", help="Compute semantic diversity"
+    )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=None,
+        help="Subsample normal and attack queries to N each",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default="../output", help="Output directory"
+    )
+    args = parser.parse_args()
 
-    df_kaggle = pd.read_csv(kaggle_path)
-    process_dataset(
-        df_kaggle,
-        name="Kaggle",
-        query_column="Query",
-        label_column="Label",
-        # samples_0=samples_0,
-        # samples_1=samples_1,
-        vocab=compute_vocab,
-        parse_trees=compute_parse_trees,
-        # div_sem=compute_div_sem,
-    )
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(exist_ok=True, parents=True)
 
-    df_wafamole = load_wafamole_samples(
-        fp_sane=wafamole_sane_path, fp_attacks=wafamole_attacks_path
-    )
-    process_dataset(
-        df=df_wafamole,
-        name="WAFAMOLE",
-        # samples_0=samples_0,
-        # samples_1=samples_1,
-        vocab=compute_vocab,
-        parse_trees=compute_parse_trees,
-        # div_sem=compute_div_sem,
-    )
+    datasets = []  # list of (name, df)
+
+    # We expect provided datasets using the argument to be of our format.
+    if args.dataset:
+        for name, path in args.dataset:
+            df = pd.read_csv(
+                path,
+                dtype={
+                    "full_query": str,
+                    "label": int,
+                    "statement_type": str,
+                    "query_template_id": str,
+                    "attack_payload": str,
+                    "attack_id": str,
+                    "attack_technique": str,
+                    "attack_desc": str,
+                    "split": str,
+                    "attack_status": str,
+                    "attack_stage": str,
+                },
+            )
+            datasets.append((name, df))
+
+    # Load WAFAMOLE and Kaggle if requested
+    if args.with_wafamole:
+        df = load_wafamole_samples()
+        if df is not None:
+            datasets.append(("WAFAMOLE", df))
+
+    if args.with_kaggle:
+        df = load_kaggle_dataset()
+        if df is not None:
+            datasets.append(("Kaggle", df))
+
+    if not datasets:
+        parser.error(
+            "No datasets provided. Use --dataset, --with-wafamole, or --with-kaggle."
+        )
+
+    for name, df in datasets:
+        process_dataset(
+            df=df,
+            name=name,
+            output_dir=output_dir,
+            samples=args.samples,
+            vocab=args.vocab,
+            parse_trees=args.parse_trees,
+            div_sem=args.div_sem,
+        )
 
 
 if __name__ == "__main__":
