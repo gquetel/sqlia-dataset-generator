@@ -2,6 +2,10 @@
 
 Downloaded from: https://github.com/vishal180618/OLTP-AdventureWorks2019-MySQL/tree/3167d046f75cf2eb8eb0bd9768dc43ca9933378f.
 The init_db.sql file was created by removing INSERT statements from the AdventureWorks.sql
+We performed the following modifications on the schema:
+
+- Replaced "." in table names by underscores so MySQL does not interpret this as database.table.
+- Added a default value for rowguid
 
 ## Templates
 
