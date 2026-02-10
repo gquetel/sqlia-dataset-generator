@@ -1,15 +1,15 @@
-SET('Deleted Scenes', 'Behind the Scenes')
-SET('Deleted Scenes', 'Trailers')
-SET('Commentaries', 'Behind the Scenes')
-SET('Deleted Scenes')
-SET('Trailers')
-SET('Commentaries', 'Deleted Scenes')
-SET('Deleted Scenes', 'Trailers', 'Behind the Scenes')
-SET('Commentaries', 'Trailers', 'Behind the Scenes')
-SET('Commentaries', 'Trailers')
-SET('Trailers', 'Behind the Scenes')
-SET('Commentaries', 'Deleted Scenes', 'Behind the Scenes')
-SET('Commentaries', 'Deleted Scenes', 'Trailers')
-SET('Commentaries', 'Deleted Scenes', 'Trailers', 'Behind the Scenes')
-SET('Behind the Scenes')
-SET('Commentaries')
+Deleted Scenes,Behind the Scenes
+Deleted Scenes,Trailers
+Commentaries, Behind the Scenes
+Deleted Scenes
+Trailers
+Commentaries, Deleted Scenes
+Deleted Scenes, Trailers, Behind the Scenes
+Commentaries, Trailers, Behind the Scenes
+Commentaries, Trailers
+Trailers, Behind the Scenes
+Commentaries, Deleted Scenes, Behind the Scenes
+Commentaries, Deleted Scenes, Trailers
+Commentaries, Deleted Scenes, Trailers, Behind the Scenes
+Behind the Scenes
+Commentaries
