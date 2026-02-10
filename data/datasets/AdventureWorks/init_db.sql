@@ -557,7 +557,7 @@ CREATE TABLE `Production_Document` (
   `Status` tinyint(3) unsigned NOT NULL COMMENT '1 = Pending approval, 2 = Approved, 3 = Obsolete',
   `DocumentSummary` longtext CHARACTER SET utf8mb4 COMMENT 'Document abstract.',
   `Document` longblob COMMENT 'Complete document.',
-  `rowguid` varchar(64) NOT NULL COMMENT 'ROWGUIDCOL number uniquely identifying the record. Required for FileStream.',
+  `rowguid` varchar(64) NOT NULL DEFAULT (UUID()) COMMENT 'ROWGUIDCOL number uniquely identifying the record. Required for FileStream.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`DocumentNode`),
   UNIQUE KEY `rowguid` (`rowguid`),
