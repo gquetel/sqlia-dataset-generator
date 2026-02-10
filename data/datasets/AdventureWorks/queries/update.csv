@@ -1,21 +1,21 @@
 template,ID,description
-"UPDATE HumanResources.Employee SET JobTitle = ""{HumanResources_Employee_JobTitle}"" WHERE BusinessEntityID = {HumanResources_Employee_BusinessEntityID}",AW-U1,Promote or reassign an employee to a new job title.
-"UPDATE Production.Product SET ListPrice = {Production_Product_ListPrice} WHERE ProductID = {Production_Product_ProductID}",AW-U2,Update a product's list price.
-"UPDATE Purchasing.Vendor SET CreditRating = {Purchasing_Vendor_CreditRating} WHERE BusinessEntityID = {Purchasing_Vendor_BusinessEntityID}",AW-U3,Change a vendor's credit rating.
-"UPDATE HumanResources.Employee SET VacationHours = {HumanResources_Employee_VacationHours} WHERE BusinessEntityID = {HumanResources_Employee_BusinessEntityID}",AW-U4,Adjust an employee's vacation hours.
-"UPDATE Sales.Store SET SalesPersonID = {Sales_Store_SalesPersonID} WHERE BusinessEntityID = {Sales_Store_BusinessEntityID}",AW-U5,Reassign a store's sales representative.
-"UPDATE Person.EmailAddress SET EmailAddress = ""{Person_EmailAddress_EmailAddress}"" WHERE BusinessEntityID = {Person_EmailAddress_BusinessEntityID}",AW-U6,Update a person's email address.
-"UPDATE Sales.SalesOrderHeader SET Status = {Sales_SalesOrderHeader_Status} WHERE SalesOrderID = {Sales_SalesOrderHeader_SalesOrderID}",AW-U7,Update a sales order status.
-"UPDATE Purchasing.PurchaseOrderHeader SET Status = {Purchasing_PurchaseOrderHeader_Status} WHERE PurchaseOrderID = {Purchasing_PurchaseOrderHeader_PurchaseOrderID}",AW-U8,Update a purchase order status.
-"UPDATE Production.Product SET ReorderPoint = {Production_Product_ReorderPoint} WHERE ProductID = {Production_Product_ProductID}",AW-U9,Adjust a product's reorder point threshold.
-"UPDATE Production.Product SET StandardCost = {Production_Product_StandardCost} WHERE ProductID = {Production_Product_ProductID}",AW-U10,Update a product's standard cost.
-"UPDATE Production.Product SET SellEndDate = ""{Production_Product_SellEndDate}"" WHERE ProductID = {Production_Product_ProductID}",AW-U11,Discontinue a product by setting its sell end date.
-"UPDATE Production.Product SET ProductSubcategoryID = {Production_Product_ProductSubcategoryID} WHERE ProductID = {Production_Product_ProductID}",AW-U12,Reassign a product to a different subcategory.
-"UPDATE Production.Product SET SafetyStockLevel = {Production_Product_SafetyStockLevel} WHERE ProductID = {Production_Product_ProductID}",AW-U13,Update a product's safety stock level.
-"UPDATE Production.ProductInventory SET Quantity = {Production_ProductInventory_Quantity} WHERE ProductID = {Production_ProductInventory_ProductID} AND LocationID = {Production_ProductInventory_LocationID}",AW-U14,Update inventory quantity for a product at a specific location.
-"UPDATE Production.ProductReview SET Rating = {Production_ProductReview_Rating} WHERE ProductReviewID = {Production_ProductReview_ProductReviewID}",AW-U15,Correct a product review rating.
-"UPDATE Person.Person SET LastName = ""{Person_Person_LastName}"" WHERE BusinessEntityID = {Person_Person_BusinessEntityID}",AW-U16,Update a person's last name.
-"UPDATE Person.Person SET EmailPromotion = {Person_Person_EmailPromotion} WHERE BusinessEntityID = {Person_Person_BusinessEntityID}",AW-U17,Update a person's email promotion preference.
-"UPDATE Person.PersonPhone SET PhoneNumber = ""{Person_PersonPhone_PhoneNumber}"" WHERE BusinessEntityID = {Person_PersonPhone_BusinessEntityID} AND PhoneNumberTypeID = {Person_PersonPhone_PhoneNumberTypeID}",AW-U18,Update a person's phone number.
-"UPDATE Person.Address SET AddressLine1 = ""{Person_Address_AddressLine1}"", City = ""{Person_Address_City}"", PostalCode = ""{Person_Address_PostalCode}"" WHERE AddressID = {Person_Address_AddressID}",AW-U19,Update a person's full address.
-"UPDATE Person.Password SET PasswordHash = ""{Person_Password_PasswordHash}"", PasswordSalt = ""{Person_Password_PasswordSalt}"" WHERE BusinessEntityID = {Person_Password_BusinessEntityID}",AW-U20,Reset a person's password.
+"UPDATE HumanResources_Employee SET JobTitle = ""{HumanResources_Employee_JobTitle}"" WHERE BusinessEntityID = {HumanResources_Employee_BusinessEntityID}",AW-U1,Promote or reassign an employee to a new job title.
+"UPDATE Production_Product SET ListPrice = {Production_Product_ListPrice} WHERE ProductID = {Production_Product_ProductID}",AW-U2,Update a product's list price.
+"UPDATE Purchasing_Vendor SET CreditRating = {Purchasing_Vendor_CreditRating} WHERE BusinessEntityID = {Purchasing_Vendor_BusinessEntityID}",AW-U3,Change a vendor's credit rating.
+"UPDATE HumanResources_Employee SET VacationHours = {HumanResources_Employee_VacationHours} WHERE BusinessEntityID = {HumanResources_Employee_BusinessEntityID}",AW-U4,Adjust an employee's vacation hours.
+"UPDATE Sales_Store SET SalesPersonID = {Sales_Store_SalesPersonID} WHERE BusinessEntityID = {Sales_Store_BusinessEntityID}",AW-U5,Reassign a store's sales representative.
+"UPDATE Person_EmailAddress SET EmailAddress = ""{Person_EmailAddress_EmailAddress}"" WHERE BusinessEntityID = {Person_EmailAddress_BusinessEntityID}",AW-U6,Update a person's email address.
+"UPDATE Sales_SalesOrderHeader SET Status = {Sales_SalesOrderHeader_Status} WHERE SalesOrderID = {Sales_SalesOrderHeader_SalesOrderID}",AW-U7,Update a sales order status.
+"UPDATE Purchasing_PurchaseOrderHeader SET Status = {Purchasing_PurchaseOrderHeader_Status} WHERE PurchaseOrderID = {Purchasing_PurchaseOrderHeader_PurchaseOrderID}",AW-U8,Update a purchase order status.
+"UPDATE Production_Product SET ReorderPoint = {Production_Product_ReorderPoint} WHERE ProductID = {Production_Product_ProductID}",AW-U9,Adjust a product's reorder point threshold.
+"UPDATE Production_Product SET StandardCost = {Production_Product_StandardCost} WHERE ProductID = {Production_Product_ProductID}",AW-U10,Update a product's standard cost.
+"UPDATE Production_Product SET SellEndDate = ""{Production_Product_SellEndDate}"" WHERE ProductID = {Production_Product_ProductID}",AW-U11,Discontinue a product by setting its sell end date.
+"UPDATE Production_Product SET ProductSubcategoryID = {Production_Product_ProductSubcategoryID} WHERE ProductID = {Production_Product_ProductID}",AW-U12,Reassign a product to a different subcategory.
+"UPDATE Production_Product SET SafetyStockLevel = {Production_Product_SafetyStockLevel} WHERE ProductID = {Production_Product_ProductID}",AW-U13,Update a product's safety stock level.
+"UPDATE Production_ProductInventory SET Quantity = {Production_ProductInventory_Quantity} WHERE ProductID = {Production_ProductInventory_ProductID} AND LocationID = {Production_ProductInventory_LocationID}",AW-U14,Update inventory quantity for a product at a specific location.
+"UPDATE Production_ProductReview SET Rating = {Production_ProductReview_Rating} WHERE ProductReviewID = {Production_ProductReview_ProductReviewID}",AW-U15,Correct a product review rating.
+"UPDATE Person_Person SET LastName = ""{Person_Person_LastName}"" WHERE BusinessEntityID = {Person_Person_BusinessEntityID}",AW-U16,Update a person's last name.
+"UPDATE Person_Person SET EmailPromotion = {Person_Person_EmailPromotion} WHERE BusinessEntityID = {Person_Person_BusinessEntityID}",AW-U17,Update a person's email promotion preference.
+"UPDATE Person_PersonPhone SET PhoneNumber = ""{Person_PersonPhone_PhoneNumber}"" WHERE BusinessEntityID = {Person_PersonPhone_BusinessEntityID} AND PhoneNumberTypeID = {Person_PersonPhone_PhoneNumberTypeID}",AW-U18,Update a person's phone number.
+"UPDATE Person_Address SET AddressLine1 = ""{Person_Address_AddressLine1}"", City = ""{Person_Address_City}"", PostalCode = ""{Person_Address_PostalCode}"" WHERE AddressID = {Person_Address_AddressID}",AW-U19,Update a person's full address.
+"UPDATE Person_Password SET PasswordHash = ""{Person_Password_PasswordHash}"", PasswordSalt = ""{Person_Password_PasswordSalt}"" WHERE BusinessEntityID = {Person_Password_BusinessEntityID}",AW-U20,Reset a person's password.

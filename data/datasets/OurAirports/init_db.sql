@@ -32,7 +32,7 @@ CREATE TABLE airport (
 );
 
 CREATE TABLE airport_frequencies (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
     airport_ref INTEGER,
     airport_ident VARCHAR(10),
     type VARCHAR(10),
@@ -68,7 +68,7 @@ CREATE TABLE runways (
 );
 
 CREATE TABLE navaids (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
     filename VARCHAR(255),
     ident VARCHAR(3),
     name VARCHAR(255),
@@ -92,7 +92,7 @@ CREATE TABLE navaids (
 );
 
 CREATE TABLE countries (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
     code VARCHAR(2) UNIQUE NOT NULL,
     name VARCHAR(100),
     continent VARCHAR(2),
@@ -101,7 +101,7 @@ CREATE TABLE countries (
 );
 
 CREATE TABLE regions (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
     code VARCHAR(10) UNIQUE NOT NULL,
     local_code VARCHAR(10),
     name VARCHAR(100),

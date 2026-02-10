@@ -1,11 +1,11 @@
 template,ID,description
-"DELETE FROM Sales.SpecialOffer WHERE EndDate < ""{Sales_SpecialOffer_EndDate}""",AW-D1,Remove expired special offers.
-"DELETE FROM Sales.ShoppingCartItem WHERE DateCreated < ""{Sales_ShoppingCartItem_DateCreated}""",AW-D2,Purge abandoned shopping cart items older than a given date.
-"DELETE FROM Production.ProductReview WHERE ProductReviewID = {Production_ProductReview_ProductReviewID}",AW-D3,Delete a specific product review.
-"DELETE FROM HumanResources.JobCandidate WHERE JobCandidateID = {HumanResources_JobCandidate_JobCandidateID}",AW-D4,Remove a rejected job candidate.
-"DELETE FROM dbo.DatabaseLog WHERE PostTime < ""{dbo_DatabaseLog_PostTime}""",AW-D5,Purge old database log entries before a given date.
-"DELETE FROM Production.ProductInventory WHERE ProductID = {Production_ProductInventory_ProductID}",AW-D6,Remove all inventory records for a discontinued product.
-"DELETE FROM Sales.PersonCreditCard WHERE BusinessEntityID = {Sales_PersonCreditCard_BusinessEntityID} AND CreditCardID = {Sales_PersonCreditCard_CreditCardID}",AW-D7,Remove a credit card association from a customer.
-"DELETE FROM Purchasing.ProductVendor WHERE BusinessEntityID = {Purchasing_ProductVendor_BusinessEntityID} AND ProductID = {Purchasing_ProductVendor_ProductID}",AW-D8,Remove a vendor-product relationship.
-"DELETE FROM Sales.Store WHERE BusinessEntityID = {Sales_Store_BusinessEntityID}",AW-D9,Delete a store that has closed.
-"DELETE FROM Sales.Customer WHERE StoreID = {Sales_Customer_StoreID}",AW-D10,Delete customer records tied to a closed store.
+"DELETE FROM Sales_SpecialOffer WHERE EndDate < ""{Sales_SpecialOffer_EndDate}""",AW-D1,Remove expired special offers.
+"DELETE FROM Sales_ShoppingCartItem WHERE DateCreated < ""{Sales_ShoppingCartItem_DateCreated}""",AW-D2,Purge abandoned shopping cart items older than a given date.
+"DELETE FROM Production_ProductReview WHERE ProductReviewID = {Production_ProductReview_ProductReviewID}",AW-D3,Delete a specific product review.
+"DELETE FROM HumanResources_JobCandidate WHERE JobCandidateID = {HumanResources_JobCandidate_JobCandidateID}",AW-D4,Remove a rejected job candidate.
+"DELETE FROM dbo_DatabaseLog WHERE PostTime < ""{dbo_DatabaseLog_PostTime}""",AW-D5,Purge old database log entries before a given date.
+"DELETE FROM Production_ProductInventory WHERE ProductID = {Production_ProductInventory_ProductID}",AW-D6,Remove all inventory records for a discontinued product.
+"DELETE FROM Sales_PersonCreditCard WHERE BusinessEntityID = {Sales_PersonCreditCard_BusinessEntityID} AND CreditCardID = {Sales_PersonCreditCard_CreditCardID}",AW-D7,Remove a credit card association from a customer.
+"DELETE FROM Purchasing_ProductVendor WHERE BusinessEntityID = {Purchasing_ProductVendor_BusinessEntityID} AND ProductID = {Purchasing_ProductVendor_ProductID}",AW-D8,Remove a vendor-product relationship.
+"DELETE FROM Sales_Store WHERE BusinessEntityID = {Sales_Store_BusinessEntityID}",AW-D9,Delete a store that has closed.
+"DELETE FROM Sales_Customer WHERE StoreID = {Sales_Customer_StoreID}",AW-D10,Delete customer records tied to a closed store.
