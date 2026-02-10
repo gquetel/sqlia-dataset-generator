@@ -285,6 +285,110 @@ def test_unprivileged_user_can_query_dataset(unprivileged_connection, dataset_na
     assert result is not None, f"Failed to query {dataset_name}.{table_name}"
 
 
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
+def test_unprivileged_user_can_truncate(unprivileged_connection, dataset_name):
+    """
+    Verify that the unprivileged user can TRUNCATE tables.
+
+    This is critical for attack generation: sqlia_generator._clean_db() runs
+    TRUNCATE TABLE on every table between sqlmap runs. If this privilege is
+    missing, no exploit samples are generated.
+    """
+    cursor = unprivileged_connection.cursor()
+    table_name = "_test_truncate_check"
+    try:
+        cursor.execute(f"USE {dataset_name}")
+        cursor.execute(f"CREATE TABLE {table_name} (id INT)")
+        cursor.execute(f"INSERT INTO {table_name} VALUES (1)")
+        cursor.execute(f"TRUNCATE TABLE {table_name}")
+    except mysql.connector.Error as e:
+        pytest.fail(
+            f"User lacks TRUNCATE privilege on '{dataset_name}': {e}\n"
+            f"Check that init_db.sql includes:\n"
+            f"  GRANT ALL PRIVILEGES ON {dataset_name}.* TO '<user>'@'localhost';\n"
+            f"  FLUSH PRIVILEGES;"
+        )
+    finally:
+        try:
+            cursor.execute(f"DROP TABLE IF EXISTS {dataset_name}.{table_name}")
+        except mysql.connector.Error:
+            pass
+        cursor.close()
+
+
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
+def test_unprivileged_user_can_dml(unprivileged_connection, dataset_name):
+    """
+    Verify that the unprivileged user can execute INSERT, UPDATE, DELETE.
+
+    Sqlmap payloads may execute DML statements. The HTTP server runs queries
+    via the unprivileged user, so these privileges are required for attack
+    generation.
+    """
+    cursor = unprivileged_connection.cursor()
+    table_name = "_test_dml_check"
+    try:
+        cursor.execute(f"USE {dataset_name}")
+        cursor.execute(f"CREATE TABLE {table_name} (id INT, val VARCHAR(50))")
+        cursor.execute(f"INSERT INTO {table_name} VALUES (1, 'test')")
+        cursor.execute(f"UPDATE {table_name} SET val = 'updated' WHERE id = 1")
+        cursor.execute(f"DELETE FROM {table_name} WHERE id = 1")
+    except mysql.connector.Error as e:
+        pytest.fail(
+            f"User lacks DML privileges on '{dataset_name}': {e}\n"
+            f"Check that init_db.sql includes:\n"
+            f"  GRANT ALL PRIVILEGES ON {dataset_name}.* TO '<user>'@'localhost';\n"
+            f"  FLUSH PRIVILEGES;"
+        )
+    finally:
+        try:
+            cursor.execute(f"DROP TABLE IF EXISTS {dataset_name}.{table_name}")
+        except mysql.connector.Error:
+            pass
+        cursor.close()
+
+
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
+def test_unprivileged_user_can_access_information_schema(
+    unprivileged_connection, dataset_name
+):
+    """
+    Verify that the unprivileged user can query information_schema.
+
+    Sqlmap uses information_schema for enumeration (techniques U, E, B).
+    This is essential for reconnaissance and exploit phases.
+    """
+    cursor = unprivileged_connection.cursor()
+    try:
+        cursor.execute(
+            "SELECT TABLE_NAME FROM information_schema.TABLES "
+            "WHERE TABLE_SCHEMA = %s LIMIT 1",
+            (dataset_name,),
+        )
+        tables_result = cursor.fetchone()
+        assert (
+            tables_result is not None
+        ), f"information_schema.TABLES returned no results for '{dataset_name}'"
+
+        cursor.execute(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = %s LIMIT 1",
+            (dataset_name,),
+        )
+        columns_result = cursor.fetchone()
+        assert (
+            columns_result is not None
+        ), f"information_schema.COLUMNS returned no results for '{dataset_name}'"
+    finally:
+        cursor.close()
+
+
 # ============================================================================
 # Dataset Configuration Consistency
 # ============================================================================
@@ -452,3 +556,132 @@ def test_template_placeholders_are_valid(dataset_name):
         )
 
         assert False, error_msg
+
+
+def fill_template(template: str, dicts: dict) -> str:
+    """
+    Fill a template string with deterministic values for testing.
+
+    Uses the first value from each dictionary file, or hardcoded values
+    for special placeholders.
+    """
+    import re
+
+    SPECIAL_VALUES = {
+        "rand_pos_number": "1000",
+        "rand_medium_pos_number": "100",
+        "rand_small_pos_number": "3",
+        "rand_string": "testvalue",
+        "conditions": "1=1",
+    }
+
+    def replacer(match):
+        name = match.group(1)
+        if name in SPECIAL_VALUES:
+            return SPECIAL_VALUES[name]
+        if name in dicts and dicts[name]:
+            return dicts[name][0]
+        return match.group(0)  # Leave unreplaced if no value found
+
+    return re.sub(r"\{([-a-zA-Z_]+)\}", replacer, template)
+
+
+@pytest.mark.parametrize(
+    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+)
+def test_templates_execute_without_errors(
+    unprivileged_connection, dataset_name, subtests
+):
+    """
+    Verify that every CSV template can be filled and executed against the database.
+
+    Fills each template with real dictionary values (first entry) and executes
+    it inside a transaction that is always rolled back. This catches:
+    - Wrong table names (e.g., dot-notation vs underscore)
+    - Wrong column names or typos
+    - Schema drift between init_db.sql and templates
+    - SQL syntax errors in templates
+    """
+    import pandas as pd
+
+    dataset_dir = Path("data/datasets") / dataset_name
+    queries_dir = dataset_dir / "queries"
+    dicts_dir = dataset_dir / "dicts"
+
+    # Load all dictionary files
+    dicts = {}
+    for dict_file in dicts_dir.iterdir():
+        if dict_file.is_file():
+            lines = dict_file.read_text().strip().splitlines()
+            dicts[dict_file.stem] = [line.strip() for line in lines if line.strip()]
+
+    # Get all CSV template files
+    csv_files = sorted(queries_dir.glob("*.csv"))
+
+    cursor = unprivileged_connection.cursor()
+    cursor.execute(f"USE {dataset_name}")
+
+    for csv_file in csv_files:
+        df = pd.read_csv(csv_file)
+
+        for _, row in df.iterrows():
+            template = row["template"]
+            template_id = row.get("ID", "unknown")
+
+            filled_query = fill_template(template, dicts)
+
+            with subtests.test(msg=f"{csv_file.stem}/{template_id}"):
+                try:
+                    cursor.execute("START TRANSACTION")
+                    cursor.execute(filled_query)
+                    # Consume any result set to avoid "Unread result found"
+                    try:
+                        cursor.fetchall()
+                    except mysql.connector.errors.InterfaceError:
+                        pass  # No result set (INSERT/UPDATE/DELETE)
+                    cursor.execute("ROLLBACK")
+                except mysql.connector.Error as e:
+                    cursor.execute("ROLLBACK")
+                    # Privilege errors (ER_ACCESS_DENIED_ERROR,
+                    # ER_SPECIFIC_ACCESS_DENIED_ERROR, ER_KILL_DENIED_ERROR,
+                    # etc.) are expected for admin templates executed by
+                    # the unprivileged user.
+                    TOLERATED_ERRNOS = {
+                        # Privilege errors: expected for admin templates
+                        # executed by the unprivileged user.
+                        1044,  # ER_DBACCESS_DENIED_ERROR
+                        1045,  # ER_ACCESS_DENIED_ERROR
+                        1095,  # ER_KILL_DENIED_ERROR
+                        1142,  # ER_TABLEACCESS_DENIED_ERROR
+                        1143,  # ER_COLUMNACCESS_DENIED_ERROR
+                        1227,  # ER_SPECIFIC_ACCESS_DENIED_ERROR
+                        1370,  # ER_PROCACCESS_DENIED_ERROR
+                        1410,  # ER_GRANT_WRONG_HOST_OR_USER (no perm)
+                        # FK constraint violations: the test fills
+                        # placeholders with the first dict entry, which
+                        # may reference parent rows absent from the DB.
+                        # The templates themselves are correct.
+                        1452,  # ER_NO_REFERENCED_ROW_2
+                        1094,  # Unknown thread id
+                    }
+                    if e.errno in TOLERATED_ERRNOS:
+                        pass  # Expected for admin templates
+                    # Special cases (maybe they could be treated another way?)
+                    elif e.errno == 1064 and template_id == "AW-I22":
+                        # We have a syntax error because the injected content is not
+                        # correctly escaped. We have a dilmena:
+                        # - We expect the user inputs to all be syntactically valid
+                        # - Patching this query to have something syntactically valid
+                        # means we modify application for normal query generation to
+                        # make sure that no injection takes place, however we provide
+                        # injection attacks samples. For now we allow this query to create
+                        # syntactically invalid queries.
+                        pass
+                    else:
+                        pytest.fail(
+                            f"Template {template_id} ({csv_file.name}) failed:\n"
+                            f"  Error: {e}\n"
+                            f"  Filled query: {filled_query}"
+                        )
+
+    cursor.close()
