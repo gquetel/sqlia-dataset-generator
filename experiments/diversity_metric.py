@@ -314,21 +314,25 @@ def process_dataset(
     parse_trees: bool = False,
     div_sem: bool = False,
 ) -> list[dict]:
-    df_0 = df[df["label"] == 0]
-    df_1 = df[df["label"] == 1]
-
-    if samples:
-        df_0 = df_0.sample(n=samples, random_state=42)
-        df_1 = df_1.sample(n=samples, random_state=42)
-
-    queries_0 = df_0["full_query"].tolist()
-    queries_1 = df_1["full_query"].tolist()
+    # Build subsets depending on whether the DataFrame has a split column.
+    if "split" in df.columns:
+        subsets = [
+            ("train-normal", df[(df["split"] == "train") & (df["label"] == 0)]),
+            ("test-normal", df[(df["split"] == "test") & (df["label"] == 0)]),
+            ("test-attack", df[(df["split"] == "test") & (df["label"] == 1)]),
+        ]
+    else:
+        subsets = [
+            ("normal", df[df["label"] == 0]),
+            ("attack", df[df["label"] == 1]),
+        ]
 
     rows = []
-    for label, queries, sub_df in [
-        ("normal", queries_0, df_0),
-        ("attack", queries_1, df_1),
-    ]:
+    for label, sub_df in subsets:
+        if samples:
+            sub_df = sub_df.sample(n=min(samples, len(sub_df)), random_state=42)
+
+        queries = sub_df["full_query"].tolist()
         row = {"dataset": name, "type": label, "n_samples": len(queries)}
         if vocab:
             row.update(print_vocab_size(queries, label, name, output_dir))
