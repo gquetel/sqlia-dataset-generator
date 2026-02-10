@@ -2,7 +2,10 @@
 
 This directory contains the database schemas for different datasets used in SQL injection attack generation.
 
-**Important**: Each dataset gets its own MySQL database. The `init_db.sql` for each dataset must create and configure its own database.
+### Notes
+
+- (1) Each dataset gets its own MySQL database. The `init_db.sql` for each dataset must create and configure its own database.
+- (2) To alleviate the size (and human processing time) of datasets, they are only initialized by defining tables. We do not fill the tables with real values. This is a possible alternative that requires to also extract or build sql queries to do so (they are not always available in the datasets/specifications). As a consequence, some INSERT queries relying on foreign keys fails to be inserted, no attacks will be successful from these because the foreign key error should happen before. We think that this a behaviour that could happen during attacks where an attacker can't find correct values to base their attacks on.
 
 ## Structure
 
