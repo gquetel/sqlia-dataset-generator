@@ -30,7 +30,7 @@ DROP TABLE IF EXISTS `HumanResources_Department`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `HumanResources_Department` (
-  `DepartmentID` smallint(6) NOT NULL COMMENT 'Primary key for Department records.',
+  `DepartmentID` smallint(6) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for Department records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Name of the department.',
   `GroupName` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Name of the group to which the department belongs.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
@@ -135,7 +135,7 @@ DROP TABLE IF EXISTS `HumanResources_JobCandidate`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `HumanResources_JobCandidate` (
-  `JobCandidateID` int(11) NOT NULL COMMENT 'Primary key for JobCandidate records.',
+  `JobCandidateID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for JobCandidate records.',
   `BusinessEntityID` int(11) DEFAULT NULL COMMENT 'Employee identification number if applicant was hired. Foreign key to Employee.BusinessEntityID.',
   `Resume` text COMMENT 'RÃ©sumÃ© in XML format.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
@@ -156,7 +156,7 @@ DROP TABLE IF EXISTS `HumanResources_Shift`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `HumanResources_Shift` (
-  `ShiftID` tinyint(3) unsigned NOT NULL COMMENT 'Primary key for Shift records.',
+  `ShiftID` tinyint(3) unsigned NOT NULL AUTO_INCREMENT COMMENT 'Primary key for Shift records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Shift description.',
   `StartTime` time(6) NOT NULL COMMENT 'Shift start time.',
   `EndTime` time(6) NOT NULL COMMENT 'Shift end time.',
@@ -178,7 +178,7 @@ DROP TABLE IF EXISTS `Person_Address`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Person_Address` (
-  `AddressID` int(11) NOT NULL COMMENT 'Primary key for Address records.',
+  `AddressID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for Address records.',
   `AddressLine1` varchar(60) CHARACTER SET utf8mb4 NOT NULL COMMENT 'First street address line.',
   `AddressLine2` varchar(60) CHARACTER SET utf8mb4 DEFAULT NULL COMMENT 'Second street address line.',
   `City` varchar(30) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Name of the city.',
@@ -207,7 +207,7 @@ DROP TABLE IF EXISTS `Person_AddressType`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Person_AddressType` (
-  `AddressTypeID` int(11) NOT NULL COMMENT 'Primary key for AddressType records.',
+  `AddressTypeID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for AddressType records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Address type description. For example, Billing, Home, or Shipping.',
   `rowguid` varchar(64) NOT NULL COMMENT 'ROWGUIDCOL number uniquely identifying the record. Used to support a merge replication sample.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
@@ -303,7 +303,7 @@ DROP TABLE IF EXISTS `Person_ContactType`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Person_ContactType` (
-  `ContactTypeID` int(11) NOT NULL COMMENT 'Primary key for ContactType records.',
+  `ContactTypeID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ContactType records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Contact type description.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`ContactTypeID`),
@@ -342,13 +342,14 @@ DROP TABLE IF EXISTS `Person_EmailAddress`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Person_EmailAddress` (
   `BusinessEntityID` int(11) NOT NULL COMMENT 'Primary key. Person associated with this email address.  Foreign key to Person.BusinessEntityID',
-  `EmailAddressID` int(11) NOT NULL COMMENT 'Primary key. ID of this email address.',
+  `EmailAddressID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key. ID of this email address.',
   `EmailAddress` varchar(50) CHARACTER SET utf8mb4 DEFAULT NULL COMMENT 'E-mail address for the person.',
   `rowguid` varchar(64) NOT NULL COMMENT 'ROWGUIDCOL number uniquely identifying the record. Used to support a merge replication sample.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`BusinessEntityID`,`EmailAddressID`),
   UNIQUE KEY `rowguid` (`rowguid`),
   KEY `IX_EmailAddress_EmailAddress` (`EmailAddress`),
+  KEY `IX_EmailAddress_EmailAddressID` (`EmailAddressID`),
   CONSTRAINT `FK_EmailAddress_Person_BusinessEntityID` FOREIGN KEY (`BusinessEntityID`) REFERENCES `Person_Person` (`BusinessEntityID`) ON DELETE NO ACTION ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COMMENT='Where to send a person email.';
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -446,7 +447,7 @@ DROP TABLE IF EXISTS `Person_PhoneNumberType`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Person_PhoneNumberType` (
-  `PhoneNumberTypeID` int(11) NOT NULL COMMENT 'Primary key for telephone number type records.',
+  `PhoneNumberTypeID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for telephone number type records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Name of the telephone number type',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`PhoneNumberTypeID`)
@@ -464,7 +465,7 @@ DROP TABLE IF EXISTS `Person_StateProvince`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Person_StateProvince` (
-  `StateProvinceID` int(11) NOT NULL COMMENT 'Primary key for StateProvince records.',
+  `StateProvinceID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for StateProvince records.',
   `StateProvinceCode` char(3) CHARACTER SET utf8mb4 NOT NULL COMMENT 'ISO standard state or province code.',
   `CountryRegionCode` varchar(3) CHARACTER SET utf8mb4 NOT NULL COMMENT 'ISO standard country or region code. Foreign key to CountryRegion.CountryRegionCode. ',
   `IsOnlyStateProvinceFlag` tinyint(1) NOT NULL DEFAULT '1' COMMENT '0 = StateProvinceCode exists. 1 = StateProvinceCode unavailable, using CountryRegionCode.',
@@ -495,7 +496,7 @@ DROP TABLE IF EXISTS `Production_BillOfMaterials`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_BillOfMaterials` (
-  `BillOfMaterialsID` int(11) NOT NULL COMMENT 'Primary key for BillOfMaterials records.',
+  `BillOfMaterialsID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for BillOfMaterials records.',
   `ProductAssemblyID` int(11) DEFAULT NULL COMMENT 'Parent product identification number. Foreign key to Product.ProductID.',
   `ComponentID` int(11) NOT NULL COMMENT 'Component identification number. Foreign key to Product.ProductID.',
   `StartDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date the component started being used in the assembly item.',
@@ -580,7 +581,7 @@ DROP TABLE IF EXISTS `Production_Illustration`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_Illustration` (
-  `IllustrationID` int(11) NOT NULL COMMENT 'Primary key for Illustration records.',
+  `IllustrationID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for Illustration records.',
   `Diagram` text COMMENT 'Illustrations used in manufacturing instructions. Stored as XML.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`IllustrationID`)
@@ -598,7 +599,7 @@ DROP TABLE IF EXISTS `Production_Location`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_Location` (
-  `LocationID` smallint(6) NOT NULL COMMENT 'Primary key for Location records.',
+  `LocationID` smallint(6) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for Location records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Location description.',
   `CostRate` decimal(10,4) NOT NULL DEFAULT '0.0000' COMMENT 'Standard hourly cost of the manufacturing location.',
   `Availability` decimal(8,2) NOT NULL DEFAULT '0.00' COMMENT 'Work capacity (in hours) of the manufacturing location.',
@@ -619,7 +620,7 @@ DROP TABLE IF EXISTS `Production_Product`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_Product` (
-  `ProductID` int(11) NOT NULL COMMENT 'Primary key for Product records.',
+  `ProductID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for Product records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Name of the product.',
   `ProductNumber` varchar(25) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Unique product identification number.',
   `MakeFlag` tinyint(1) NOT NULL DEFAULT '1' COMMENT '0 = Product is purchased, 1 = Product is manufactured in-house.',
@@ -671,7 +672,7 @@ DROP TABLE IF EXISTS `Production_ProductCategory`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ProductCategory` (
-  `ProductCategoryID` int(11) NOT NULL COMMENT 'Primary key for ProductCategory records.',
+  `ProductCategoryID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ProductCategory records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Category description.',
   `rowguid` varchar(64) NOT NULL COMMENT 'ROWGUIDCOL number uniquely identifying the record. Used to support a merge replication sample.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
@@ -714,7 +715,7 @@ DROP TABLE IF EXISTS `Production_ProductDescription`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ProductDescription` (
-  `ProductDescriptionID` int(11) NOT NULL COMMENT 'Primary key for ProductDescription records.',
+  `ProductDescriptionID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ProductDescription records.',
   `Description` varchar(400) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Description of the product.',
   `rowguid` varchar(64) NOT NULL COMMENT 'ROWGUIDCOL number uniquely identifying the record. Used to support a merge replication sample.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
@@ -803,7 +804,7 @@ DROP TABLE IF EXISTS `Production_ProductModel`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ProductModel` (
-  `ProductModelID` int(11) NOT NULL COMMENT 'Primary key for ProductModel records.',
+  `ProductModelID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ProductModel records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Product model description.',
   `CatalogDescription` text COMMENT 'Detailed product catalog information in xml format.',
   `Instructions` text COMMENT 'Manufacturing instructions in xml format.',
@@ -874,7 +875,7 @@ DROP TABLE IF EXISTS `Production_ProductPhoto`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ProductPhoto` (
-  `ProductPhotoID` int(11) NOT NULL COMMENT 'Primary key for ProductPhoto records.',
+  `ProductPhotoID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ProductPhoto records.',
   `ThumbNailPhoto` longblob COMMENT 'Small image of the product.',
   `ThumbnailPhotoFileName` varchar(50) CHARACTER SET utf8mb4 DEFAULT NULL COMMENT 'Small image file name.',
   `LargePhoto` longblob COMMENT 'Large image of the product.',
@@ -917,7 +918,7 @@ DROP TABLE IF EXISTS `Production_ProductReview`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ProductReview` (
-  `ProductReviewID` int(11) NOT NULL COMMENT 'Primary key for ProductReview records.',
+  `ProductReviewID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ProductReview records.',
   `ProductID` int(11) NOT NULL COMMENT 'Product identification number. Foreign key to Product.ProductID.',
   `ReviewerName` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Name of the reviewer.',
   `ReviewDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date review was submitted.',
@@ -942,7 +943,7 @@ DROP TABLE IF EXISTS `Production_ProductSubcategory`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ProductSubcategory` (
-  `ProductSubcategoryID` int(11) NOT NULL COMMENT 'Primary key for ProductSubcategory records.',
+  `ProductSubcategoryID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ProductSubcategory records.',
   `ProductCategoryID` int(11) NOT NULL COMMENT 'Product category identification number. Foreign key to ProductCategory.ProductCategoryID.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Subcategory description.',
   `rowguid` varchar(64) NOT NULL COMMENT 'ROWGUIDCOL number uniquely identifying the record. Used to support a merge replication sample.',
@@ -967,7 +968,7 @@ DROP TABLE IF EXISTS `Production_ScrapReason`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_ScrapReason` (
-  `ScrapReasonID` smallint(6) NOT NULL COMMENT 'Primary key for ScrapReason records.',
+  `ScrapReasonID` smallint(6) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ScrapReason records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Failure description.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`ScrapReasonID`),
@@ -986,7 +987,7 @@ DROP TABLE IF EXISTS `Production_TransactionHistory`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_TransactionHistory` (
-  `TransactionID` int(11) NOT NULL COMMENT 'Primary key for TransactionHistory records.',
+  `TransactionID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for TransactionHistory records.',
   `ProductID` int(11) NOT NULL COMMENT 'Product identification number. Foreign key to Product.ProductID.',
   `ReferenceOrderID` int(11) NOT NULL COMMENT 'Purchase order, sales order, or work order identification number.',
   `ReferenceOrderLineID` int(11) NOT NULL DEFAULT '0' COMMENT 'Line number associated with the purchase order, sales order, or work order.',
@@ -1058,7 +1059,7 @@ DROP TABLE IF EXISTS `Production_WorkOrder`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Production_WorkOrder` (
-  `WorkOrderID` int(11) NOT NULL COMMENT 'Primary key for WorkOrder records.',
+  `WorkOrderID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for WorkOrder records.',
   `ProductID` int(11) NOT NULL COMMENT 'Product identification number. Foreign key to Product.ProductID.',
   `OrderQty` int(11) NOT NULL COMMENT 'Product quantity to build.',
   `StockedQty` int(11) NOT NULL COMMENT 'Quantity built and put in inventory.',
@@ -1150,7 +1151,7 @@ DROP TABLE IF EXISTS `Purchasing_PurchaseOrderDetail`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Purchasing_PurchaseOrderDetail` (
   `PurchaseOrderID` int(11) NOT NULL COMMENT 'Primary key. Foreign key to PurchaseOrderHeader.PurchaseOrderID.',
-  `PurchaseOrderDetailID` int(11) NOT NULL COMMENT 'Primary key. One line number per purchased product.',
+  `PurchaseOrderDetailID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key. One line number per purchased product.',
   `DueDate` datetime(6) NOT NULL COMMENT 'Date the product is expected to be received.',
   `OrderQty` smallint(6) NOT NULL COMMENT 'Quantity ordered.',
   `ProductID` int(11) NOT NULL COMMENT 'Product identification number. Foreign key to Product.ProductID.',
@@ -1161,6 +1162,7 @@ CREATE TABLE `Purchasing_PurchaseOrderDetail` (
   `StockedQty` decimal(9,2) NOT NULL COMMENT 'Quantity accepted into inventory. Computed as ReceivedQty - RejectedQty.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
   PRIMARY KEY (`PurchaseOrderID`,`PurchaseOrderDetailID`),
+  KEY `IX_PurchaseOrderDetail_PurchaseOrderDetailID` (`PurchaseOrderDetailID`),
   KEY `IX_PurchaseOrderDetail_ProductID` (`ProductID`),
   CONSTRAINT `FK_PurchaseOrderDetail_Product_ProductID` FOREIGN KEY (`ProductID`) REFERENCES `Production_Product` (`ProductID`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   CONSTRAINT `FK_PurchaseOrderDetail_PurchaseOrderHeader_PurchaseOrderID` FOREIGN KEY (`PurchaseOrderID`) REFERENCES `Purchasing_PurchaseOrderHeader` (`PurchaseOrderID`) ON DELETE NO ACTION ON UPDATE NO ACTION
@@ -1178,7 +1180,7 @@ DROP TABLE IF EXISTS `Purchasing_PurchaseOrderHeader`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Purchasing_PurchaseOrderHeader` (
-  `PurchaseOrderID` int(11) NOT NULL COMMENT 'Primary key.',
+  `PurchaseOrderID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key.',
   `RevisionNumber` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT 'Incremental number to track changes to the purchase order over time.',
   `Status` tinyint(3) unsigned NOT NULL DEFAULT '1' COMMENT 'Order current status. 1 = Pending; 2 = Approved; 3 = Rejected; 4 = Complete',
   `EmployeeID` int(11) NOT NULL COMMENT 'Employee who created the purchase order. Foreign key to Employee.BusinessEntityID.',
@@ -1212,7 +1214,7 @@ DROP TABLE IF EXISTS `Purchasing_ShipMethod`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Purchasing_ShipMethod` (
-  `ShipMethodID` int(11) NOT NULL COMMENT 'Primary key for ShipMethod records.',
+  `ShipMethodID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ShipMethod records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Shipping company name.',
   `ShipBase` decimal(19,4) NOT NULL DEFAULT '0.0000' COMMENT 'Minimum shipping charge.',
   `ShipRate` decimal(19,4) NOT NULL DEFAULT '0.0000' COMMENT 'Shipping charge per pound.',
@@ -1282,7 +1284,7 @@ DROP TABLE IF EXISTS `Sales_CreditCard`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_CreditCard` (
-  `CreditCardID` int(11) NOT NULL COMMENT 'Primary key for CreditCard records.',
+  `CreditCardID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for CreditCard records.',
   `CardType` varchar(50) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Credit card name.',
   `CardNumber` varchar(25) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Credit card number.',
   `ExpMonth` tinyint(3) unsigned NOT NULL COMMENT 'Credit card expiration month.',
@@ -1323,7 +1325,7 @@ DROP TABLE IF EXISTS `Sales_CurrencyRate`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_CurrencyRate` (
-  `CurrencyRateID` int(11) NOT NULL COMMENT 'Primary key for CurrencyRate records.',
+  `CurrencyRateID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for CurrencyRate records.',
   `CurrencyRateDate` datetime(6) NOT NULL COMMENT 'Date and time the exchange rate was obtained.',
   `FromCurrencyCode` char(3) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Exchange rate was converted from this currency code.',
   `ToCurrencyCode` char(3) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Exchange rate was converted to this currency code.',
@@ -1350,7 +1352,7 @@ DROP TABLE IF EXISTS `Sales_Customer`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_Customer` (
-  `CustomerID` int(11) NOT NULL COMMENT 'Primary key.',
+  `CustomerID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key.',
   `PersonID` int(11) DEFAULT NULL COMMENT 'Foreign key to Person.BusinessEntityID',
   `StoreID` int(11) DEFAULT NULL COMMENT 'Foreign key to Store.BusinessEntityID',
   `TerritoryID` int(11) DEFAULT NULL COMMENT 'ID of the territory in which the customer is located. Foreign key to SalesTerritory.SalesTerritoryID.',
@@ -1403,7 +1405,7 @@ DROP TABLE IF EXISTS `Sales_SalesOrderDetail`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_SalesOrderDetail` (
   `SalesOrderID` int(11) NOT NULL COMMENT 'Primary key. Foreign key to SalesOrderHeader.SalesOrderID.',
-  `SalesOrderDetailID` int(11) NOT NULL COMMENT 'Primary key. One incremental unique number per product sold.',
+  `SalesOrderDetailID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key. One incremental unique number per product sold.',
   `CarrierTrackingNumber` varchar(25) CHARACTER SET utf8mb4 DEFAULT NULL COMMENT 'Shipment tracking number supplied by the shipper.',
   `OrderQty` smallint(6) NOT NULL COMMENT 'Quantity ordered per product.',
   `ProductID` int(11) NOT NULL COMMENT 'Product sold to customer. Foreign key to Product.ProductID.',
@@ -1416,6 +1418,7 @@ CREATE TABLE `Sales_SalesOrderDetail` (
   PRIMARY KEY (`SalesOrderID`,`SalesOrderDetailID`),
   UNIQUE KEY `rowguid` (`rowguid`),
   UNIQUE KEY `AK_SalesOrderDetail_rowguid` (`rowguid`),
+  KEY `IX_SalesOrderDetail_SalesOrderDetailID` (`SalesOrderDetailID`),
   KEY `IX_SalesOrderDetail_ProductID` (`ProductID`),
   KEY `FK_SalesOrderDetail_SpecialOfferProduct_SpecialOfferIDProductID` (`SpecialOfferID`,`ProductID`),
   CONSTRAINT `FK_SalesOrderDetail_SalesOrderHeader_SalesOrderID` FOREIGN KEY (`SalesOrderID`) REFERENCES `Sales_SalesOrderHeader` (`SalesOrderID`) ON DELETE CASCADE ON UPDATE NO ACTION,
@@ -1434,7 +1437,7 @@ DROP TABLE IF EXISTS `Sales_SalesOrderHeader`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_SalesOrderHeader` (
-  `SalesOrderID` int(11) NOT NULL COMMENT 'Primary key.',
+  `SalesOrderID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key.',
   `RevisionNumber` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT 'Incremental number to track changes to the sales order over time.',
   `OrderDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Dates the sales order was created.',
   `DueDate` datetime(6) NOT NULL COMMENT 'Date the order is due to the customer.',
@@ -1567,7 +1570,7 @@ DROP TABLE IF EXISTS `Sales_SalesReason`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_SalesReason` (
-  `SalesReasonID` int(11) NOT NULL COMMENT 'Primary key for SalesReason records.',
+  `SalesReasonID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for SalesReason records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Sales reason description.',
   `ReasonType` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Category the sales reason belongs to.',
   `ModifiedDate` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Date and time the record was last updated.',
@@ -1586,7 +1589,7 @@ DROP TABLE IF EXISTS `Sales_SalesTaxRate`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_SalesTaxRate` (
-  `SalesTaxRateID` int(11) NOT NULL COMMENT 'Primary key for SalesTaxRate records.',
+  `SalesTaxRateID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for SalesTaxRate records.',
   `StateProvinceID` int(11) NOT NULL COMMENT 'State, province, or country/region the sales tax applies to.',
   `TaxType` tinyint(3) unsigned NOT NULL COMMENT '1 = Tax applied to retail transactions, 2 = Tax applied to wholesale transactions, 3 = Tax applied to all sales (retail and wholesale) transactions.',
   `TaxRate` decimal(10,4) NOT NULL DEFAULT '0.0000' COMMENT 'Tax rate amount.',
@@ -1612,7 +1615,7 @@ DROP TABLE IF EXISTS `Sales_SalesTerritory`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_SalesTerritory` (
-  `TerritoryID` int(11) NOT NULL COMMENT 'Primary key for SalesTerritory records.',
+  `TerritoryID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for SalesTerritory records.',
   `Name` varchar(100) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Sales territory description',
   `CountryRegionCode` varchar(3) CHARACTER SET utf8mb4 NOT NULL COMMENT 'ISO standard country or region code. Foreign key to CountryRegion.CountryRegionCode. ',
   `Group` varchar(50) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Geographic area to which the sales territory belong.',
@@ -1668,7 +1671,7 @@ DROP TABLE IF EXISTS `Sales_ShoppingCartItem`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_ShoppingCartItem` (
-  `ShoppingCartItemID` int(11) NOT NULL COMMENT 'Primary key for ShoppingCartItem records.',
+  `ShoppingCartItemID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for ShoppingCartItem records.',
   `ShoppingCartID` varchar(50) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Shopping cart identification number.',
   `Quantity` int(11) NOT NULL DEFAULT '1' COMMENT 'Product quantity ordered.',
   `ProductID` int(11) NOT NULL COMMENT 'Product ordered. Foreign key to Product.ProductID.',
@@ -1692,7 +1695,7 @@ DROP TABLE IF EXISTS `Sales_SpecialOffer`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `Sales_SpecialOffer` (
-  `SpecialOfferID` int(11) NOT NULL COMMENT 'Primary key for SpecialOffer records.',
+  `SpecialOfferID` int(11) NOT NULL AUTO_INCREMENT COMMENT 'Primary key for SpecialOffer records.',
   `Description` varchar(255) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Discount description.',
   `DiscountPct` decimal(10,4) NOT NULL DEFAULT '0.0000' COMMENT 'Discount precentage.',
   `Type` varchar(50) CHARACTER SET utf8mb4 NOT NULL COMMENT 'Discount type category.',
