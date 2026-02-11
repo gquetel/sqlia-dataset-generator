@@ -9,7 +9,7 @@ source venv-3.12.3/bin/activate
 cd models/
 
 DATASET_PATH=$HOME/datasets/100k-training/
-MODELS_DIR=./output/models/
+MODELS_DIR=./output/models/li_specialised/
 
 python3 training.py --dataset=$DATASET_PATH/specialised-OurAirports.csv --models ae_li --subfolder=specialised-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_A
 python3 training.py --dataset=$DATASET_PATH/specialised-sakila.csv --models ae_li --subfolder=specialised-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_B

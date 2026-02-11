@@ -18,7 +18,7 @@ source venv-3.12.3/bin/activate
 cd models/
 
 DATASET_PATH=$HOME/datasets/100k-training/
-MODELS_DIR=./output/models/
+MODELS_DIR=./output/models/sbert_generic/
 
 # Train ae_sbert on generic datasets - save model for matrix evaluation
 # generic-OurAirports = trained on BCD, generic-sakila = trained on ACD, etc.

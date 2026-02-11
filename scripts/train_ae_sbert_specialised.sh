@@ -18,7 +18,7 @@ source venv-3.12.3/bin/activate
 cd models/
 
 DATASET_PATH=$HOME/datasets/100k-training/
-MODELS_DIR=./output/models/
+MODELS_DIR=./output/models/sbert_generic/
 
 # Train ae_sbert on specialised datasets
 srun python3 ./training.py --dataset=$DATASET_PATH/specialised-OurAirports.csv --models ae_sbert --subfolder=specialised-OurAirports-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_A

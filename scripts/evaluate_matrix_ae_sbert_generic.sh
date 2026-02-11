@@ -2,7 +2,7 @@
 #SBATCH --job-name=ae_sbert
 #SBATCH --output=../logs/%x_%j.out
 #SBATCH --error=../logs/%x_%j.err
-#SBATCH --partition=V100
+#SBATCH --partition=A100
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
@@ -13,33 +13,34 @@ echo "Job started at: $(date)"
 
 cd ~/repos/sqlia-dataset/
 source venv-3.10.3/bin/activate
+
 DATASETS_DIR=$HOME/datasets/testing/
-MODELS_DIR=./models/output/models/sbert_specialised/
-RESULTS_DIR=./models/output/sbert_specialised/
+MODELS_DIR=./models/output/models/sbert_generic/
+RESULTS_DIR=./models/output/sbert_generic/
 
 # Get scenario from command line argument (1-4)
 SCENARIO=${1:-1}
 
 case $SCENARIO in
     1)
-        # Train on D (OurAirports), evaluate on all
-        MODEL_NAME="ae_sbert_D"
-        TRAIN_DATASET="specialised-OurAirports.csv"
+        # Train on BCD (OurAirports), evaluate on all
+        MODEL_NAME="ae_sbert_BCD"
+        TRAIN_DATASET="generic-OurAirports.csv"
         ;;
     2)
-        # Train on B (sakila), evaluate on all
-        MODEL_NAME="ae_sbert_B"
-        TRAIN_DATASET="specialised-sakila.csv"
+        # Train on ACD (sakila), evaluate on all
+        MODEL_NAME="ae_sbert_ACD"
+        TRAIN_DATASET="generic-sakila.csv"
         ;;
     3)
-        # Train on C (AdventureWorks), evaluate on all
-        MODEL_NAME="ae_sbert_C"
-        TRAIN_DATASET="specialised-AdventureWorks.csv"
+        # Train on ABD (AdventureWorks), evaluate on all
+        MODEL_NAME="ae_sbert_ABD"
+        TRAIN_DATASET="generic-AdventureWorks.csv"
         ;;
     4)
-        # Train on D (OHR), evaluate on all
-        MODEL_NAME="ae_sbert_D"
-        TRAIN_DATASET="specialised-OHR.csv"
+        # Train on ABC (OHR), evaluate on all
+        MODEL_NAME="ae_sbert_ABC"
+        TRAIN_DATASET="generic-OHR.csv"
         ;;
     *)
         echo "Invalid scenario: $SCENARIO (must be 1-4)"
@@ -57,10 +58,10 @@ python3.10 models/training.py \
     --save-model-path=$MODELS_DIR/$MODEL_NAME
 
 # Evaluate on all test datasets
-for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "specialised-AdventureWorks.csv:C" "specialised-OHR.csv:D"; do
+for TEST in "generic-OurAirports.csv:A" "generic-sakila.csv:B" "generic-AdventureWorks.csv:C" "generic-OHR.csv:D"; do
     TEST_FILE="${TEST%:*}"
     TEST_LABEL="${TEST#*:}"
-    echo $TEST
+    
     python3.10 experiments/evaluate_model.py \
         --model-path=$MODELS_DIR/${MODEL_NAME}.pth \
         --model-type=ae_sbert \

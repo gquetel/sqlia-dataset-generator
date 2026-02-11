@@ -6,9 +6,14 @@ echo "Job started at: $(date)"
 cd ~/repos/sqlia-dataset/
 source venv-3.12.3/bin/activate
 
-DATASETS_DIR=$HOME/datasets/100k-training/
-MODELS_DIR=./models/output/models/
-RESULTS_DIR=./models/output/
+DATASETS_DIR=$HOME/datasets/testing/
+MODELS_DIR=./models/output/models/li_generic/
+RESULTS_DIR=./models/output/li_generic/
+
+python3 models/training.py --dataset=$DATASETS_DIR/generic-OurAirports.csv --models ae_li --subfolder=generic-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCD --testing
+python3 models/training.py --dataset=$DATASETS_DIR/generic-sakila.csv --models ae_li --subfolder=generic-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_ACD --testing
+python3 models/training.py --dataset=$DATASETS_DIR/generic-AdventureWorks.csv --models ae_li --subfolder=generic-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_ABD --testing
+python3 models/training.py --dataset=$DATASETS_DIR/generic-OHR.csv --models ae_li --subfolder=generic-OHR-ae_li --save-model-path=$MODELS_DIR/ae_li_ABC --testing
 
 # Evaluate ae_li_ABC on all test datasets
 python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-OurAirports.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_A/ 
