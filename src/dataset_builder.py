@@ -353,12 +353,15 @@ class DatasetBuilder:
         atk_mask = self.df["label"] == 1
         self.df.loc[atk_mask, "split"] = "test"
 
-        # For normal samples: first n_normal_train go to train, rest to test
+        # For normal samples: shuffle then split to ensure statement type diversity
         normal_mask = self.df["label"] == 0
         normal_indices = self.df[normal_mask].index
+        shuffled = (
+            normal_indices.to_series().sample(frac=1, random_state=self.seed).index
+        )
 
-        train_indices = normal_indices[:n_normal_train]
-        test_indices = normal_indices[n_normal_train:]
+        train_indices = shuffled[:n_normal_train]
+        test_indices = shuffled[n_normal_train:]
 
         self.df.loc[train_indices, "split"] = "train"
         self.df.loc[test_indices, "split"] = "test"
