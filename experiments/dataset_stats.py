@@ -104,6 +104,16 @@ def collect_dataset_stats(df: pd.DataFrame, dataset_name: str) -> Dict:
     else:
         stats["stmt_attack"] = {}
 
+    # Template counts per split
+    df_train = df[df["split"] == "train"]
+    df_test = df[df["split"] == "test"]
+    df_test_normal = df_test[df_test["label"] == 0]
+    df_test_attack = df_test[df_test["label"] == 1]
+
+    stats["templates_train"] = df_train["query_template_id"].nunique()
+    stats["templates_test_normal"] = df_test_normal["query_template_id"].nunique()
+    stats["templates_test_attack"] = df_test_attack["query_template_id"].nunique()
+
     # Attack technique distribution
     if len(df_attacks) > 0:
         technique_counts = df_attacks["attack_technique"].value_counts()
@@ -130,6 +140,17 @@ def display_sample_counts(stats: Dict, dataset_name: str):
     print(f"Attacks: {stats['attacks']:,} ({stats['attack_pct']:.1f}%)")
     print(f"Normal:  {stats['normal']:,} ({stats['normal_pct']:.1f}%)")
     print(f"Total:   {stats['total']:,}")
+    print()
+
+
+def display_template_counts(stats: Dict, dataset_name: str):
+    """
+    Display unique template counts per split.
+    """
+    print("--- Unique Templates per Split ---")
+    print(f"  Train:       {stats['templates_train']:>6,}")
+    print(f"  Test normal: {stats['templates_test_normal']:>6,}")
+    print(f"  Test attack: {stats['templates_test_attack']:>6,}")
     print()
 
 
@@ -244,6 +265,9 @@ def export_csv_summary(all_stats: Dict[str, Dict], datasets: Dict, output_path: 
             "normal": stats["normal"],
             "total": stats["total"],
             "attack_pct": round(stats["attack_pct"], 2),
+            "templates_train": stats["templates_train"],
+            "templates_test_normal": stats["templates_test_normal"],
+            "templates_test_attack": stats["templates_test_attack"],
         }
 
         # Statement type percentages for normal queries
@@ -336,6 +360,7 @@ def main():
 
         # Display results
         display_sample_counts(stats, config["name"])
+        display_template_counts(stats, config["name"])
         display_statement_distribution(stats, config["name"], label=0)
         display_statement_distribution(stats, config["name"], label=1)
         display_technique_distribution(stats, config["name"])
