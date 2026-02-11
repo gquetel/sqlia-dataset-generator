@@ -553,24 +553,36 @@ class sqlmapGenerator:
         if self.testing_mode:
             techniques = {"error": "--technique=E --schema "}
 
-        for template in self.templates:
-            for i in techniques.items():
-                # example of cache file: ./.cache/airport-I1-union
-                cache_filepath = f"./.cache/{template['ID']}-{i[0]}"
-                if Path(cache_filepath).is_file():
-                    self.generated_attacks = pd.read_csv(cache_filepath)
-                    last_atkid = self.generated_attacks.iloc[-1]["attack_id"]
-                    # Increment, as the retrieved value is the latest number of attacks.
-                    # We want the next one to be different.
-                    self._scenario_id = int(last_atkid.split("-")[1]) + 1
-                    logger.info(
-                        f">> Found cached file for scenario {template['ID']}-{i[0]}"
-                        f" with {self._scenario_id} launched attacks."
-                    )
-                    self._scenario_id += 1
-                    continue
+        # Build ordered list of (template, technique, cache_filepath) combos.
+        combos = [
+            (template, tech, f"./.cache/{template['ID']}-{tech[0]}")
+            for template in self.templates
+            for tech in techniques.items()
+        ]
 
-                self.perform_attack(i, template)
-                self.generated_attacks.to_csv(cache_filepath, index=False)
+        # Find the last cached file (scan in reverse) and load only that one,
+        # since each cache file is a cumulative snapshot of all prior attacks.
+        last_cached_idx = -1
+        for idx in range(len(combos) - 1, -1, -1):
+            if Path(combos[idx][2]).is_file():
+                last_cached_idx = idx
+                break
+
+        if last_cached_idx >= 0:
+            cache_path = combos[last_cached_idx][2]
+            self.generated_attacks = pd.read_csv(cache_path)
+            last_atkid = self.generated_attacks.iloc[-1]["attack_id"]
+            self._scenario_id = int(last_atkid.split("-")[1]) + 2
+            logger.info(
+                f">> Resuming from cached file {cache_path}"
+                f" with {self._scenario_id - 1} launched attacks."
+            )
+
+        for idx, (template, tech, cache_filepath) in enumerate(combos):
+            if idx <= last_cached_idx:
+                continue
+
+            self.perform_attack(tech, template)
+            self.generated_attacks.to_csv(cache_filepath, index=False)
 
         return self.generated_attacks
