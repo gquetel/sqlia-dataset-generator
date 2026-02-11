@@ -54,6 +54,11 @@ def main():
         action="store_true",
         help="Generate small datasets (500 train, 5000 test) for one target only",
     )
+    parser.add_argument(
+        "--specialised-only",
+        action="store_true",
+        help="Only generate specialised (same-dataset) experiments, skip generic",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -75,31 +80,34 @@ def main():
         print(f"  -> {len(test_sets[name])} test samples")
 
     # Step 2: Generic datasets
-    print("\n=== Step 2: Generic datasets ===")
-    for target in targets:
-        sources = [n for n in names if n != target]
-        per_source = train_size // len(sources)
-        remainder = train_size - per_source * len(sources)
+    if args.specialised_only:
+        print("\n=== Skipping generic datasets (--specialised-only) ===")
+    else:
+        print("\n=== Step 2: Generic datasets ===")
+        for target in targets:
+            sources = [n for n in names if n != target]
+            per_source = train_size // len(sources)
+            remainder = train_size - per_source * len(sources)
 
-        train_parts = []
-        for i, src in enumerate(sources):
-            n = per_source + (1 if i < remainder else 0)
-            print(f"  Sampling {n} train rows from {src} for generic-{target}...")
-            part = sample_split(
-                DATASETS[src], "train", n, args.seed + hash(src) % 2**16
-            )
-            train_parts.append(part)
+            train_parts = []
+            for i, src in enumerate(sources):
+                n = per_source + (1 if i < remainder else 0)
+                print(f"  Sampling {n} train rows from {src} for generic-{target}...")
+                part = sample_split(
+                    DATASETS[src], "train", n, args.seed + hash(src) % 2**16
+                )
+                train_parts.append(part)
 
-        train_df = pd.concat(train_parts, ignore_index=True)
-        train_df["split"] = "train"
+            train_df = pd.concat(train_parts, ignore_index=True)
+            train_df["split"] = "train"
 
-        test_df = test_sets[target].copy()
-        test_df["split"] = "test"
+            test_df = test_sets[target].copy()
+            test_df["split"] = "test"
 
-        out = pd.concat([train_df, test_df], ignore_index=True)
-        outpath = os.path.join(args.output_dir, f"generic-{target}{suffix}.csv")
-        out.to_csv(outpath, index=False)
-        print(f"  Saved {outpath} ({len(train_df)} train + {len(test_df)} test)")
+            out = pd.concat([train_df, test_df], ignore_index=True)
+            outpath = os.path.join(args.output_dir, f"generic-{target}{suffix}.csv")
+            out.to_csv(outpath, index=False)
+            print(f"  Saved {outpath} ({len(train_df)} train + {len(test_df)} test)")
 
     # Step 3: Specialised datasets
     print("\n=== Step 3: Specialised datasets ===")
