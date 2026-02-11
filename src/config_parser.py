@@ -24,6 +24,15 @@ def get_used_datasets(config: dict):
     return [dataset["name"] for dataset in config.get("datasets", [])]
 
 
+def get_dataset_port(config: dict, dataset_name: str) -> int:
+    """Return the MySQL port for a specific dataset (base port + offset)."""
+    base_port = config["mysql"]["port"]
+    for dataset in config.get("datasets", []):
+        if dataset["name"] == dataset_name:
+            return base_port + dataset.get("port_offset", 0)
+    raise ValueError(f"Dataset '{dataset_name}' not found in configuration")
+
+
 def get_statement_types_and_proportions(dataset_config: dict):
     """Extract statement types and their proportions from a dataset configuration.
 

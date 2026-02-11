@@ -49,6 +49,8 @@ All samples generated during campaigns are collected and included in the test se
 
 **Note on data exfiltration scope**: To reduce generation time, exploit phases use targeted exfiltration flags (`--users`, `--banner`, `--schema`, `--current-user`) instead of `--all`. To generate payloads that dump complete database contents (tables, columns, data), modify the techniques dictionary in the `generate_attacks` function in `src/sqlia_generator.py`.
 
+**Database isolation**: Each dataset is generated with only its own database present in the MySQL instance. The launcher starts an isolated MySQL server, creates the database (`init_dataset_db`), runs generation, then stops the server (`stop_mysql_server` via `mysql-stop --clean`). This prevents sqlmap from enumerating unrelated schemas during `--schema` extraction, which would otherwise inflate boolean-based blind queries disproportionately.
+
 #### Insider Threat Attacks
 
 Insider attack samples are generated using sqlmap's direct connection mode with various enumeration objectives, simulating [insider threat](https://doi.org/10.1007/978-3-030-93956-4_11) campaigns.
@@ -161,13 +163,13 @@ $ mysqld --basedir=/usr/local/mysqld_1/ --datadir=/usr/local/mysqld_1/datadir/ -
 $ mysql -u root --skip-password --host=localhost --port=61337 -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'";
 ```
 
-Initialize database content using [bootstrap.sql](data/bootstrap.sql):
+Initialize the unprivileged user using [bootstrap.sql](data/bootstrap.sql):
 
 ```bash
 $ mysql --user=root --password=root --host=localhost --port=61337 < ./data/bootstrap.sql
 ```
 
-This creates the unprivileged user, database, and tables required for query validation and sqlmap attacks.
+This creates the unprivileged user required for query validation and sqlmap attacks. Dataset databases are created on-demand during generation (one at a time, for isolation).
 
 ### Creating New Datasets
 

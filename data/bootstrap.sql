@@ -9,11 +9,6 @@ FLUSH PRIVILEGES;
 CREATE USER 'tata'@'localhost' IDENTIFIED BY 'tata';
 FLUSH PRIVILEGES;
 
--- Load dataset-specific schemas (each creates its own database)
--- TODO: I am unsure this is the right location to do this. Maybe I should instead
--- source the correct file at the begining of the generation of a dataset
--- And drop the database at the end of the generation to reduce side effects.
-SOURCE ./datasets/OurAirports/init_db.sql;
-SOURCE ./datasets/OHR/init_db.sql;
-SOURCE ./datasets/sakila/init_db.sql
-SOURCE ./datasets/AdventureWorks/init_db.sql
+-- Dataset-specific schemas are created on-demand during generation
+-- (init_dataset_db / stop_mysql_server in db_cnt_manager.py)
+-- to ensure each dataset is isolated from the others during sqlmap runs.

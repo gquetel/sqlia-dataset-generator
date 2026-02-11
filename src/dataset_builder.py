@@ -649,7 +649,8 @@ class DatasetBuilder:
     def generate_attack_queries_sqlmapapi(
         self, testing_mode: bool, debug_mode: bool
     ) -> dict:
-        server_port = 8080
+        base_http_port = 8080
+        server_port = base_http_port + self.dataset_config.get("port_offset", 0)
         generated_attack_queries = []
 
         # First, initialize all HTTP endpoints for each template.

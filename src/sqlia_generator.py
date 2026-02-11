@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 from subprocess import STDOUT, Popen, PIPE
 import pandas as pd
@@ -67,10 +68,12 @@ class sqlmapGenerator:
         self._scenario_id = 0
 
     def _run_pt_kill(self):
+        socket_path = f"/tmp/mysql-{self.dataset_name}/mysql.sock"
+        socket_opt = f" --socket={socket_path}"
         ptkill_command = (
             f"pt-kill --kill-query --user=root --password={self.sqlc.priv_pwd} --interval 1"
             f" --host={self.sqlc.host} --port={self.sqlc.port} --database "
-            f"{self.sqlc.database} --busy-time 5s --run-time 10s --print"
+            f"{self.sqlc.database} --busy-time 5s --run-time 10s --print{socket_opt}"
         )
         logger.debug(f"{ptkill_command}")
         proc = Popen(

@@ -10,10 +10,13 @@ databases with proper structure. Tests are intentionally simple and non-brittle:
 - Check that init_db.sql files are properly integrated
 
 Test Strategy:
-- Uses connection settings from config.toml (same as production code)
+- Each dataset gets its own isolated MySQL instance (unique port + datadir)
+- MySQL instances are started/stopped automatically via mysql-start / mysql-stop
 - Focuses on smoke tests that catch initialization failures
 - Easy to extend for new datasets
 """
+
+import copy
 
 import pytest
 import mysql.connector
@@ -21,87 +24,120 @@ import toml
 from pathlib import Path
 from typing import List
 
+from src.config_parser import get_dataset_port
+from src.db_cnt_manager import (
+    init_dataset_db,
+    start_mysql_server,
+    stop_mysql_server,
+)
+
+# All datasets under test.  Each one gets its own MySQL instance.
+ALL_DATASETS = ["OurAirports", "OHR", "sakila", "AdventureWorks"]
+
+# Port offsets used by the test suite (hardcoded, independent of config.toml).
+# These must not collide with the dev server port (61337) or with each other.
+_TEST_PORT_OFFSETS = {
+    "OurAirports": 100,
+    "OHR": 101,
+    "sakila": 102,
+    "AdventureWorks": 103,
+}
+
 
 # ============================================================================
 # Pytest Fixtures
 # ============================================================================
 
 
+@pytest.fixture(scope="session", params=ALL_DATASETS)
+def dataset_name(request):
+    """Parametrize all dependent tests over every dataset."""
+    return request.param
+
+
 @pytest.fixture(scope="session")
 def config():
-    """
-    Load configuration from config.toml.
-
-    Note: If these tests fail due to connection issues, verify that:
-    1. The nix shell is running (starts MySQL on port 61337)
-    2. config.toml has correct MySQL connection settings
-    3. bootstrap.sql has been executed (happens automatically in nix shell)
-    """
+    """Load configuration from config.toml."""
     config_path = Path("config.toml")
     assert config_path.exists(), "config.toml not found - run from repo root"
     return toml.load(config_path)
 
 
-@pytest.fixture(scope="session")
-def mysql_config(config):
-    """
-    MySQL connection parameters from config.toml.
+def _test_config(config: dict, dataset_name: str) -> dict:
+    """Return a *copy* of config with port_offset set for the test suite.
 
-    Returns:
-        dict: Connection parameters for root user
+    The test suite uses its own port offsets (starting at 100) so that test
+    MySQL instances never collide with the development server.
     """
-    mysql_cfg = config["mysql"]
-    return {
+    cfg = copy.deepcopy(config)
+
+    # Inject all datasets with test port offsets so that
+    # get_dataset_port() can resolve any dataset_name.
+    datasets_by_name = {d["name"]: d for d in cfg.get("datasets", [])}
+    for name, offset in _TEST_PORT_OFFSETS.items():
+        if name in datasets_by_name:
+            datasets_by_name[name]["port_offset"] = offset
+        else:
+            # Dataset not in config.toml (commented out) – add a minimal entry.
+            cfg.setdefault("datasets", []).append({"name": name, "port_offset": offset})
+
+    return cfg
+
+
+@pytest.fixture(scope="session")
+def dataset_db(config, dataset_name):
+    """Start an isolated MySQL instance, bootstrap it, source init_db.sql.
+
+    Yields a dict with the patched config and connection parameters.
+    Tears down (mysql-stop --clean) after all tests for this dataset_name.
+    """
+    cfg = _test_config(config, dataset_name)
+    port = get_dataset_port(cfg, dataset_name)
+
+    # Start a clean MySQL instance for this dataset.
+    start_mysql_server(cfg, dataset_name)
+
+    # Source the dataset schema.
+    init_dataset_db(cfg, dataset_name)
+
+    mysql_cfg = cfg["mysql"]
+    priv_params = {
         "host": mysql_cfg["host"],
-        "port": mysql_cfg["port"],
-        "user": mysql_cfg["priv_user"],  # Use root for admin queries
+        "port": port,
+        "user": mysql_cfg["priv_user"],
         "password": mysql_cfg["priv_pwd"],
     }
-
-
-@pytest.fixture(scope="session")
-def unprivileged_mysql_config(config):
-    """
-    MySQL connection parameters for unprivileged user.
-    """
-    mysql_cfg = config["mysql"]
-    return {
+    unpriv_params = {
         "host": mysql_cfg["host"],
-        "port": mysql_cfg["port"],
-        "user": mysql_cfg["user"],  # tata
+        "port": port,
+        "user": mysql_cfg["user"],
         "password": mysql_cfg["password"],
     }
 
+    yield {
+        "config": cfg,
+        "port": port,
+        "priv_params": priv_params,
+        "unpriv_params": unpriv_params,
+    }
 
-@pytest.fixture(scope="session")
-def mysql_connection(mysql_config):
-    """
-    Session-scoped MySQL connection for administrative queries.
-    """
-    cnx = mysql.connector.connect(**mysql_config)
+    stop_mysql_server(cfg, dataset_name)
+
+
+@pytest.fixture
+def mysql_connection(dataset_db):
+    """Privileged MySQL connection scoped to the per-dataset instance."""
+    cnx = mysql.connector.connect(**dataset_db["priv_params"])
     yield cnx
     cnx.close()
 
 
 @pytest.fixture
-def unprivileged_connection(unprivileged_mysql_config):
-    """
-    Test-scoped connection using the unprivileged user from config.
-    """
-    cnx = mysql.connector.connect(**unprivileged_mysql_config)
+def unprivileged_connection(dataset_db):
+    """Unprivileged MySQL connection scoped to the per-dataset instance."""
+    cnx = mysql.connector.connect(**dataset_db["unpriv_params"])
     yield cnx
     cnx.close()
-
-
-@pytest.fixture(scope="session")
-def dataset_names(config):
-    """
-    Extract all dataset names from config.toml.
-
-    Returns:
-        List[str]: Dataset names (also database names)
-    """
-    return [dataset["name"] for dataset in config["datasets"]]
 
 
 # ============================================================================
@@ -172,21 +208,20 @@ def test_config_file_exists():
 
 
 def test_mysql_connection(mysql_connection):
-    """Verify that we can connect to MySQL using config.toml settings."""
+    """Verify that we can connect to the per-dataset MySQL instance."""
     cursor = mysql_connection.cursor()
     cursor.execute("SELECT VERSION()")
     version = cursor.fetchone()[0]
     cursor.close()
 
     assert version is not None, "Failed to query MySQL version"
-    # Expected MySQL 8.4.5 in nix shell, but don't enforce exact version
     assert version.startswith("8."), f"Expected MySQL 8.x, got {version}"
 
 
-def test_unprivileged_user_exists(mysql_connection, unprivileged_mysql_config):
+def test_unprivileged_user_exists(mysql_connection, dataset_db):
     """Verify that the unprivileged user from config exists."""
     cursor = mysql_connection.cursor()
-    user = unprivileged_mysql_config["user"]
+    user = dataset_db["unpriv_params"]["user"]
 
     cursor.execute(
         "SELECT 1 FROM mysql.user WHERE User = %s AND Host = 'localhost'", (user,)
@@ -207,9 +242,6 @@ def test_unprivileged_user_can_connect(unprivileged_connection):
     assert result[0] == 1, "Unprivileged user cannot execute basic queries"
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_dataset_database_exists(mysql_connection, dataset_name):
     """Verify that the dataset database exists."""
     cursor = mysql_connection.cursor()
@@ -219,15 +251,11 @@ def test_dataset_database_exists(mysql_connection, dataset_name):
     assert exists, (
         f"Database '{dataset_name}' does not exist. "
         f"Check that:\n"
-        f"  1. nix shell is running (initializes databases)\n"
-        f"  2. data/bootstrap.sql sources datasets/{dataset_name}/init_db.sql\n"
-        f"  3. datasets/{dataset_name}/init_db.sql is valid SQL"
+        f"  1. datasets/{dataset_name}/init_db.sql is valid SQL\n"
+        f"  2. The dataset_db fixture ran successfully"
     )
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_dataset_has_tables(mysql_connection, dataset_name):
     """Verify that the dataset database contains tables (not empty)."""
     cursor = mysql_connection.cursor()
@@ -240,15 +268,10 @@ def test_dataset_has_tables(mysql_connection, dataset_name):
     )
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
-def test_unprivileged_user_has_access(
-    mysql_connection, unprivileged_mysql_config, dataset_name
-):
+def test_unprivileged_user_has_access(mysql_connection, dataset_db, dataset_name):
     """Verify that the unprivileged user has privileges on the dataset."""
     cursor = mysql_connection.cursor()
-    user = unprivileged_mysql_config["user"]
+    user = dataset_db["unpriv_params"]["user"]
     has_privs = user_has_privileges(cursor, user, dataset_name)
     cursor.close()
 
@@ -260,9 +283,6 @@ def test_unprivileged_user_has_access(
     )
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_unprivileged_user_can_query_dataset(unprivileged_connection, dataset_name):
     """Verify that unprivileged user can execute queries on the dataset."""
     cursor = unprivileged_connection.cursor()
@@ -285,9 +305,6 @@ def test_unprivileged_user_can_query_dataset(unprivileged_connection, dataset_na
     assert result is not None, f"Failed to query {dataset_name}.{table_name}"
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_unprivileged_user_can_truncate(unprivileged_connection, dataset_name):
     """
     Verify that the unprivileged user can TRUNCATE tables.
@@ -318,9 +335,6 @@ def test_unprivileged_user_can_truncate(unprivileged_connection, dataset_name):
         cursor.close()
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_unprivileged_user_can_dml(unprivileged_connection, dataset_name):
     """
     Verify that the unprivileged user can execute INSERT, UPDATE, DELETE.
@@ -352,9 +366,6 @@ def test_unprivileged_user_can_dml(unprivileged_connection, dataset_name):
         cursor.close()
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_unprivileged_user_can_access_information_schema(
     unprivileged_connection, dataset_name
 ):
@@ -408,22 +419,21 @@ def test_config_datasets_have_init_files(config):
         )
 
 
-def test_init_files_are_in_bootstrap(config):
-    """Verify that bootstrap.sql sources all init_db.sql files from config."""
-    bootstrap_file = Path("data/bootstrap.sql")
-    assert bootstrap_file.exists(), "Missing data/bootstrap.sql"
+def test_init_files_exist_for_all_datasets(config):
+    """Verify that each configured dataset has an init_db.sql file.
 
-    content = bootstrap_file.read_text()
+    Note: bootstrap.sql no longer sources these files directly. Databases
+    are created on-demand by init_dataset_db() during generation and by
+    the ``dataset_db`` test fixture.
+    """
+    datasets_dir = Path("data/datasets")
 
     for dataset_config in config["datasets"]:
         dataset_name = dataset_config["name"]
-        expected_source = f"SOURCE ./datasets/{dataset_name}/init_db.sql"
-
-        assert expected_source in content, (
-            f"bootstrap.sql does not source {dataset_name}/init_db.sql\n"
-            f"Add this line to data/bootstrap.sql:\n"
-            f"  {expected_source};"
-        )
+        init_file = datasets_dir / dataset_name / "init_db.sql"
+        assert (
+            init_file.exists()
+        ), f"Dataset '{dataset_name}' is missing init_db.sql at {init_file}"
 
 
 # ============================================================================
@@ -431,9 +441,6 @@ def test_init_files_are_in_bootstrap(config):
 # ============================================================================
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_dataset_has_reasonable_table_count(mysql_connection, dataset_name):
     """
     Verify that the dataset database is not empty.
@@ -468,9 +475,6 @@ def extract_placeholders(template: str) -> List[str]:
     return list(set(param_names))  # Return unique placeholders
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_template_placeholders_are_valid(dataset_name):
     """
     Verify that all placeholders in template CSV files are either:
@@ -586,9 +590,6 @@ def fill_template(template: str, dicts: dict) -> str:
     return re.sub(r"\{([-a-zA-Z_]+)\}", replacer, template)
 
 
-@pytest.mark.parametrize(
-    "dataset_name", ["OurAirports", "OHR", "sakila", "AdventureWorks"]
-)
 def test_templates_execute_without_errors(
     unprivileged_connection, dataset_name, subtests
 ):
@@ -659,10 +660,16 @@ def test_templates_execute_without_errors(
                         1410,  # ER_GRANT_WRONG_HOST_OR_USER (no perm)
                         # FK constraint violations: the test fills
                         # placeholders with the first dict entry, which
-                        # may reference parent rows absent from the DB.
+                        # may reference parent rows absent from the DB, or
+                        # may try to delete rows that are referenced.
                         # The templates themselves are correct.
-                        1452,  # ER_NO_REFERENCED_ROW_2
+                        1451,  # ER_ROW_IS_REFERENCED (FK constraint child exists)
+                        1452,  # ER_NO_REFERENCED_ROW_2 (FK constraint parent missing)
                         1094,  # Unknown thread id
+                        # Duplicate key errors: the test fills placeholders
+                        # with the first dict entry, which may already exist
+                        # in the pre-populated database from insert.sql.
+                        1062,  # ER_DUP_ENTRY (Duplicate entry for key)
                     }
                     if e.errno in TOLERATED_ERRNOS:
                         pass  # Expected for admin templates

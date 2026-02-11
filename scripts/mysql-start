@@ -43,7 +43,8 @@ echo "Starting MySQL on port $MYSQL_PORT..."
 mysqld \
     --datadir="$MYSQL_DATADIR" \
     --socket="$MYSQL_UNIX_PORT" \
-    --port="$MYSQL_PORT" &
+    --port="$MYSQL_PORT" \
+    >>"$MYSQL_HOME/log/mysqld.log" 2>&1 &
 MYSQL_PID=$!
 echo "$MYSQL_PID" > "$MYSQL_HOME/mysqld.pid"
 
@@ -73,18 +74,10 @@ if [ "$FRESH_INIT" = true ] && [ ! -f "$MYSQL_HOME/.bootstrapped" ]; then
 fi
 
 # Print connection info
-DATABASES=$(mysql $MYSQL_CONNECT -u root -proot -N -e "SHOW DATABASES;" 2>/dev/null \
-    | grep -vE '^(information_schema|performance_schema|mysql|sys)$' \
-    | tr '\n' ', ' | sed 's/, $//')
-
 echo ""
 echo "MySQL development environment ready!"
 echo "  Port: $MYSQL_PORT"
-if [ -n "${DATABASES:-}" ]; then
-    echo "  Databases: $DATABASES"
-else
-    echo "  Databases: (none)"
-fi
+echo "  Databases: created on-demand during generation (isolated per dataset)"
 echo "  User: tata / Password: tata"
 echo "  Root user: root / Password: root"
 echo ""

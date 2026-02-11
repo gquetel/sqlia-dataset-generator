@@ -8,6 +8,12 @@ import tomllib
 import pandas as pd
 
 from src.dataset_builder import DatasetBuilder
+from src.config_parser import get_dataset_port
+from src.db_cnt_manager import (
+    init_dataset_db,
+    start_mysql_server,
+    stop_mysql_server,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -317,10 +323,19 @@ def main():
         dataset_name = dataset_config.get("name", "unknown")
         logger.info(f"Building dataset: {dataset_name}")
 
+        # Start an isolated MySQL instance for this dataset.
+        start_mysql_server(config, dataset_name)
+
+        # Create ONLY this dataset's database for isolation: sqlmap will only
+        # see one schema during enumeration instead of all datasets' schemas.
+        init_dataset_db(config, dataset_name)
+
         # We create a unified config for each dataset to be given to DatasetBuilder.
+        # Override the port so the builder connects to this dataset's MySQL instance.
+        mysql_cfg = {**config["mysql"], "port": get_dataset_port(config, dataset_name)}
         dataset_specific_config = {
             "general": config["general"],
-            "mysql": config["mysql"],
+            "mysql": mysql_cfg,
             "dataset": dataset_config,
         }
 
@@ -333,6 +348,11 @@ def main():
 
         db.save(args.output_dir)
         logger.info(f"Dataset {dataset_name} saved successfully")
+
+        # Stop the MySQL instance and clean up all data.
+        # No need to DROP DATABASE first — mysql-stop --clean removes
+        # the entire datadir, and DROP DATABASE can hang on leftover locks.
+        stop_mysql_server(config, dataset_name)
 
     # Merge all generated datasets into a single file
     merge_datasets(config, args.output_dir)

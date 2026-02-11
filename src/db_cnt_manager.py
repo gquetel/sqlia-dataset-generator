@@ -1,7 +1,118 @@
+import logging
+import os
+from pathlib import Path
+from subprocess import PIPE, Popen
+
 import mysql.connector
 import mysql
 
-from .config_parser import get_mysql_info
+from .config_parser import get_mysql_info, get_dataset_port
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Dataset-level database isolation helpers
+# ---------------------------------------------------------------------------
+
+# Resolve the project root and datasets directory relative to this file.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_DATASETS_DIR = _PROJECT_ROOT / "data" / "datasets"
+_SCRIPTS_DIR = _PROJECT_ROOT / "scripts"
+
+
+def _mysql_env(dataset_name: str, port: int) -> dict:
+    """Build the environment variables needed by mysql-start / mysql-stop."""
+    mysql_home = f"/tmp/mysql-{dataset_name}"
+    env = os.environ.copy()
+    env["MYSQL_HOME"] = mysql_home
+    env["MYSQL_DATADIR"] = f"{mysql_home}/data"
+    env["MYSQL_UNIX_PORT"] = f"{mysql_home}/mysql.sock"
+    env["MYSQL_PORT"] = str(port)
+    # Ensure our scripts directory is on PATH
+    env["PATH"] = f"{_SCRIPTS_DIR}:{env.get('PATH', '')}"
+    return env
+
+
+def start_mysql_server(config: dict, dataset_name: str) -> int:
+    """Start an isolated MySQL instance for *dataset_name*.
+
+    Returns the port the server is listening on.
+    """
+    port = get_dataset_port(config, dataset_name)
+    env = _mysql_env(dataset_name, port)
+
+    # Clean any leftover state first.
+    proc = Popen(
+        [str(_SCRIPTS_DIR / "mysql-stop"), "--clean"],
+        env=env,
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    proc.communicate()
+
+    # Start a fresh instance.
+    logger.info(
+        f"Starting MySQL for '{dataset_name}' on port {port} "
+        f"(MYSQL_HOME={env['MYSQL_HOME']})"
+    )
+    proc = Popen(
+        [str(_SCRIPTS_DIR / "mysql-start")],
+        env=env,
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"mysql-start failed for '{dataset_name}':\n"
+            f"{stderr.decode()}\n{stdout.decode()}"
+        )
+
+    logger.info(f"MySQL for '{dataset_name}' started on port {port}.")
+    return port
+
+
+def stop_mysql_server(config: dict, dataset_name: str) -> None:
+    """Stop and clean up the isolated MySQL instance for *dataset_name*."""
+    port = get_dataset_port(config, dataset_name)
+    env = _mysql_env(dataset_name, port)
+
+    logger.info(f"Stopping MySQL for '{dataset_name}'.")
+    proc = Popen(
+        [str(_SCRIPTS_DIR / "mysql-stop"), "--clean"],
+        env=env,
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    _, stderr = proc.communicate()
+    if proc.returncode != 0:
+        logger.warning(f"mysql-stop failed for '{dataset_name}': {stderr.decode()}")
+
+
+def init_dataset_db(config: dict, dataset_name: str) -> None:
+    """Create a single dataset's database (schema + data) via the MySQL CLI."""
+    port = get_dataset_port(config, dataset_name)
+    _, _, _, _, priv_user, priv_pwd = get_mysql_info(config=config)
+    dataset_dir = _DATASETS_DIR / dataset_name
+    sql_file = "init_db.sql"
+
+    sql_path = dataset_dir / sql_file
+    if not sql_path.is_file():
+        raise FileNotFoundError(f"Expected SQL file not found: {sql_path}")
+
+    command = (
+        f"mysql --port={port} --protocol=tcp "
+        f"-u {priv_user} -p{priv_pwd} < {sql_path}"
+    )
+
+    logger.info(f"Initializing database: sourcing {sql_path}")
+    proc = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+    _, stderr = proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(f"Failed to source {sql_path}: {stderr.decode()}")
+
+    logger.info(f"Database '{dataset_name}' initialized successfully.")
 
 
 class SQLConnector:
