@@ -60,7 +60,7 @@ update = "1/10"
 insert = "1/10"
 
 [[datasets]]
-name = "OurAirports"
+name = "AdventureWorks"
 
 [datasets.statements]
 select = "7/10"
