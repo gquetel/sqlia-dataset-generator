@@ -682,7 +682,7 @@ class DatasetBuilder:
         self.df = generated_attack_queries
 
     def _clean_cache_folder(self):
-        shutil.rmtree("./.cache/", ignore_errors=True)
+        shutil.rmtree(f"./.cache/{self.dataset_name}/", ignore_errors=True)
 
     def _remove_contradictions(self):
         """Remove contradictory samples from the dataset."""

@@ -319,6 +319,7 @@ def main():
 
     datasets = config.get("datasets", [])
 
+    # TODO: launcher should orchestrate parallel dataset generation natively
     for dataset_config in datasets:
         dataset_name = dataset_config.get("name", "unknown")
         logger.info(f"Building dataset: {dataset_name}")

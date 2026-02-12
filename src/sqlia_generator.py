@@ -550,7 +550,8 @@ class sqlmapGenerator:
             "inline": "--technique=Q --users --banner --schema ",
         }
 
-        Path("./.cache/").mkdir(parents=True, exist_ok=True)
+        cache_dir = f"./.cache/{self.dataset_name}"
+        Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
         # Template's number is reduced, we also only consider the error technique.
         if self.testing_mode:
@@ -558,7 +559,7 @@ class sqlmapGenerator:
 
         # Build ordered list of (template, technique, cache_filepath) combos.
         combos = [
-            (template, tech, f"./.cache/{template['ID']}-{tech[0]}")
+            (template, tech, f"{cache_dir}/{template['ID']}-{tech[0]}")
             for template in self.templates
             for tech in techniques.items()
         ]
@@ -581,11 +582,16 @@ class sqlmapGenerator:
                 f" with {self._scenario_id - 1} launched attacks."
             )
 
+        prev_cache = None
         for idx, (template, tech, cache_filepath) in enumerate(combos):
             if idx <= last_cached_idx:
+                prev_cache = cache_filepath  # track last existing cache
                 continue
 
             self.perform_attack(tech, template)
             self.generated_attacks.to_csv(cache_filepath, index=False)
+            if prev_cache is not None:
+                Path(prev_cache).unlink(missing_ok=True)
+            prev_cache = cache_filepath
 
         return self.generated_attacks
