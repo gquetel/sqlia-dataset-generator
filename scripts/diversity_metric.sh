@@ -2,11 +2,11 @@
 #SBATCH --job-name=diversity-metric   # Name of your job
 #SBATCH --output=../output/%x_%j.out           # Output file (%x for job name, %j for job ID)
 #SBATCH --error=../output/%x_%j.err            # Error file
-#SBATCH --partition=A100              # Partition to submit to (A100, V100, etc.)
+#SBATCH --partition=A30              # Partition to submit to (A100, V100, etc.)
 #SBATCH --gres=gpu:1                 # Request 1 GPU
 #SBATCH --cpus-per-task=16           # Request 16 CPU cores
 #SBATCH --mem=32G                    # Request 64 GB of memory
-#SBATCH --time=24:00:00              # Time limit for the job (hh:mm:ss)
+#SBATCH --time=12:00:00              # Time limit for the job (hh:mm:ss)
 
 # Print job details
 echo "Starting job on node: $(hostname)"

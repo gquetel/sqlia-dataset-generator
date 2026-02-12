@@ -12,9 +12,9 @@ echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
 
 cd ~/repos/sqlia-dataset/
-source venv-3.10.3/bin/activate
+source venv-3.12.3/bin/activate
 
-DATASETS_DIR=$HOME/datasets/testing/
+DATASETS_DIR=$HOME/datasets/100k-training/
 MODELS_DIR=./models/output/models/sbert_generic/
 RESULTS_DIR=./models/output/sbert_generic/
 
@@ -51,7 +51,7 @@ esac
 echo "Running scenario $SCENARIO: $MODEL_NAME"
 
 # Train
-python3.10 models/training.py \
+python3 models/training.py \
     --dataset=$DATASETS_DIR/$TRAIN_DATASET \
     --models ae_sbert \
     --subfolder=${TRAIN_DATASET%.csv}-ae_sbert \
@@ -62,7 +62,7 @@ for TEST in "generic-OurAirports.csv:A" "generic-sakila.csv:B" "generic-Adventur
     TEST_FILE="${TEST%:*}"
     TEST_LABEL="${TEST#*:}"
     
-    python3.10 experiments/evaluate_model.py \
+    python3 experiments/evaluate_model.py \
         --model-path=$MODELS_DIR/${MODEL_NAME}.pth \
         --model-type=ae_sbert \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \

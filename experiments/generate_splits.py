@@ -14,13 +14,13 @@ import numpy as np
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+REPO_ROOT = "/home/infres/gquetel/datasets/full"
 
 DATASETS = {
-    "OurAirports": os.path.join(REPO_ROOT, "output/OurAirports.csv"),
-    "sakila": os.path.join(REPO_ROOT, "output/sakila.csv"),
-    "AdventureWorks": os.path.join(REPO_ROOT, "output/AdventureWorks.csv"),
-    "OHR": os.path.join(REPO_ROOT, "output/OHR.csv"),
+    "OurAirports": os.path.join(REPO_ROOT, "OurAirports.csv"),
+    "sakila": os.path.join(REPO_ROOT, "sakila.csv"),
+    "AdventureWorks": os.path.join(REPO_ROOT, "AdventureWorks.csv"),
+    "OHR": os.path.join(REPO_ROOT, "OHR.csv"),
 }
 
 TRAIN_SIZE = 100_000

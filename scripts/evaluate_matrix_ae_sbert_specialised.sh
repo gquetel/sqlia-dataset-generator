@@ -2,7 +2,7 @@
 #SBATCH --job-name=ae_sbert
 #SBATCH --output=../logs/%x_%j.out
 #SBATCH --error=../logs/%x_%j.err
-#SBATCH --partition=V100
+#SBATCH --partition=A100
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
@@ -12,8 +12,9 @@ echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
 
 cd ~/repos/sqlia-dataset/
-source venv-3.10.3/bin/activate
-DATASETS_DIR=$HOME/datasets/testing/
+source venv-3.12.3/bin/activate
+
+DATASETS_DIR=$HOME/datasets/100k-training/
 MODELS_DIR=./models/output/models/sbert_specialised/
 RESULTS_DIR=./models/output/sbert_specialised/
 
@@ -22,8 +23,8 @@ SCENARIO=${1:-1}
 
 case $SCENARIO in
     1)
-        # Train on D (OurAirports), evaluate on all
-        MODEL_NAME="ae_sbert_D"
+        # Train on A (OurAirports), evaluate on all
+        MODEL_NAME="ae_sbert_A"
         TRAIN_DATASET="specialised-OurAirports.csv"
         ;;
     2)
@@ -50,7 +51,7 @@ esac
 echo "Running scenario $SCENARIO: $MODEL_NAME"
 
 # Train
-python3.10 models/training.py \
+python3 models/training.py \
     --dataset=$DATASETS_DIR/$TRAIN_DATASET \
     --models ae_sbert \
     --subfolder=${TRAIN_DATASET%.csv}-ae_sbert \
@@ -61,7 +62,7 @@ for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "speciali
     TEST_FILE="${TEST%:*}"
     TEST_LABEL="${TEST#*:}"
     echo $TEST
-    python3.10 experiments/evaluate_model.py \
+    python3 experiments/evaluate_model.py \
         --model-path=$MODELS_DIR/${MODEL_NAME}.pth \
         --model-type=ae_sbert \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \
