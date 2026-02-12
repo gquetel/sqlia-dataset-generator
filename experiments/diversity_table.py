@@ -4,7 +4,7 @@
 import csv
 from pathlib import Path
 
-BASE_DIR = Path.home() / "experiences-results/2026-02-11-diversity"
+BASE_DIR = Path.home() / "experiences-results/2026-02-12-results"
 LEX_SYN_CSV = BASE_DIR / "diversity_metrics_lex_syn" / "diversity_metrics.csv"
 SEM_CSV = BASE_DIR / "diversity_metrics_sem" / "diversity_metrics.csv"
 

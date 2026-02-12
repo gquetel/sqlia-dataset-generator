@@ -253,4 +253,13 @@ Code is available in the [models](./models/) folder. After generating a dataset:
 
 ```bash
 cd models && python3 ./training.py
+
+# Save a trained model to disk for later evaluation
+cd models && python3 ./training.py --save-model-path /path/to/model.pth
 ```
+
+To evaluate a saved model on a different test dataset, use `experiments/evaluate_model.py`.
+
+## TODO:
+
+- Standardize all output paths in scripts & notebooks loading data.
