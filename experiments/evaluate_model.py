@@ -23,6 +23,8 @@ sys.path.insert(0, str(REPO_ROOT / "models"))
 from constants import DotDict, ProjectPaths
 from explain import (
     get_metrics_treshold,
+    get_recall_per_attack,
+    get_recall_per_statement_type,
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
 )
@@ -162,6 +164,16 @@ def evaluate_model(
         threshold=threshold,
         model_name=model_name,
     )
+
+    # Build a DataFrame with predictions for per-category recall
+    df_eval = df_test.copy()
+    df_eval["preds"] = preds
+
+    recall_per_attack = get_recall_per_attack(df_eval, model_name)
+    metrics_dict.update(recall_per_attack)
+
+    recall_per_stmt = get_recall_per_statement_type(df_eval, model_name)
+    metrics_dict.update(recall_per_stmt)
 
     return metrics_dict, labels, scores
 
