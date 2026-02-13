@@ -48,9 +48,10 @@ port_offset = 1 # Applied to both MySQL port (61337+offset) and HTTP server port
 
 [datasets.statements]
 select = "7/10"
-delete = "1/10"
+delete = "9/100"
 update = "1/10"
 insert = "1/10"
+admin = "1/100"
 
 [[datasets]]
 name = "sakila"
@@ -58,9 +59,10 @@ port_offset = 2 # Applied to both MySQL port (61337+offset) and HTTP server port
 
 [datasets.statements]
 select = "7/10"
-delete = "1/10"
+delete = "9/100"
 update = "1/10"
 insert = "1/10"
+admin = "1/100"
 
 [[datasets]]
 name = "AdventureWorks"
@@ -68,6 +70,7 @@ port_offset = 3         # Applied to both MySQL port (61337+offset) and HTTP ser
 
 [datasets.statements]
 select = "7/10"
-delete = "1/10"
+delete = "9/100"
 update = "1/10"
 insert = "1/10"
+admin = "1/100"

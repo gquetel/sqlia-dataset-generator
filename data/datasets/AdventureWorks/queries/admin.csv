@@ -1,0 +1,15 @@
+template,ID,description,payload_type
+"USE {admin_db_name}",AW-admin1,Change the used database.,string
+"SHOW TABLES;",AW-admin2,See tables in current database.,
+"SHOW COLUMNS FROM {admin_table_name}",AW-admin3,See columns from specified table.,string
+"SHOW SESSION STATUS ",AW-admin4,See status of current session.,
+"SHOW GLOBAL STATUS ",AW-admin5,See global status of DBMS.,
+"GRANT ALL ON {admin_db_name}.* TO '{admin_username}'@'localhost';",AW-admin6,Set all privileges to user on a database.,string string
+"GRANT ALL ON {admin_db_name}.* TO '{admin_username}'@'localhost' WITH GRANT OPTION;",AW-admin7,"Set all privileges to user on a database and transitively allow him to manage rights",string string
+"GRANT SELECT ON {admin_db_name}.* TO '{admin_username}'@'localhost';",AW-admin8,Set select privileges to user on a database.,string string
+"GRANT SELECT,INSERT,DELETE,UPDATE ON {admin_db_name}.* TO '{admin_username}'@'localhost';",AW-admin9,"Set select, update, delete, insert privileges to user on a database.",string string
+"REVOKE ALL ON {admin_db_name}.* FROM '{admin_username}'@'localhost';",AW-admin10,Revoke all privileges to user on a database.,string string
+"SHOW GRANTS FOR  '{admin_username}';",AW-admin11, View privileges of user.,string
+"KILL QUERY {rand_pos_number}",AW-admin12, Stop the execution of a query.,string
+"CREATE USER '{admin_username}'@'localhost' IDENTIFIED BY '{rand_string}'",AW-admin13, Create a new user.,string string
+"DROP USER '{admin_username}'@'localhost';",AW-admin14, Delete a user.,string

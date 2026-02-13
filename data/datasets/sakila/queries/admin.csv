@@ -1,0 +1,15 @@
+template,ID,description,payload_type
+"USE {admin_db_name}",sakila-admin1,Change the used database.,string
+"SHOW TABLES;",sakila-admin2,See tables in current database.,
+"SHOW COLUMNS FROM {admin_table_name}",sakila-admin3,See columns from specified table.,string
+"SHOW SESSION STATUS ",sakila-admin4,See status of current session.,
+"SHOW GLOBAL STATUS ",sakila-admin5,See global status of DBMS.,
+"GRANT ALL ON {admin_db_name}.* TO '{admin_username}'@'localhost';",sakila-admin6,Set all privileges to user on a database.,string string
+"GRANT ALL ON {admin_db_name}.* TO '{admin_username}'@'localhost' WITH GRANT OPTION;",sakila-admin7,"Set all privileges to user on a database and transitively allow him to manage rights",string string
+"GRANT SELECT ON {admin_db_name}.* TO '{admin_username}'@'localhost';",sakila-admin8,Set select privileges to user on a database.,string string
+"GRANT SELECT,INSERT,DELETE,UPDATE ON {admin_db_name}.* TO '{admin_username}'@'localhost';",sakila-admin9,"Set select, update, delete, insert privileges to user on a database.",string string
+"REVOKE ALL ON {admin_db_name}.* FROM '{admin_username}'@'localhost';",sakila-admin10,Revoke all privileges to user on a database.,string string
+"SHOW GRANTS FOR  '{admin_username}';",sakila-admin11, View privileges of user.,string
+"KILL QUERY {rand_pos_number}",sakila-admin12, Stop the execution of a query.,string
+"CREATE USER '{admin_username}'@'localhost' IDENTIFIED BY '{rand_string}'",sakila-admin13, Create a new user.,string string
+"DROP USER '{admin_username}'@'localhost';",sakila-admin14, Delete a user.,string
