@@ -1,0 +1,30 @@
+[[table]]
+name = "employees"
+select_columns = "employee_id"
+min_conditions = 2
+max_conditions = 5
+
+[[table.field]]
+column = "first_name"
+dict = "employees_first_name"
+type = "string"
+
+[[table.field]]
+column = "last_name"
+dict = "employees_last_name"
+type = "string"
+
+[[table.field]]
+column = "salary"
+dict = "employees_salary"
+type = "numeric"
+
+[[table.field]]
+column = "hire_date"
+dict = "employees_hire_date"
+type = "date"
+
+[[table.field]]
+column = "department_id"
+dict = "employees_department_id"
+type = "numeric"

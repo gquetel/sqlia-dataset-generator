@@ -1,0 +1,30 @@
+[[table]]
+name = "Production_Product"
+select_columns = "ProductID"
+min_conditions = 2
+max_conditions = 5
+
+[[table.field]]
+column = "Name"
+dict = "Production_Product_Name"
+type = "string"
+
+[[table.field]]
+column = "ListPrice"
+dict = "Production_Product_ListPrice"
+type = "numeric"
+
+[[table.field]]
+column = "Color"
+dict = "Production_Product_Color"
+type = "string"
+
+[[table.field]]
+column = "Size"
+dict = "Production_Product_Size"
+type = "string"
+
+[[table.field]]
+column = "Weight"
+dict = "Production_Product_Weight"
+type = "numeric"

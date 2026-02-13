@@ -12,3 +12,4 @@ template,ID,description
 "SELECT city FROM locations WHERE location_id = (SELECT location_id FROM departments WHERE department_id = (SELECT department_id FROM employees WHERE employee_id = {employees_employee_id}))",OHR-S11,Find the city of an employee by ID using subqueries
 "SELECT first_name, last_name, employee_id, job_id FROM employees WHERE department_id IN (SELECT department_id FROM departments WHERE location_id IN (SELECT location_id FROM locations WHERE city = '{locations_city}'))",OHR-S12,Find employees in departments located in a given city
 "SELECT * FROM employees WHERE salary BETWEEN {jobs_min_salary} AND {jobs_max_salary}",OHR-S13,Find employees whose salary falls between two values
+"SELECT employee_id FROM employees WHERE {conditions}",OHR-S14,Search employees using a flexible set of filter conditions.

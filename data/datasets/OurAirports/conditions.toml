@@ -1,0 +1,70 @@
+[[table]]
+name = "airport"
+select_columns = "id"
+min_conditions = 2
+max_conditions = 7
+
+[[table.field]]
+column = "type"
+dict = "airports_type"
+type = "string"
+
+[[table.field]]
+column = "name"
+type = "custom"
+patterns = [
+  'name LIKE "%{rand_string}%"',
+  'name LIKE "%{rand_string}%" OR name LIKE "%{rand_string}%"',
+]
+
+[[table.field]]
+column = "latitude"
+type = "custom"
+patterns = [
+  'latitude >= {airports_latitude_deg}',
+  'latitude <= {airports_latitude_deg}',
+  'latitude BETWEEN {airports_latitude_deg} AND {airports_latitude_deg}',
+]
+
+[[table.field]]
+column = "longitude"
+type = "custom"
+patterns = [
+  'longitude >= {airports_longitude_deg}',
+  'longitude <= {airports_longitude_deg}',
+  'longitude BETWEEN {airports_longitude_deg} AND {airports_longitude_deg}',
+]
+
+[[table.field]]
+column = "elevation_feet"
+type = "custom"
+patterns = [
+  'elevation_feet >= {airports_elevation_ft}',
+  'elevation_feet <= {airports_elevation_ft}',
+  'elevation_feet BETWEEN {airports_elevation_ft} AND {airports_elevation_ft}',
+]
+
+[[table.field]]
+column = "scheduled_service"
+type = "custom"
+patterns = [
+  'scheduled_service = "{airports_scheduled_service}"',
+  'scheduled_service LIKE "{airports_scheduled_service}"',
+]
+
+[[table.field]]
+column = "geo"
+type = "custom"
+patterns = [
+  'continent LIKE "{airports_continent}"',
+  'continent = "{airports_continent}"',
+  'iso_country = "{airports_iso_country}"',
+  'iso_country LIKE "{airports_iso_country}"',
+  'iso_region = "{airports_iso_region}"',
+  'iso_region LIKE "{airports_iso_region}"',
+  'municipality = "{airports_municipality}"',
+  'municipality LIKE "{airports_municipality}"',
+  '( FIND_IN_SET("{rand_string}", keywords_field) > 0 OR FIND_IN_SET("{rand_string}", keywords_field) > 0 OR FIND_IN_SET("{rand_string}", keywords_field) > 0)',
+  '( FIND_IN_SET("{rand_string}", keywords_field) > 0 OR FIND_IN_SET("{rand_string}", keywords_field) > 0)',
+  '( FIND_IN_SET("{rand_string}", keywords_field) > 0)',
+]

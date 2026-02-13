@@ -185,10 +185,43 @@ In practice, you should create a folder under `data/datasets/` containing:
 ```
 data/datasets/<dataset_name>/
 ├── init_db.sql          # Database schema definition
+├── conditions.toml      # Optional: Variable-condition definitions
 ├── dicts/               # Dictionary files (one per placeholder)
 ├── queries/*.csv        # CSV templates (required)
 └── *.sql                # Optional: Raw SQL with -- template-ID annotations
 ```
+
+#### Variable-Condition Templates
+
+Templates can use the special `{conditions}` placeholder to generate queries with a variable number of WHERE conditions. This simulates search forms where users fill different combinations of fields. To use this feature, create a `conditions.toml` file in the dataset directory defining which tables support variable conditions, which columns to use, and their types.
+
+Each field can be typed (auto-generates patterns from `string`/`numeric`/`date` type) or custom (explicit pattern list for special cases like `FIND_IN_SET`):
+
+```toml
+[[table]]
+name = "film"
+select_columns = "film_id"
+min_conditions = 2
+max_conditions = 6
+
+  [[table.field]]
+  column = "title"
+  dict = "film_title"
+  type = "string"          # Auto-generates: =, LIKE, IN patterns
+
+  [[table.field]]
+  column = "release_year"
+  dict = "film_release_year"
+  type = "numeric"         # Auto-generates: =, >=, <=, BETWEEN patterns
+```
+
+Then add a template using `{conditions}` in the corresponding `queries/select.csv`:
+
+```csv
+"SELECT film_id FROM film WHERE {conditions}",sakila-S12,Search films using a flexible set of filter conditions.
+```
+
+During normal generation, the generator picks a random number of fields (within `[min_conditions, max_conditions]`) and a random pattern per field. For attack generation, one concrete condition set is frozen so sqlmap can inject into the resulting placeholders. An improvement would be to use the `--forms` option, but that's for future work.
 
 You can test your specification through the `pytest` test suite by parametrizing the test functions in [test_launcher_integration](tests/test_database_schemas.py) with your dataset name.
 

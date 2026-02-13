@@ -52,22 +52,22 @@ delete = "1/10"
 update = "1/10"
 insert = "1/10"
 
-# [[datasets]]
-# name = "sakila"
-# port_offset = 2  # Applied to both MySQL port (61337+offset) and HTTP server port (8080+offset)
+[[datasets]]
+name = "sakila"
+port_offset = 2 # Applied to both MySQL port (61337+offset) and HTTP server port (8080+offset)
 
-# [datasets.statements]
-# select = "7/10"
-# delete = "1/10"
-# update = "1/10"
-# insert = "1/10"
+[datasets.statements]
+select = "7/10"
+delete = "1/10"
+update = "1/10"
+insert = "1/10"
 
-# [[datasets]]
-# name = "AdventureWorks"
-# port_offset = 3  # Applied to both MySQL port (61337+offset) and HTTP server port (8080+offset)
+[[datasets]]
+name = "AdventureWorks"
+port_offset = 3         # Applied to both MySQL port (61337+offset) and HTTP server port (8080+offset)
 
-# [datasets.statements]
-# select = "7/10"
-# delete = "1/10"
-# update = "1/10"
-# insert = "1/10"
+[datasets.statements]
+select = "7/10"
+delete = "1/10"
+update = "1/10"
+insert = "1/10"

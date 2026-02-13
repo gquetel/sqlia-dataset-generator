@@ -10,3 +10,4 @@ template,ID,description
 "SELECT phone, district FROM address WHERE district IN (""{address_district}"", ""{address_district}"", ""{address_district}"")",sakila-S9,Get phone and district for addresses in specified districts.
 "SELECT * FROM payment WHERE payment_date BETWEEN ""{payment_payment_date}"" AND ""{payment_payment_date}""",sakila-S10,Get all payments made between two dates.
 "SELECT title, description, release_year FROM film WHERE description LIKE ""{rand_string}""",sakila-S11,Find films where description begins with a given string.
+"SELECT film_id FROM film WHERE {conditions}",sakila-S12,Search films using a flexible set of filter conditions.

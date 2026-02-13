@@ -19,3 +19,4 @@ template,ID,description
 "SELECT p.FirstName, p.LastName, p.PersonType, ea.EmailAddress, pp.PhoneNumber FROM Person_Person p LEFT JOIN Person_EmailAddress ea ON p.BusinessEntityID = ea.BusinessEntityID LEFT JOIN Person_PersonPhone pp ON p.BusinessEntityID = pp.BusinessEntityID WHERE p.BusinessEntityID = {Person_Person_BusinessEntityID}",AW-S18,Get user profile details by BusinessEntityID.
 "SELECT COUNT(*) AS EmailExists FROM Person_EmailAddress WHERE EmailAddress = ""{Person_EmailAddress_EmailAddress}""",AW-S19,Check if an email address already exists.
 "SELECT c.CustomerID, c.PersonID, c.StoreID, c.TerritoryID FROM Sales_Customer c WHERE c.AccountNumber = ""{Sales_Customer_AccountNumber}""",AW-S20,Retrieve customer account by account number.
+"SELECT ProductID FROM Production_Product WHERE {conditions}",AW-S21,Search products using a flexible set of filter conditions.

@@ -40,6 +40,7 @@ import pytest
 from pathlib import Path
 import sys
 import subprocess
+import shutil
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -579,3 +580,145 @@ select = "1/1"
         assert (
             "Missing required" in combined_output or "ValueError" in combined_output
         ), f"Expected ValueError about missing parameter. Output:\n{combined_output}"
+
+    @pytest.mark.parametrize(
+        "dataset_name,template_id,template_query",
+        [
+            (
+                "OurAirports",
+                "airport-S23",
+                '"SELECT id FROM airport WHERE {conditions}",airport-S23,Retrieve airport IDs based on a flexible set of search conditions.,string',
+            ),
+            (
+                "sakila",
+                "sakila-S12",
+                '"SELECT film_id FROM film WHERE {conditions}",sakila-S12,Search films using a flexible set of filter conditions.',
+            ),
+            (
+                "AdventureWorks",
+                "AW-S21",
+                '"SELECT ProductID FROM Production_Product WHERE {conditions}",AW-S21,Search products using a flexible set of filter conditions.',
+            ),
+            (
+                "OHR",
+                "OHR-S14",
+                '"SELECT employee_id FROM employees WHERE {conditions}",OHR-S14,Search employees using a flexible set of filter conditions.',
+            ),
+        ],
+    )
+    @pytest.mark.slow
+    @pytest.mark.integration
+    def test_conditions_template_generation(
+        self, tmp_path, subtests, dataset_name, template_id, template_query
+    ):
+        """Test that {conditions} templates generate valid normal and attack samples for each dataset."""
+        repo_root = Path(__file__).parent.parent
+        real_dataset_dir = repo_root / "data" / "datasets" / dataset_name
+
+        # Copy dataset directory to tmp_path
+        dest_dataset_dir = tmp_path / "data" / "datasets" / dataset_name
+        shutil.copytree(real_dataset_dir, dest_dataset_dir)
+
+        # Determine the CSV header from the original file
+        original_select = real_dataset_dir / "queries" / "select.csv"
+        with open(original_select) as f:
+            header = f.readline().strip()
+
+        # Replace select.csv with only the {conditions} template
+        select_csv = dest_dataset_dir / "queries" / "select.csv"
+        select_csv.write_text(f"{header}\n{template_query}\n")
+
+        # Remove other query CSV files so only select is available
+        for csv_file in (dest_dataset_dir / "queries").glob("*.csv"):
+            if csv_file.name != "select.csv":
+                csv_file.unlink()
+
+        # Create output directory
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Write minimal config with select-only statements
+        config_file = tmp_path / "test_config.toml"
+        config_file.write_text(
+            f"""
+[general]
+output_path = "dataset.csv"
+attacks_ratio = 0.1
+normal_only_template_ratio = 0
+seed = 42
+
+[mysql]
+user = "tata"
+password = "tata"
+host = "localhost"
+port = 61337
+priv_user = "root"
+priv_pwd = "root"
+
+[[datasets]]
+name = "{dataset_name}"
+
+[datasets.statements]
+select = "1"
+"""
+        )
+
+        # Run launcher in testing mode
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(repo_root / "launcher.py"),
+                "--config-file",
+                str(config_file),
+                "--testing",
+                "--output-dir",
+                str(output_dir),
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+        )
+
+        combined_output = result.stdout + result.stderr
+
+        with subtests.test(msg="success"):
+            assert (
+                "CRITICAL" not in result.stderr
+            ), f"CRITICAL error found:\n{result.stderr}"
+            assert (
+                f"Dataset {dataset_name} saved successfully" in combined_output
+            ), f"Expected success message not found. Output:\n{combined_output}"
+
+        output_file = output_dir / f"{dataset_name}.csv"
+
+        with subtests.test(msg="output exists"):
+            assert output_file.exists(), f"{dataset_name}.csv not found in {output_dir}"
+
+        if not output_file.exists():
+            return  # Cannot validate further without output
+
+        df = pd.read_csv(output_file)
+
+        with subtests.test(msg="normal samples present"):
+            n_normal = len(df[df["label"] == 0])
+            assert n_normal > 0, f"No normal samples found in {dataset_name} dataset"
+
+        with subtests.test(msg="attack samples present"):
+            n_attacks = len(df[df["label"] == 1])
+            assert n_attacks > 0, f"No attack samples found in {dataset_name} dataset"
+
+        with subtests.test(msg="all queries use conditions template"):
+            # Insider threat attacks have NaN template IDs; exclude them
+            non_insider = df[df["attack_technique"] != "insider"]
+            template_ids = non_insider["query_template_id"].dropna().unique()
+            assert list(template_ids) == [
+                template_id
+            ], f"Expected only template {template_id} but found {list(template_ids)}"
+
+        with subtests.test(msg="normal queries have WHERE clause with AND"):
+            normal_queries = df[df["label"] == 0]["full_query"].tolist()
+            queries_with_and = [q for q in normal_queries if " AND " in q]
+            assert len(queries_with_and) > 0, (
+                f"No normal queries contain ' AND ' (multiple conditions). "
+                f"Sample queries: {normal_queries[:3]}"
+            )

@@ -1,0 +1,35 @@
+[[table]]
+name = "film"
+select_columns = "film_id"
+min_conditions = 2
+max_conditions = 6
+
+[[table.field]]
+column = "title"
+dict = "film_title"
+type = "string"
+
+[[table.field]]
+column = "release_year"
+dict = "film_release_year"
+type = "numeric"
+
+[[table.field]]
+column = "rental_duration"
+dict = "film_rental_duration"
+type = "numeric"
+
+[[table.field]]
+column = "rental_rate"
+dict = "film_rental_rate"
+type = "numeric"
+
+[[table.field]]
+column = "length"
+dict = "film_length"
+type = "numeric"
+
+[[table.field]]
+column = "rating"
+dict = "film_rating"
+type = "string"
