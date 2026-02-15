@@ -108,6 +108,37 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
     return d_res
 
 
+def get_balanced_accuracy_per_attack(
+    df: pd.DataFrame, model_name: str, recall_per_attack: dict
+):
+    """Compute multiclass-style balanced accuracy treating each attack technique as a separate class.
+
+    Balanced accuracy = mean recall across all classes (normal + each attack technique).
+    Reuses the already-computed per-technique recalls from get_recall_per_attack().
+    """
+    class_recalls = []
+
+    # TNR (recall for normal class)
+    normal_mask = df["label"] == 0
+    if normal_mask.any():
+        normal_preds = df.loc[normal_mask, "preds"]
+        tnr = (normal_preds == 0).sum() / len(normal_preds)
+        class_recalls.append(tnr)
+
+    # Per-technique recalls
+    for key, value in recall_per_attack.items():
+        tech_recall = float(value.strip("%")) / 100.0
+        class_recalls.append(tech_recall)
+
+    bal_acc = np.mean(class_recalls) if class_recalls else 0.0
+
+    result = f"{bal_acc * 100:.2f}%"
+    logger.info(f"Balanced Accuracy Per Technique for {model_name}: {result}")
+    return {
+        "balanced_accuracy_per_technique": result,
+    }
+
+
 def get_recall_per_statement_type(df: pd.DataFrame, model_name: str, suffix: str = ""):
     """Display Recall score per statement type from a dataframe with preds."""
     statement_types = df.loc[df["label"] == 1, "statement_type"].unique().tolist()

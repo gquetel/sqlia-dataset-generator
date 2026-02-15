@@ -39,6 +39,7 @@ from constants import DotDict, ProjectPaths
 
 from explain import (
     get_metrics_treshold,
+    get_balanced_accuracy_per_attack,
     get_recall_per_attack,
     get_recall_per_statement_type,
     plot_pr_curves_plt_from_scores,
@@ -367,8 +368,10 @@ def compute_metrics_generic(
             "preds": preds,
         }
     )
-    d_res.update(get_recall_per_attack(df=_df, model_name=model_name))
+    recall_per_attack = get_recall_per_attack(df=_df, model_name=model_name)
+    d_res.update(recall_per_attack)
     d_res.update(get_recall_per_statement_type(df=_df, model_name=model_name))
+    d_res.update(get_balanced_accuracy_per_attack(df=_df, model_name=model_name, recall_per_attack=recall_per_attack))
     training_results.append(d_res)
 
     return l_test, s_test, threshold

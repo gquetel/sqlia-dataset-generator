@@ -23,6 +23,7 @@ sys.path.insert(0, str(REPO_ROOT / "models"))
 from constants import DotDict, ProjectPaths
 from explain import (
     get_metrics_treshold,
+    get_balanced_accuracy_per_attack,
     get_recall_per_attack,
     get_recall_per_statement_type,
     plot_pr_curves_plt_from_scores,
@@ -174,6 +175,9 @@ def evaluate_model(
 
     recall_per_stmt = get_recall_per_statement_type(df_eval, model_name)
     metrics_dict.update(recall_per_stmt)
+
+    bal_acc_per_attack = get_balanced_accuracy_per_attack(df_eval, model_name, recall_per_attack=recall_per_attack)
+    metrics_dict.update(bal_acc_per_attack)
 
     return metrics_dict, labels, scores
 
