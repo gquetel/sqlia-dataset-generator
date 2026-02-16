@@ -66,7 +66,8 @@ for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "speciali
         --model-path=$MODELS_DIR/${MODEL_NAME}.pth \
         --model-type=ae_sbert \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \
-        --output-dir=$RESULTS_DIR/${MODEL_NAME}_on_${TEST_LABEL}/
+        --output-dir=$RESULTS_DIR/${MODEL_NAME}_on_${TEST_LABEL}/ \
+        --fixed-fpr=0.01
 done
 
 echo "Job finished at: $(date)"
