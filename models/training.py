@@ -37,11 +37,8 @@ from U_Sentence_BERT import (
 )
 from constants import DotDict, ProjectPaths
 
+from evaluation import compute_all_metrics, get_threshold_for_max_rate
 from explain import (
-    get_metrics_treshold,
-    get_balanced_accuracy_per_attack,
-    get_recall_per_attack,
-    get_recall_per_statement_type,
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
 )
@@ -187,21 +184,6 @@ def preprocess_for_user_inputs_training(df: pd.DataFrame):
     dropped_count = c - len(df)
     logger.info(f"Dropped {dropped_count} samples with no user_input")
     df["full_query"] = df["user_inputs"]
-
-
-def get_threshold_for_max_rate(s_val, max_rate=0.001):
-    """Compute threshold given a max allowed FPR.
-
-    Args:
-        s_val (_type_): _description_
-        max_rate (float, optional): _description_. Defaults to 0.00001.
-
-    Returns:
-        _type_: _description_
-    """
-    s_val = np.array(s_val)
-    percentile = (1 - max_rate) * 100
-    return np.percentile(s_val, percentile)
 
 
 # --------------- Generic Evaluation Functions ---------------
@@ -352,26 +334,13 @@ def compute_metrics_generic(
                 "to be treated as false negatives."
             )
 
-    d_res, preds = get_metrics_treshold(
+    d_res, preds = compute_all_metrics(
+        df_test=df_test,
         labels=l_test,
         scores=s_test,
-        model_name=model_name,
         threshold=threshold,
+        model_name=model_name,
     )
-
-    # Recall per attack
-    _df = pd.DataFrame(
-        {
-            "attack_technique": df_test["attack_technique"],
-            "statement_type": df_test["statement_type"],
-            "label": l_test,
-            "preds": preds,
-        }
-    )
-    recall_per_attack = get_recall_per_attack(df=_df, model_name=model_name)
-    d_res.update(recall_per_attack)
-    d_res.update(get_recall_per_statement_type(df=_df, model_name=model_name))
-    d_res.update(get_balanced_accuracy_per_attack(df=_df, model_name=model_name, recall_per_attack=recall_per_attack))
     training_results.append(d_res)
 
     return l_test, s_test, threshold

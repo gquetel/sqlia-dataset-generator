@@ -21,11 +21,8 @@ REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
 from constants import DotDict, ProjectPaths
+from evaluation import compute_all_metrics, get_threshold_for_max_rate
 from explain import (
-    get_metrics_treshold,
-    get_balanced_accuracy_per_attack,
-    get_recall_per_attack,
-    get_recall_per_statement_type,
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
 )
@@ -133,53 +130,33 @@ def load_model(
 
 
 def evaluate_model(
-    model,
     df_test: pd.DataFrame,
+    labels: np.ndarray,
+    scores: np.ndarray,
+    threshold: float,
     model_name: str,
-) -> tuple[dict, np.ndarray, np.ndarray]:
-    """Evaluate a model on test data using the same structure as compute_metrics_generic.
+) -> tuple[dict, np.ndarray]:
+    """Evaluate a model on test data using pre-computed scores.
 
     Args:
-        model: Loaded model instance (AutoEncoder_Li or AutoEncoder_SecureBERT).
         df_test: Test dataset.
+        labels: Ground truth labels.
+        scores: Pre-computed anomaly scores.
+        threshold: Decision threshold.
         model_name: Name for logging and results.
 
     Returns:
-        Tuple of (metrics_dict, labels, scores).
+        Tuple of (metrics_dict, preds).
     """
-    threshold = model.threshold
-    logger.info(f"Using saved threshold: {threshold:.6f}")
+    logger.info(f"Using threshold: {threshold:.6f}")
 
-    labels, scores = get_scores_generic(
-        df=df_test,
-        batch_size=4096,
-        model=model,
-        preprocess_fn=preprocessing_generic_ae,
-        score_fn=decision_score_ae,
-        use_scaler=False,  # Scaler is handled internally by the model
-    )
-
-    metrics_dict, preds = get_metrics_treshold(
+    return compute_all_metrics(
+        df_test=df_test,
         labels=labels,
         scores=scores,
         threshold=threshold,
         model_name=model_name,
     )
-
-    # Build a DataFrame with predictions for per-category recall
-    df_eval = df_test.copy()
-    df_eval["preds"] = preds
-
-    recall_per_attack = get_recall_per_attack(df_eval, model_name)
-    metrics_dict.update(recall_per_attack)
-
-    recall_per_stmt = get_recall_per_statement_type(df_eval, model_name)
-    metrics_dict.update(recall_per_stmt)
-
-    bal_acc_per_attack = get_balanced_accuracy_per_attack(df_eval, model_name, recall_per_attack=recall_per_attack)
-    metrics_dict.update(bal_acc_per_attack)
-
-    return metrics_dict, labels, scores
 
 
 def main():
@@ -230,6 +207,13 @@ def main():
         help="Random seed",
     )
     parser.add_argument(
+        "--fixed-fpr",
+        type=float,
+        default=None,
+        help="Override saved threshold by computing one from test set normal samples "
+        "at the given FPR (e.g. 0.01 for 1%% FPR)",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging",
@@ -258,8 +242,29 @@ def main():
         embeddings_cache_dir=args.embeddings_cache,
     )
 
+    # Score once — reused for both threshold computation and evaluation
+    labels, scores = get_scores_generic(
+        df=df_test,
+        batch_size=4096,
+        model=model,
+        preprocess_fn=preprocessing_generic_ae,
+        score_fn=decision_score_ae,
+        use_scaler=False,
+    )
+
+    # Determine threshold
+    if args.fixed_fpr is not None:
+        logger.info(
+            f"Computing threshold for fixed FPR={args.fixed_fpr} from test set normal samples"
+        )
+        normal_scores = scores[labels == 0]
+        threshold = get_threshold_for_max_rate(normal_scores, max_rate=args.fixed_fpr)
+        logger.info(f"Fixed-FPR threshold: {threshold:.6f}")
+    else:
+        threshold = model.threshold
+
     # Evaluate model and save results
-    metrics, labels, scores = evaluate_model(model, df_test, model_name)
+    metrics, preds = evaluate_model(df_test, labels, scores, threshold, model_name)
     results_df = pd.DataFrame([metrics])
     results_path = output_dir / "results.csv"
     results_df.to_csv(results_path, index=False)
