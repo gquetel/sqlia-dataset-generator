@@ -7,8 +7,8 @@ cd ~/repos/sqlia-dataset/
 # source venv-3.12.3/bin/activate
 
 DATASETS_DIR=$HOME/datasets/100k-training/
-MODELS_DIR=./models/output/models/li_generic/
-RESULTS_DIR=./models/output/li_generic/
+MODELS_DIR=./models/output/models/ae_li_generic/
+RESULTS_DIR=./models/output/ae_li_generic/
 
 python3 models/training.py --dataset=$DATASETS_DIR/generic-OurAirports.csv --models ae_li --subfolder=generic-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCD
 python3 models/training.py --dataset=$DATASETS_DIR/generic-sakila.csv --models ae_li --subfolder=generic-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_ACD

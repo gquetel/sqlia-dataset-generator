@@ -8,7 +8,7 @@ source venv-3.12.3/bin/activate
 cd models/
 
 DATASET_PATH=$HOME/datasets/100k-training/
-MODELS_DIR=./output/models/li_generic/
+MODELS_DIR=./output/models/ae_li_generic/
 
 # Generic experiments - train on 3 datasets, save model for matrix evaluation
 # generic-OurAirports = trained on BCD, generic-sakila = trained on ACD, etc.

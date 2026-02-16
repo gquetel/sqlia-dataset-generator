@@ -15,8 +15,8 @@ cd ~/repos/sqlia-dataset/
 source venv-3.12.3/bin/activate
 
 DATASETS_DIR=$HOME/datasets/100k-training/
-MODELS_DIR=./models/output/models/sbert_specialised/
-RESULTS_DIR=./models/output/sbert_specialised/
+MODELS_DIR=./models/output/models/ae_sbert_specialised/
+RESULTS_DIR=./models/output/ae_sbert_specialised/
 
 # Get scenario from command line argument (1-4)
 SCENARIO=${1:-1}
