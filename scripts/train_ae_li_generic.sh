@@ -12,10 +12,10 @@ MODELS_DIR=./output/models/ae_li_generic/
 
 # Generic experiments - train on 3 datasets, save model for matrix evaluation
 # generic-OurAirports = trained on BCD, generic-sakila = trained on ACD, etc.
-python3 training.py --dataset=$DATASET_PATH/generic-OurAirports.csv --models ae_li --subfolder=generic-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCD 
-python3 training.py --dataset=$DATASET_PATH/generic-sakila.csv --models ae_li --subfolder=generic-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_ACD 
-python3 training.py --dataset=$DATASET_PATH/generic-AdventureWorks.csv --models ae_li --subfolder=generic-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_ABD 
-python3 training.py --dataset=$DATASET_PATH/generic-OHR.csv --models ae_li --subfolder=generic-OHR-ae_li --save-model-path=$MODELS_DIR/ae_li_ABC 
+python3 training.py --dataset=$DATASET_PATH/generic-OurAirports.csv --models ae_li --subfolder=ae_li_generic/generic-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCD 
+python3 training.py --dataset=$DATASET_PATH/generic-sakila.csv --models ae_li --subfolder=ae_li_generic/generic-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_ACD 
+python3 training.py --dataset=$DATASET_PATH/generic-AdventureWorks.csv --models ae_li --subfolder=ae_li_generic/generic-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_ABD 
+python3 training.py --dataset=$DATASET_PATH/generic-OHR.csv --models ae_li --subfolder=ae_li_generic/generic-OHR-ae_li --save-model-path=$MODELS_DIR/ae_li_ABC 
 
 # Print job completion time
 echo "Job finished at: $(date)"

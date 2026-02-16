@@ -23,10 +23,10 @@ MODELS_DIR=./output/models/ae_sbert_generic/
 # Train ae_sbert on generic datasets - save model for matrix evaluation
 # generic-OurAirports = trained on BCD, generic-sakila = trained on ACD, etc.
 
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-OurAirports.csv --models ae_sbert --subfolder=generic-OurAirports-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_BCD
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-sakila.csv --models ae_sbert --subfolder=generic-sakila-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_ACD
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-AdventureWorks.csv --models ae_sbert --subfolder=generic-AdventureWorks-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_ABD
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-OHR.csv --models ae_sbert --subfolder=generic-OHR-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_ABC
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-OurAirports.csv --models ae_sbert --subfolder=ae_sbert_generic/generic-OurAirports-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_BCD
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-sakila.csv --models ae_sbert --subfolder=ae_sbert_generic/generic-sakila-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_ACD
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-AdventureWorks.csv --models ae_sbert --subfolder=ae_sbert_generic/generic-AdventureWorks-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_ABD
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-OHR.csv --models ae_sbert --subfolder=ae_sbert_generic/generic-OHR-ae_sbert --save-model-path=$MODELS_DIR/ae_sbert_ABC
 
 # Print job completion time
 echo "Job finished at: $(date)"

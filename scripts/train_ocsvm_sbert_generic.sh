@@ -20,10 +20,10 @@ cd models/
 DATASET_PATH=$HOME/datasets/100k-training/
 
 # Train ocsvm_sbert on generic datasets
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-OurAirports.csv --models ocsvm_sbert --subfolder=generic-OurAirports-ocsvm_sbert
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-sakila.csv --models ocsvm_sbert --subfolder=generic-sakila-ocsvm_sbert
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-AdventureWorks.csv --models ocsvm_sbert --subfolder=generic-AdventureWorks-ocsvm_sbert
-srun python3 ./training.py --dataset=$DATASET_PATH/generic-OHR.csv --models ocsvm_sbert --subfolder=generic-OHR-ocsvm_sbert
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-OurAirports.csv --models ocsvm_sbert --subfolder=ocsvm_sbert_generic/generic-OurAirports-ocsvm_sbert
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-sakila.csv --models ocsvm_sbert --subfolder=ocsvm_sbert_generic/generic-sakila-ocsvm_sbert
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-AdventureWorks.csv --models ocsvm_sbert --subfolder=ocsvm_sbert_generic/generic-AdventureWorks-ocsvm_sbert
+srun python3 ./training.py --dataset=$DATASET_PATH/generic-OHR.csv --models ocsvm_sbert --subfolder=ocsvm_sbert_generic/generic-OHR-ocsvm_sbert
 
 # Print job completion time
 echo "Job finished at: $(date)"

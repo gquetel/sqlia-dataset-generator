@@ -10,10 +10,10 @@ DATASETS_DIR=$HOME/datasets/100k-training/
 MODELS_DIR=./models/output/models/ae_li_generic/
 RESULTS_DIR=./models/output/ae_li_generic/
 
-python3 models/training.py --dataset=$DATASETS_DIR/generic-OurAirports.csv --models ae_li --subfolder=generic-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCD
-python3 models/training.py --dataset=$DATASETS_DIR/generic-sakila.csv --models ae_li --subfolder=generic-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_ACD
-python3 models/training.py --dataset=$DATASETS_DIR/generic-AdventureWorks.csv --models ae_li --subfolder=generic-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_ABD
-python3 models/training.py --dataset=$DATASETS_DIR/generic-OHR.csv --models ae_li --subfolder=generic-OHR-ae_li --save-model-path=$MODELS_DIR/ae_li_ABC
+python3 models/training.py --dataset=$DATASETS_DIR/generic-OurAirports.csv --models ae_li --subfolder=ae_li_generic/generic-OurAirports-ae_li --save-model-path=$MODELS_DIR/ae_li_BCD
+python3 models/training.py --dataset=$DATASETS_DIR/generic-sakila.csv --models ae_li --subfolder=ae_li_generic/generic-sakila-ae_li --save-model-path=$MODELS_DIR/ae_li_ACD
+python3 models/training.py --dataset=$DATASETS_DIR/generic-AdventureWorks.csv --models ae_li --subfolder=ae_li_generic/generic-AdventureWorks-ae_li --save-model-path=$MODELS_DIR/ae_li_ABD
+python3 models/training.py --dataset=$DATASETS_DIR/generic-OHR.csv --models ae_li --subfolder=ae_li_generic/generic-OHR-ae_li --save-model-path=$MODELS_DIR/ae_li_ABC
 
 # Evaluate ae_li_ABC on all test datasets
 python3 experiments/evaluate_model.py --model-path=$MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$DATASETS_DIR/generic-OurAirports.csv --output-dir=$RESULTS_DIR/ae_li_ABC_on_A/ --fixed-fpr=0.01
