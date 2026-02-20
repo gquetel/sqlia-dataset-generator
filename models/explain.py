@@ -42,7 +42,7 @@ def get_metrics_treshold(
     model_name: str = "",
 ):
 
-    preds = (scores >= threshold).astype(int)
+    preds = (scores > threshold).astype(int)
 
     accuracy = f"{accuracy_score(labels, preds)* 100:.2f}%"
     f1 = f"{f1_score(labels, preds)* 100:.2f}%"
