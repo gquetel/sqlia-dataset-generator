@@ -33,6 +33,7 @@ from training import (
 )
 from U_Kakisim import AutoEncoder_Kakisim
 from U_Li import AutoEncoder_Li
+from U_Loginov import AutoEncoder_Loginov
 from U_Sentence_BERT import AutoEncoder_SecureBERT
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,9 @@ def load_model(
     elif model_type == "ae_kakisim_enriched":
         model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device, views=["E"])
         model.load_model(model_path)
+    elif model_type == "ae_loginov":
+        model = AutoEncoder_Loginov(GENERIC=GENERIC, device=device, use_scaler=True)
+        model.load_model(model_path)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -180,7 +184,13 @@ def main():
         "--model-type",
         type=str,
         required=True,
-        choices=["ae_li", "ae_sbert", "ae_kakisim", "ae_kakisim_enriched"],
+        choices=[
+            "ae_li",
+            "ae_sbert",
+            "ae_kakisim",
+            "ae_kakisim_enriched",
+            "ae_loginov",
+        ],
         help="Type of model",
     )
     parser.add_argument(

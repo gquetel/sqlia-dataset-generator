@@ -41,6 +41,11 @@ from U_Kakisim import (
     OCSVM_Kakisim,
     preprocessing_kakisim,
 )
+from U_Loginov import (
+    AutoEncoder_Loginov,
+    OCSVM_Loginov,
+    preprocess_loginov,
+)
 from constants import DotDict, ProjectPaths
 
 from cache_utils import hash_df, load_cache, save_cache
@@ -165,7 +170,7 @@ def init_args() -> argparse.Namespace:
         "--save-model-path",
         type=str,
         dest="save_model_path",
-        help="Path to save trained model (without extension). Works with ae_li, ae_sbert, ae_kakisim, and ae_kakisim_enriched.",
+        help="Path to save trained model (without extension). Works with ae_li, ae_sbert, ae_kakisim, ae_kakisim_enriched, and ae_loginov.",
     )
 
     parser.add_argument(
@@ -981,6 +986,86 @@ def train_ae_kakisim_enriched(
     return labels, scores, threshold
 
 
+def train_ocsvm_loginov(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = True,
+):
+    set_global_seed()
+    model_name = "Loginov and OCSVM"
+    if use_scaler:
+        model_name += "-scaler"
+
+    logger.info(f"Training model: {model_name}")
+    model = OCSVM_Loginov(
+        GENERIC=GENERIC,
+        nu=0.05,
+        kernel="rbf",
+        gamma="scale",
+        max_iter=1000,
+        use_scaler=use_scaler,
+    )
+    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
+
+    labels, scores, threshold = compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocess_loginov,
+        get_decision_scores_fn=decision_score_generic,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+    return labels, scores, threshold
+
+
+def train_ae_loginov(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = True,
+):
+    global save_model_path
+    set_global_seed()
+    random.seed(GENERIC.RANDOM_SEED)
+    np.random.seed(GENERIC.RANDOM_SEED)
+    torch.manual_seed(GENERIC.RANDOM_SEED)
+
+    model_name = "Loginov and AE"
+    if use_scaler:
+        model_name += "-scaler"
+    logger.info(f"Training model: {model_name}")
+    model = AutoEncoder_Loginov(
+        GENERIC=GENERIC,
+        device=init_device(),
+        learning_rate=0.005,
+        epochs=100,
+        batch_size=8192,
+        use_scaler=use_scaler,
+    )
+    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
+
+    labels, scores, threshold = compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_generic_ae,
+        get_decision_scores_fn=decision_score_ae,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+
+    if save_model_path:
+        model.save_model(save_model_path, threshold=threshold)
+
+    return labels, scores, threshold
+
+
 def save_results(args):
     dfres = pd.DataFrame(training_results)
     resdir = project_paths.output_path
@@ -1000,6 +1085,7 @@ def select_models(args):
         "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
         "kakisim": ["ocsvm_kakisim", "ae_kakisim"],
         "kakisim_enriched": ["ocsvm_kakisim_enriched", "ae_kakisim_enriched"],
+        "loginov": ["ocsvm_loginov", "ae_loginov"],
     }
 
     MODEL_REGISTRY = {
@@ -1035,6 +1121,12 @@ def select_models(args):
         ),
         "ae_kakisim_enriched": lambda df_train, df_test, df_val: train_ae_kakisim_enriched(
             df_train=df_train, df_test=df_test, df_val=df_val
+        ),
+        "ocsvm_loginov": lambda df_train, df_test, df_val: train_ocsvm_loginov(
+            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
+        ),
+        "ae_loginov": lambda df_train, df_test, df_val: train_ae_loginov(
+            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
         ),
     }
 
