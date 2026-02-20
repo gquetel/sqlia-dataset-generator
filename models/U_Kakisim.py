@@ -120,10 +120,16 @@ def _get_tag(ttype, token_val: str, next_tok=None) -> str:
         return "Comparison"
     if ttype in T.Operator:
         return "Oper"
-    if ttype is T.Name:
+    if ttype in T.Name:
+        if ttype is T.Name.Builtin:
+            return "Builtin"
         # Function call: Name immediately followed by opening parenthesis
         if next_tok is not None and next_tok.value == "(":
             return "Func"
+        # sqlparse sometimes classifies keywords (e.g. type names) as T.Name
+        upper = token_val.upper()
+        if upper in _KEYWORD_OVERRIDES:
+            return _KEYWORD_OVERRIDES[upper]
         return "Identifi"
     if ttype in T.Comment:
         return "Escap"
@@ -131,21 +137,45 @@ def _get_tag(ttype, token_val: str, next_tok=None) -> str:
         if token_val == "'":
             return "Escap"
         return "Error"
-    return "Error"
+    return "Unknown"
+
+
+def _walk_tree(node, result: list[tuple[str, str]]):
+    """Recursively walk sqlparse tree, emitting (token_value, tag) pairs.
+
+    IdentifierList groups are collapsed into a single Identifierlist tag;
+    all other groups are recursed into and their leaves are tagged individually.
+    """
+    if isinstance(node, sqlparse.sql.IdentifierList):
+        result.append((node.value, "Identifierlist"))
+        return
+    if node.ttype is not None:
+        # Leaf token
+        if node.is_whitespace:
+            return
+        tag = _get_tag(node.ttype, node.value, next_tok=None)
+        result.append((node.value, tag))
+    else:
+        # Group node – recurse
+        for child in node.tokens:
+            _walk_tree(child, result)
 
 
 def _tokenize_and_tag(query: str) -> list[tuple[str, str]]:
-    """Flatten sqlparse parse tree; return [(token_value, kakisim_tag), ...]."""
+    """Walk sqlparse parse tree; return [(token_value, kakisim_tag), ...]."""
     statements = sqlparse.parse(query)
     if not statements:
         return []
-    flat = [tok for tok in statements[0].flatten() if not tok.is_whitespace]
-    result = []
-    for i, tok in enumerate(flat):
-        next_tok = flat[i + 1] if i + 1 < len(flat) else None
-        tag = _get_tag(tok.ttype, tok.value, next_tok)
-        result.append((tok.value, tag))
-    return result
+    result: list[tuple[str, str]] = []
+    _walk_tree(statements[0], result)
+    # Post-pass: promote Name immediately followed by '(' to Func
+    fixed: list[tuple[str, str]] = []
+    for i, (val, tag) in enumerate(result):
+        if tag == "Identifi" and i + 1 < len(result) and result[i + 1][0] == "(":
+            fixed.append((val, "Func"))
+        else:
+            fixed.append((val, tag))
+    return fixed
 
 
 def _sql_to_views(query: str) -> tuple[str, str, str]:
