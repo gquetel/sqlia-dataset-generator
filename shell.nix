@@ -67,6 +67,23 @@ let
     doCheck = false;
   };
 
+  # gensim 4.3.3 in nixpkgs is not supported for python3.13; use 4.4.0 wheel directly.
+  gensim = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "gensim";
+    version = "4.4.0";
+    format = "wheel";
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/b3/b9/ee43ef9c391857232603a9ee281e9c5953f7922d70c98c2296a037d1c0b7/gensim-4.4.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl";
+      sha256 = "sha256-kDOxiSC3d05o6vrNvYclL/opOC7EZd24i9A24A/IY2U=";
+    };
+    propagatedBuildInputs = [
+      pkgs.python313Packages.numpy
+      pkgs.python313Packages.scipy
+      pkgs.python313Packages.smart-open
+    ];
+    doCheck = false;
+  };
+
   # This lib is used by plotly to export figures. It is very cursed, IT WILL REQUIRE
   # GOOGLE CHROME TO EXPORT THE FIGURE!!! I hate it, but I hate manually saving
   # figures more.
@@ -105,6 +122,7 @@ let
         ps.jupyter
         ps.plotly
         ps.matplotlib-venn
+
         # Diversity metric + WAFAMOLE loading.
         ps.sqlglot
         ps.sqlparse
@@ -114,11 +132,13 @@ let
         ps.evaluate
         ps.torch
         ps.transformers
+
       ]
       ++ [
         mysql-connector
         pytest
         kaleido
+        gensim
       ]
     )).override
       (args: {

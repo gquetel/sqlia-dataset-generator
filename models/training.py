@@ -40,6 +40,9 @@ from U_Kakisim import (
     AutoEncoder_Kakisim,
     OCSVM_Kakisim,
     preprocessing_kakisim,
+    AutoEncoder_Kakisim_W2V,
+    OCSVM_Kakisim_W2V,
+    preprocessing_kakisim_w2v,
 )
 from U_Loginov import (
     AutoEncoder_Loginov,
@@ -820,14 +823,14 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     return labels, scores, threshold
 
 
-def train_ocsvm_kakisim(
+def train_ocsvm_kakisim_c(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
     set_global_seed()
-    model_name = "Kakisim and OCSVM"
+    model_name = "Kakisim-C and OCSVM"
     if use_scaler:
         model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
@@ -838,6 +841,7 @@ def train_ocsvm_kakisim(
         gamma="scale",
         max_iter=10000,
         use_scaler=use_scaler,
+        views=["C"],
     )
     cache_dir = project_paths.features_cache_path if use_feature_cache else None
     model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
@@ -856,7 +860,7 @@ def train_ocsvm_kakisim(
     return labels, scores, threshold
 
 
-def train_ae_kakisim(
+def train_ae_kakisim_c(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
@@ -868,7 +872,7 @@ def train_ae_kakisim(
     np.random.seed(GENERIC.RANDOM_SEED)
     torch.manual_seed(GENERIC.RANDOM_SEED)
 
-    model_name = "Kakisim and AE"
+    model_name = "Kakisim-C and AE"
     if use_scaler:
         model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
@@ -879,7 +883,8 @@ def train_ae_kakisim(
         epochs=100,
         batch_size=4096,
         use_scaler=use_scaler,
-        min_df=10,
+        views=["C"],
+        min_df=1,
     )
     cache_dir = project_paths.features_cache_path if use_feature_cache else None
     model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
@@ -902,25 +907,25 @@ def train_ae_kakisim(
     return labels, scores, threshold
 
 
-def train_ocsvm_kakisim_enriched(
+def train_ocsvm_kakisim_w2v(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
     set_global_seed()
-    model_name = "Kakisim-E and OCSVM"
+    model_name = "Kakisim-W2V and OCSVM"
     if use_scaler:
         model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_Kakisim(
+    model = OCSVM_Kakisim_W2V(
         GENERIC=GENERIC,
         nu=0.05,
         kernel="rbf",
         gamma="scale",
         max_iter=10000,
         use_scaler=use_scaler,
-        views=["E"],
+        vector_size=256,
     )
     cache_dir = project_paths.features_cache_path if use_feature_cache else None
     model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
@@ -930,7 +935,7 @@ def train_ocsvm_kakisim_enriched(
         df_test=df_test,
         df_val=df_val,
         model_name=model_name,
-        preprocess_fn=preprocessing_kakisim,
+        preprocess_fn=preprocessing_kakisim_w2v,
         get_decision_scores_fn=decision_score_generic,
         use_scaler=use_scaler,
         insider_as_fn=False,
@@ -939,7 +944,7 @@ def train_ocsvm_kakisim_enriched(
     return labels, scores, threshold
 
 
-def train_ae_kakisim_enriched(
+def train_ae_kakisim_w2v(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
@@ -951,19 +956,18 @@ def train_ae_kakisim_enriched(
     np.random.seed(GENERIC.RANDOM_SEED)
     torch.manual_seed(GENERIC.RANDOM_SEED)
 
-    model_name = "Kakisim-E and AE"
+    model_name = "Kakisim-W2V and AE"
     if use_scaler:
         model_name += "-scaler"
     logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Kakisim(
+    model = AutoEncoder_Kakisim_W2V(
         GENERIC=GENERIC,
         device=init_device(),
         learning_rate=0.001,
         epochs=100,
         batch_size=4096,
         use_scaler=use_scaler,
-        views=["E"],
-        min_df=10,
+        vector_size=256,
     )
     cache_dir = project_paths.features_cache_path if use_feature_cache else None
     model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
@@ -1083,8 +1087,8 @@ def select_models(args):
         "li": ["ocsvm_li", "lof_li", "ae_li"],
         "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
         "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
-        "kakisim": ["ocsvm_kakisim", "ae_kakisim"],
-        "kakisim_enriched": ["ocsvm_kakisim_enriched", "ae_kakisim_enriched"],
+        "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
+        "kakisim_w2v": ["ocsvm_kakisim_w2v", "ae_kakisim_w2v"],
         "loginov": ["ocsvm_loginov", "ae_loginov"],
     }
 
@@ -1110,16 +1114,16 @@ def select_models(args):
         "ocsvm_sbert": train_ocsvm_sbert,
         "lof_sbert": train_lof_sbert,
         "ae_sbert": train_ae_sbert,
-        "ocsvm_kakisim": lambda df_train, df_test, df_val: train_ocsvm_kakisim(
+        "ocsvm_kakisim_c": lambda df_train, df_test, df_val: train_ocsvm_kakisim_c(
             df_train=df_train, df_test=df_test, df_val=df_val
         ),
-        "ae_kakisim": lambda df_train, df_test, df_val: train_ae_kakisim(
+        "ae_kakisim_c": lambda df_train, df_test, df_val: train_ae_kakisim_c(
             df_train=df_train, df_test=df_test, df_val=df_val
         ),
-        "ocsvm_kakisim_enriched": lambda df_train, df_test, df_val: train_ocsvm_kakisim_enriched(
+        "ocsvm_kakisim_w2v": lambda df_train, df_test, df_val: train_ocsvm_kakisim_w2v(
             df_train=df_train, df_test=df_test, df_val=df_val
         ),
-        "ae_kakisim_enriched": lambda df_train, df_test, df_val: train_ae_kakisim_enriched(
+        "ae_kakisim_w2v": lambda df_train, df_test, df_val: train_ae_kakisim_w2v(
             df_train=df_train, df_test=df_test, df_val=df_val
         ),
         "ocsvm_loginov": lambda df_train, df_test, df_val: train_ocsvm_loginov(

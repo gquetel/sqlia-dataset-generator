@@ -31,7 +31,7 @@ from training import (
     get_scores_generic,
     preprocessing_generic_ae,
 )
-from U_Kakisim import AutoEncoder_Kakisim
+from U_Kakisim import AutoEncoder_Kakisim, AutoEncoder_Kakisim_W2V
 from U_Li import AutoEncoder_Li
 from U_Loginov import AutoEncoder_Loginov
 from U_Sentence_BERT import AutoEncoder_SecureBERT
@@ -119,11 +119,11 @@ def load_model(
             project_paths=project_paths,
         )
         model.load_model(load_path=model_path)
-    elif model_type == "ae_kakisim":
-        model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device)
+    elif model_type == "ae_kakisim_c":
+        model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device, views=["C"])
         model.load_model(model_path)
-    elif model_type == "ae_kakisim_enriched":
-        model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device, views=["E"])
+    elif model_type == "ae_kakisim_w2v":
+        model = AutoEncoder_Kakisim_W2V(GENERIC=GENERIC, device=device)
         model.load_model(model_path)
     elif model_type == "ae_loginov":
         model = AutoEncoder_Loginov(GENERIC=GENERIC, device=device, use_scaler=True)
@@ -187,8 +187,8 @@ def main():
         choices=[
             "ae_li",
             "ae_sbert",
-            "ae_kakisim",
-            "ae_kakisim_enriched",
+            "ae_kakisim_c",
+            "ae_kakisim_w2v",
             "ae_loginov",
         ],
         help="Type of model",

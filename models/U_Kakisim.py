@@ -561,3 +561,348 @@ def preprocessing_kakisim(
         return X_scaled, labels
 
     return X, labels
+
+
+class Word2VecKakisimVectorizer:
+    """Word2Vec over concatenated T+C+E token sequences, max-pooled to fixed size."""
+
+    def __init__(
+        self,
+        vector_size: int = 256,
+        window: int = 5,
+        min_count: int = 2,
+        workers: int = 4,
+    ):
+        self.vector_size = vector_size
+        self.window = window
+        self.min_count = min_count
+        self.workers = workers
+        self._w2v = None  # gensim Word2Vec, set during fit_transform
+
+    def _to_sequences(self, queries) -> list[list[str]]:
+        """Return one token list per query (T+C+E concatenated)."""
+        str_queries = [str(q) for q in queries]
+        if len(str_queries) > 1000:
+            with Pool() as pool:
+                results = pool.map(_sql_to_views, str_queries, chunksize=500)
+        else:
+            results = [_sql_to_views(q) for q in str_queries]
+        return [t.split() + c.split() + e.split() for t, c, e in results]
+
+    def fit_transform(self, queries) -> np.ndarray:
+        from gensim.models import Word2Vec
+
+        sequences = self._to_sequences(queries)
+        self._w2v = Word2Vec(
+            sentences=sequences,
+            vector_size=self.vector_size,
+            window=self.window,
+            min_count=self.min_count,
+            workers=self.workers,
+        )
+        return self._max_pool(sequences)
+
+    def transform(self, queries) -> np.ndarray:
+        return self._max_pool(self._to_sequences(queries))
+
+    def _max_pool(self, sequences) -> np.ndarray:
+        out = np.zeros((len(sequences), self.vector_size), dtype=np.float32)
+        wv = self._w2v.wv
+        for i, tokens in enumerate(sequences):
+            vecs = [wv[t] for t in tokens if t in wv]
+            if vecs:
+                out[i] = np.max(vecs, axis=0)
+        return out
+
+    @property
+    def views_tag(self) -> str:
+        return "TCE_w2v"
+
+    def _vocab_tag(self) -> str:
+        vocab = sorted(self._w2v.wv.key_to_index.keys())
+        return hashlib.md5(str(vocab).encode()).hexdigest()[:8]
+
+    def get_feature_names_out(self) -> np.ndarray:
+        return np.array([f"w2v_{i}" for i in range(self.vector_size)])
+
+
+class OCSVM_Kakisim_W2V:
+    def __init__(
+        self,
+        GENERIC,
+        nu: float = 0.05,
+        kernel: str = "rbf",
+        gamma: str = "scale",
+        max_iter: int = -1,
+        use_scaler: bool = True,
+        vector_size: int = 256,
+    ):
+        self.nu = nu
+        self.kernel = kernel
+        self.gamma = gamma
+        self.max_iter = max_iter
+
+        self.vectorizer = Word2VecKakisimVectorizer(vector_size=vector_size)
+        self.GENERIC = GENERIC
+
+        self._scaler = StandardScaler(with_mean=False)
+
+        self.clf = None
+        self.model_name = None
+        self.cache_dir = None
+        self.feature_columns = None
+        self.use_scaler = use_scaler
+
+    def preprocess_for_train(
+        self, df: pd.DataFrame, cache_dir: str | None = None
+    ) -> np.ndarray:
+        if cache_dir:
+            key = f"kakisim_{self.vectorizer.views_tag}-vectorized-train-{hash_df(df)}.pkl"
+            cached = load_cache(os.path.join(cache_dir, key))
+            if cached is not None:
+                self.vectorizer = cached["vectorizer"]
+                return cached["features"]
+
+        pp_queries = self.vectorizer.fit_transform(df["full_query"])
+
+        if cache_dir:
+            save_cache(
+                os.path.join(cache_dir, key),
+                {
+                    "vectorizer": self.vectorizer,
+                    "features": pp_queries,
+                },
+            )
+        return pp_queries
+
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        model_name: str = None,
+        cache_dir: str | None = None,
+    ):
+        self.model_name = model_name
+        self.cache_dir = cache_dir
+        f_matrix = self.preprocess_for_train(df, cache_dir=cache_dir)
+        model = OneClassSVM(
+            nu=self.nu,
+            kernel=self.kernel,
+            gamma=self.gamma,
+            max_iter=self.max_iter,
+        )
+        self.feature_columns = self.vectorizer.get_feature_names_out()
+
+        if self.use_scaler:
+            f_matrix = self._scaler.fit_transform(f_matrix)
+
+        model.fit(f_matrix)
+        self.clf = model
+
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+        labels = df["label"].to_numpy()
+        cache_path = None
+        if self.cache_dir:
+            vocab_tag = self.vectorizer._vocab_tag()
+            cache_path = os.path.join(
+                self.cache_dir,
+                f"kakisim_{self.vectorizer.views_tag}-vectorized-{hash_df(df)}-{vocab_tag}.pkl",
+            )
+            cached = load_cache(cache_path)
+            if cached is not None:
+                return pd.DataFrame(cached), labels
+        pp_queries = self.vectorizer.transform(df["full_query"])
+        if cache_path:
+            save_cache(cache_path, pp_queries)
+        return pd.DataFrame(pp_queries), labels
+
+
+class AutoEncoder_Kakisim_W2V:
+    def __init__(
+        self,
+        GENERIC,
+        device,
+        learning_rate: float = 0.001,
+        epochs: int = 100,
+        batch_size: int = 32,
+        use_scaler: bool = False,
+        vector_size: int = 256,
+    ):
+        self.random_state = GENERIC.RANDOM_SEED
+        self.clf = None
+        self.GENERIC = GENERIC
+        self.model_name = None
+        self.cache_dir = None
+
+        self.vectorizer = Word2VecKakisimVectorizer(vector_size=vector_size)
+        self.use_scaler = use_scaler
+        self.device = device
+        self.threshold = None
+
+        self._scaler = MaxAbsScaler()
+        self._scaler_min = None
+        self._scaler_max = None
+
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+        self.feature_columns = None
+
+    def preprocess_for_preds(self, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+        labels = df["label"].to_numpy()
+        cache_path = None
+        if self.cache_dir:
+            vocab_tag = self.vectorizer._vocab_tag()
+            cache_path = os.path.join(
+                self.cache_dir,
+                f"kakisim_{self.vectorizer.views_tag}-vectorized-{hash_df(df)}-{vocab_tag}.pkl",
+            )
+            cached = load_cache(cache_path)
+            if cached is not None:
+                return pd.DataFrame(cached), labels
+        pp_queries = self.vectorizer.transform(df["full_query"])
+        if cache_path:
+            save_cache(cache_path, pp_queries)
+        return pd.DataFrame(pp_queries), labels
+
+    def preprocess_for_train(
+        self, df: pd.DataFrame, cache_dir: str | None = None
+    ) -> np.ndarray:
+        if cache_dir:
+            key = f"kakisim_{self.vectorizer.views_tag}-vectorized-train-{hash_df(df)}.pkl"
+            cached = load_cache(os.path.join(cache_dir, key))
+            if cached is not None:
+                self.vectorizer = cached["vectorizer"]
+                pp_queries = cached["features"]
+                self._scaler_min = pp_queries.min(axis=None)
+                self._scaler_max = pp_queries.max(axis=None)
+                return pp_queries
+
+        pp_queries = self.vectorizer.fit_transform(df["full_query"])
+        self._scaler_min = pp_queries.min(axis=None)
+        self._scaler_max = pp_queries.max(axis=None)
+
+        if cache_dir:
+            save_cache(
+                os.path.join(cache_dir, key),
+                {
+                    "vectorizer": self.vectorizer,
+                    "features": pp_queries,
+                },
+            )
+        return pp_queries
+
+    def X_to_tensor(self, X) -> torch.Tensor:
+        X = X.values
+        if self.use_scaler:
+            X = self._scaler.transform(X)
+        X_tensors = torch.FloatTensor(X).to(self.device)
+        return X_tensors
+
+    def train_model(
+        self,
+        df: pd.DataFrame,
+        model_name: str = None,
+        cache_dir: str | None = None,
+    ):
+        self.model_name = model_name
+        self.cache_dir = cache_dir
+        f_matrix = self.preprocess_for_train(df, cache_dir=cache_dir)
+        self.feature_columns = self.vectorizer.get_feature_names_out()
+        input_dim = len(self.feature_columns)
+
+        self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+        self.clf = self.clf.to(self.device)
+
+        criterion = nn.MSELoss().to(self.device)
+        optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
+
+        n_samples = f_matrix.shape[0]
+        self.clf.train()
+        for epoch in range(self.epochs):
+            total_loss = 0
+            for i in range(0, n_samples, self.batch_size):
+                batch = torch.FloatTensor(f_matrix[i : i + self.batch_size]).to(
+                    self.device
+                )
+                optimizer.zero_grad()
+                reconstructed = self.clf(batch)
+                loss = criterion(reconstructed, batch)
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+
+            logger.debug(
+                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/n_samples:.6f}"
+            )
+
+    def save_model(self, save_path: str, threshold: float = None):
+        """Save model weights, vectorizer, threshold, and metadata."""
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        model_path = save_path.with_suffix(".pth")
+        meta_path = save_path.parent / f"{save_path.stem}_meta.pkl"
+
+        torch.save(self.clf.state_dict(), model_path)
+
+        metadata = {
+            "learning_rate": self.learning_rate,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "input_dim": len(self.feature_columns),
+            "use_scaler": self.use_scaler,
+            "vectorizer": self.vectorizer,
+            "threshold": threshold,
+            "vector_size": self.vectorizer.vector_size,
+        }
+        with open(meta_path, "wb") as f:
+            pickle.dump(metadata, f)
+
+        logger.info(f"Saved AutoEncoder_Kakisim_W2V model to {model_path}")
+        if threshold is not None:
+            logger.info(f"Saved threshold: {threshold}")
+
+    def load_model(self, load_path: str):
+        """Load model from saved checkpoint."""
+        load_path = Path(load_path)
+        if load_path.suffix != ".pth":
+            load_path = load_path.with_suffix(".pth")
+
+        meta_path = load_path.parent / f"{load_path.stem}_meta.pkl"
+
+        if not load_path.exists():
+            raise FileNotFoundError(f"Model weights not found: {load_path}")
+        if not meta_path.exists():
+            raise FileNotFoundError(f"Model metadata not found: {meta_path}")
+
+        with open(meta_path, "rb") as f:
+            metadata = pickle.load(f)
+
+        self.learning_rate = metadata.get("learning_rate", self.learning_rate)
+        self.epochs = metadata.get("epochs", self.epochs)
+        self.batch_size = metadata.get("batch_size", self.batch_size)
+        self.use_scaler = metadata.get("use_scaler", self.use_scaler)
+        self.threshold = metadata.get("threshold", None)
+        input_dim = metadata["input_dim"]
+
+        # Restore vectorizer (holds trained Word2Vec model)
+        self.vectorizer = metadata["vectorizer"]
+        self.feature_columns = self.vectorizer.get_feature_names_out()
+
+        self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+        self.clf.to(self.device)
+        state_dict = torch.load(load_path, map_location=self.device)
+        self.clf.load_state_dict(state_dict)
+        self.clf.eval()
+
+        logger.info(f"Loaded AutoEncoder_Kakisim_W2V model from {load_path}")
+
+
+def preprocessing_kakisim_w2v(
+    model: OCSVM_Kakisim_W2V | AutoEncoder_Kakisim_W2V,
+    df: pd.DataFrame,
+    use_scaler: bool = False,
+):
+    X, labels = model.preprocess_for_preds(df=df)
+    return X.to_numpy(), labels

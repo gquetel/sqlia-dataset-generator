@@ -21,5 +21,8 @@ plotly==6.3.1
 sqlglot==26.16.2
 sqlparse==0.5.3
 
+## Word2Vec vectorizer
+gensim
+
 # Testing
 pytest==9.0.2  # Built-in subtests support
