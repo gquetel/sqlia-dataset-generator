@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+from multiprocessing import Pool
 import pandas as pd
 from scipy import sparse
 from scipy.sparse import hstack, csr_matrix
@@ -184,12 +185,15 @@ class KakisimVectorizer:
         self._cv_e = CountVectorizer()
 
     def _to_view_strings(self, queries) -> tuple[list[str], list[str], list[str]]:
-        t_strs, c_strs, e_strs = [], [], []
-        for q in queries:
-            t, c, e = _sql_to_views(str(q))
-            t_strs.append(t)
-            c_strs.append(c)
-            e_strs.append(e)
+        str_queries = [str(q) for q in queries]
+        if len(str_queries) > 1000:
+            with Pool() as pool:
+                results = pool.map(_sql_to_views, str_queries, chunksize=500)
+        else:
+            results = [_sql_to_views(q) for q in str_queries]
+        t_strs = [r[0] for r in results]
+        c_strs = [r[1] for r in results]
+        e_strs = [r[2] for r in results]
         return t_strs, c_strs, e_strs
 
     def fit_transform(self, queries) -> csr_matrix:
