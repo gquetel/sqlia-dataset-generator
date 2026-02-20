@@ -1,7 +1,9 @@
 import hashlib
 import logging
 import os
+import pickle
 from multiprocessing import Pool
+from pathlib import Path
 import pandas as pd
 from scipy import sparse
 from scipy.sparse import hstack, csr_matrix
@@ -177,12 +179,18 @@ class KakisimVectorizer:
 
     Produces three semantic views of each SQL query (T, C, E), counts token
     frequencies per view, then hstacks the sparse matrices.
+
+    The `views` argument selects which views to include (default: all three).
     """
 
-    def __init__(self):
-        self._cv_t = CountVectorizer()
-        self._cv_c = CountVectorizer()
-        self._cv_e = CountVectorizer()
+    def __init__(self, views: list[str] | None = None):
+        self._views = set(views) if views is not None else {"T", "C", "E"}
+        if "T" in self._views:
+            self._cv_t = CountVectorizer()
+        if "C" in self._views:
+            self._cv_c = CountVectorizer()
+        if "E" in self._views:
+            self._cv_e = CountVectorizer()
 
     def _to_view_strings(self, queries) -> tuple[list[str], list[str], list[str]]:
         str_queries = [str(q) for q in queries]
@@ -198,30 +206,50 @@ class KakisimVectorizer:
 
     def fit_transform(self, queries) -> csr_matrix:
         t_strs, c_strs, e_strs = self._to_view_strings(queries)
-        mat_t = self._cv_t.fit_transform(t_strs)
-        mat_c = self._cv_c.fit_transform(c_strs)
-        mat_e = self._cv_e.fit_transform(e_strs)
-        return hstack([mat_t, mat_c, mat_e], format="csr")
+        mats = []
+        if "T" in self._views:
+            mats.append(self._cv_t.fit_transform(t_strs))
+        if "C" in self._views:
+            mats.append(self._cv_c.fit_transform(c_strs))
+        if "E" in self._views:
+            mats.append(self._cv_e.fit_transform(e_strs))
+        return hstack(mats, format="csr")
 
     def transform(self, queries) -> csr_matrix:
         t_strs, c_strs, e_strs = self._to_view_strings(queries)
-        mat_t = self._cv_t.transform(t_strs)
-        mat_c = self._cv_c.transform(c_strs)
-        mat_e = self._cv_e.transform(e_strs)
-        return hstack([mat_t, mat_c, mat_e], format="csr")
+        mats = []
+        if "T" in self._views:
+            mats.append(self._cv_t.transform(t_strs))
+        if "C" in self._views:
+            mats.append(self._cv_c.transform(c_strs))
+        if "E" in self._views:
+            mats.append(self._cv_e.transform(e_strs))
+        return hstack(mats, format="csr")
 
     def get_feature_names_out(self) -> np.ndarray:
-        return np.concatenate(
-            [
-                self._cv_t.get_feature_names_out(),
-                self._cv_c.get_feature_names_out(),
-                self._cv_e.get_feature_names_out(),
-            ]
-        )
+        parts = []
+        if "T" in self._views:
+            parts.append(self._cv_t.get_feature_names_out())
+        if "C" in self._views:
+            parts.append(self._cv_c.get_feature_names_out())
+        if "E" in self._views:
+            parts.append(self._cv_e.get_feature_names_out())
+        return np.concatenate(parts)
+
+    @property
+    def views_tag(self) -> str:
+        """Short string identifying the active views, e.g. 'E' or 'TCE'."""
+        return "".join(sorted(self._views))
 
     def _vocab_tag(self) -> str:
-        vocab = str(sorted(self._cv_t.vocabulary_.items()))
-        return hashlib.md5(vocab.encode()).hexdigest()[:8]
+        views_str = self.views_tag
+        if "T" in self._views:
+            vocab = str(sorted(self._cv_t.vocabulary_.items()))
+        elif "C" in self._views:
+            vocab = str(sorted(self._cv_c.vocabulary_.items()))
+        else:
+            vocab = str(sorted(self._cv_e.vocabulary_.items()))
+        return hashlib.md5((views_str + vocab).encode()).hexdigest()[:8]
 
 
 class OCSVM_Kakisim:
@@ -233,13 +261,14 @@ class OCSVM_Kakisim:
         gamma: str = "scale",
         max_iter: int = -1,
         use_scaler: bool = True,
+        views: list[str] | None = None,
     ):
         self.nu = nu
         self.kernel = kernel
         self.gamma = gamma
         self.max_iter = max_iter
 
-        self.vectorizer = KakisimVectorizer()
+        self.vectorizer = KakisimVectorizer(views=views)
         self.GENERIC = GENERIC
 
         self._scaler = StandardScaler(with_mean=False)
@@ -254,7 +283,7 @@ class OCSVM_Kakisim:
         self, df: pd.DataFrame, cache_dir: str | None = None
     ) -> csr_matrix:
         if cache_dir:
-            key = f"kakisim-vectorized-train-{hash_df(df)}.pkl"
+            key = f"kakisim_{self.vectorizer.views_tag}-vectorized-train-{hash_df(df)}.pkl"
             cached = load_cache(os.path.join(cache_dir, key))
             if cached is not None:
                 self.vectorizer = cached["vectorizer"]
@@ -302,7 +331,7 @@ class OCSVM_Kakisim:
             vocab_tag = self.vectorizer._vocab_tag()
             cache_path = os.path.join(
                 self.cache_dir,
-                f"kakisim-vectorized-{hash_df(df)}-{vocab_tag}.pkl",
+                f"kakisim_{self.vectorizer.views_tag}-vectorized-{hash_df(df)}-{vocab_tag}.pkl",
             )
             cached = load_cache(cache_path)
             if cached is not None:
@@ -322,6 +351,7 @@ class AutoEncoder_Kakisim:
         epochs: int = 100,
         batch_size: int = 32,
         use_scaler: bool = False,
+        views: list[str] | None = None,
     ):
         self.random_state = GENERIC.RANDOM_SEED
         self.clf = None
@@ -329,9 +359,10 @@ class AutoEncoder_Kakisim:
         self.model_name = None
         self.cache_dir = None
 
-        self.vectorizer = KakisimVectorizer()
+        self.vectorizer = KakisimVectorizer(views=views)
         self.use_scaler = use_scaler
         self.device = device
+        self.threshold = None
 
         self._scaler = MaxAbsScaler()
         self._scaler_min = None
@@ -350,7 +381,7 @@ class AutoEncoder_Kakisim:
             vocab_tag = self.vectorizer._vocab_tag()
             cache_path = os.path.join(
                 self.cache_dir,
-                f"kakisim-vectorized-{hash_df(df)}-{vocab_tag}.pkl",
+                f"kakisim_{self.vectorizer.views_tag}-vectorized-{hash_df(df)}-{vocab_tag}.pkl",
             )
             cached = load_cache(cache_path)
             if cached is not None:
@@ -364,7 +395,7 @@ class AutoEncoder_Kakisim:
         self, df: pd.DataFrame, cache_dir: str | None = None
     ) -> csr_matrix:
         if cache_dir:
-            key = f"kakisim-vectorized-train-{hash_df(df)}.pkl"
+            key = f"kakisim_{self.vectorizer.views_tag}-vectorized-train-{hash_df(df)}.pkl"
             cached = load_cache(os.path.join(cache_dir, key))
             if cached is not None:
                 self.vectorizer = cached["vectorizer"]
@@ -447,6 +478,82 @@ class AutoEncoder_Kakisim:
             logger.debug(
                 f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
             )
+
+    def save_model(self, save_path: str, threshold: float = None):
+        """Save model weights, vectorizer, threshold, and metadata.
+
+        Args:
+            save_path: Path to save the model (without extension).
+                       Creates {save_path}.pth for weights and {save_path}_meta.pkl for metadata.
+            threshold: Decision threshold computed on validation set.
+        """
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        model_path = save_path.with_suffix(".pth")
+        meta_path = save_path.parent / f"{save_path.stem}_meta.pkl"
+
+        torch.save(self.clf.state_dict(), model_path)
+
+        metadata = {
+            "learning_rate": self.learning_rate,
+            "epochs": self.epochs,
+            "batch_size": self.batch_size,
+            "input_dim": len(self.feature_columns),
+            "use_scaler": self.use_scaler,
+            "vectorizer": self.vectorizer,
+            "threshold": threshold,
+            "views": list(self.vectorizer._views),
+        }
+        with open(meta_path, "wb") as f:
+            pickle.dump(metadata, f)
+
+        logger.info(f"Saved AutoEncoder_Kakisim model to {model_path}")
+        if threshold is not None:
+            logger.info(f"Saved threshold: {threshold}")
+
+    def load_model(self, load_path: str):
+        """Load model from saved checkpoint.
+
+        Args:
+            load_path: Path to the model file (with or without .pth extension).
+        """
+        load_path = Path(load_path)
+        if load_path.suffix != ".pth":
+            load_path = load_path.with_suffix(".pth")
+
+        meta_path = load_path.parent / f"{load_path.stem}_meta.pkl"
+
+        if not load_path.exists():
+            raise FileNotFoundError(f"Model weights not found: {load_path}")
+        if not meta_path.exists():
+            raise FileNotFoundError(f"Model metadata not found: {meta_path}")
+
+        with open(meta_path, "rb") as f:
+            metadata = pickle.load(f)
+
+        self.learning_rate = metadata.get("learning_rate", self.learning_rate)
+        self.epochs = metadata.get("epochs", self.epochs)
+        self.batch_size = metadata.get("batch_size", self.batch_size)
+        self.use_scaler = metadata.get("use_scaler", self.use_scaler)
+        self.threshold = metadata.get("threshold", None)
+        input_dim = metadata["input_dim"]
+
+        # Restore vectorizer (holds trained CountVectorizer vocabularies)
+        self.vectorizer = metadata["vectorizer"]
+        self.feature_columns = self.vectorizer.get_feature_names_out()
+
+        if self.use_scaler:
+            self.clf = MyAutoEncoder(input_dim=input_dim)
+        else:
+            self.clf = MyAutoEncoderRelu(input_dim=input_dim)
+
+        self.clf.to(self.device)
+        state_dict = torch.load(load_path, map_location=self.device)
+        self.clf.load_state_dict(state_dict)
+        self.clf.eval()
+
+        logger.info(f"Loaded AutoEncoder_Kakisim model from {load_path}")
 
 
 def preprocessing_kakisim(

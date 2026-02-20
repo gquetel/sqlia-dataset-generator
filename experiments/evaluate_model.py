@@ -31,6 +31,7 @@ from training import (
     get_scores_generic,
     preprocessing_generic_ae,
 )
+from U_Kakisim import AutoEncoder_Kakisim
 from U_Li import AutoEncoder_Li
 from U_Sentence_BERT import AutoEncoder_SecureBERT
 
@@ -117,6 +118,12 @@ def load_model(
             project_paths=project_paths,
         )
         model.load_model(load_path=model_path)
+    elif model_type == "ae_kakisim":
+        model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device)
+        model.load_model(model_path)
+    elif model_type == "ae_kakisim_enriched":
+        model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device, views=["E"])
+        model.load_model(model_path)
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -173,7 +180,7 @@ def main():
         "--model-type",
         type=str,
         required=True,
-        choices=["ae_li", "ae_sbert"],
+        choices=["ae_li", "ae_sbert", "ae_kakisim", "ae_kakisim_enriched"],
         help="Type of model",
     )
     parser.add_argument(

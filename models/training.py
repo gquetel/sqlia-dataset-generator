@@ -160,7 +160,7 @@ def init_args() -> argparse.Namespace:
         "--save-model-path",
         type=str,
         dest="save_model_path",
-        help="Path to save trained model (without extension). Only works with ae_li and ae_sbert.",
+        help="Path to save trained model (without extension). Works with ae_li, ae_sbert, ae_kakisim, and ae_kakisim_enriched.",
     )
 
     parser.add_argument(
@@ -852,6 +852,7 @@ def train_ae_kakisim(
     df_val: pd.DataFrame,
     use_scaler: bool = False,
 ):
+    global save_model_path
     set_global_seed()
     random.seed(GENERIC.RANDOM_SEED)
     np.random.seed(GENERIC.RANDOM_SEED)
@@ -883,6 +884,93 @@ def train_ae_kakisim(
         insider_as_fn=False,
         use_batches=True,
     )
+
+    if save_model_path:
+        model.save_model(save_model_path, threshold=threshold)
+
+    return labels, scores, threshold
+
+
+def train_ocsvm_kakisim_enriched(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
+):
+    set_global_seed()
+    model_name = "Kakisim-E and OCSVM"
+    if use_scaler:
+        model_name += "-scaler"
+    logger.info(f"Training model: {model_name}")
+    model = OCSVM_Kakisim(
+        GENERIC=GENERIC,
+        nu=0.05,
+        kernel="rbf",
+        gamma="scale",
+        max_iter=10000,
+        use_scaler=use_scaler,
+        views=["E"],
+    )
+    cache_dir = project_paths.features_cache_path if use_feature_cache else None
+    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
+
+    labels, scores, threshold = compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_kakisim,
+        get_decision_scores_fn=decision_score_generic,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+    return labels, scores, threshold
+
+
+def train_ae_kakisim_enriched(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
+):
+    global save_model_path
+    set_global_seed()
+    random.seed(GENERIC.RANDOM_SEED)
+    np.random.seed(GENERIC.RANDOM_SEED)
+    torch.manual_seed(GENERIC.RANDOM_SEED)
+
+    model_name = "Kakisim-E and AE"
+    if use_scaler:
+        model_name += "-scaler"
+    logger.info(f"Training model: {model_name}")
+    model = AutoEncoder_Kakisim(
+        GENERIC=GENERIC,
+        device=init_device(),
+        learning_rate=0.001,
+        epochs=100,
+        batch_size=4096,
+        use_scaler=use_scaler,
+        views=["E"],
+    )
+    cache_dir = project_paths.features_cache_path if use_feature_cache else None
+    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
+
+    labels, scores, threshold = compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_generic_ae,
+        get_decision_scores_fn=decision_score_ae,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+
+    if save_model_path:
+        model.save_model(save_model_path, threshold=threshold)
+
     return labels, scores, threshold
 
 
@@ -904,6 +992,7 @@ def select_models(args):
         "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
         "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
         "kakisim": ["ocsvm_kakisim", "ae_kakisim"],
+        "kakisim_enriched": ["ocsvm_kakisim_enriched", "ae_kakisim_enriched"],
     }
 
     MODEL_REGISTRY = {
@@ -932,6 +1021,12 @@ def select_models(args):
             df_train=df_train, df_test=df_test, df_val=df_val
         ),
         "ae_kakisim": lambda df_train, df_test, df_val: train_ae_kakisim(
+            df_train=df_train, df_test=df_test, df_val=df_val
+        ),
+        "ocsvm_kakisim_enriched": lambda df_train, df_test, df_val: train_ocsvm_kakisim_enriched(
+            df_train=df_train, df_test=df_test, df_val=df_val
+        ),
+        "ae_kakisim_enriched": lambda df_train, df_test, df_val: train_ae_kakisim_enriched(
             df_train=df_train, df_test=df_test, df_val=df_val
         ),
     }
