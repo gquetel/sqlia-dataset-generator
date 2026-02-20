@@ -14,9 +14,16 @@ echo "Job started at: $(date)"
 cd ~/repos/sqlia-dataset/
 source venv-3.12.12/bin/activate
 
+TESTING=false
+
 DATASETS_DIR=$HOME/datasets/100k-training/
 MODELS_DIR=./models/output/models/ae_kakisim_w2v_generic/
 RESULTS_DIR=./models/output/ae_kakisim_w2v_generic/
+
+TESTING_FLAG=""
+if [ "$TESTING" = "true" ]; then
+    TESTING_FLAG="--testing"
+fi
 
 # Get scenario from command line argument (1-4)
 SCENARIO=${1:-1}
@@ -51,7 +58,8 @@ python3 models/training.py \
     --dataset=$DATASETS_DIR/$TRAIN_DATASET \
     --models ae_kakisim_w2v \
     --subfolder=${TRAIN_DATASET%.csv}-ae_kakisim_w2v \
-    --save-model-path=$MODELS_DIR/$MODEL_NAME
+    --save-model-path=$MODELS_DIR/$MODEL_NAME \
+    $TESTING_FLAG
 
 # Evaluate on all test datasets
 for TEST in "generic-OurAirports.csv:A" "generic-sakila.csv:B" "generic-AdventureWorks.csv:C" "generic-OHR.csv:D"; do
