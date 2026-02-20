@@ -282,15 +282,17 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
 
         criterion = nn.MSELoss()
         optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
-        X_tensor = self.X_to_tensor(embeddings)
+        X_array = np.array(embeddings)
+        n_samples = len(X_array)
 
         self.clf.train()
 
         for epoch in range(self.epochs):
             total_loss = 0
-            for i in range(0, len(X_tensor), self.batch_size):
-                batch = X_tensor[i : i + self.batch_size]
-                batch = batch.to(self.device)
+            for i in range(0, n_samples, self.batch_size):
+                batch = torch.FloatTensor(X_array[i : i + self.batch_size]).to(
+                    self.device
+                )
 
                 optimizer.zero_grad()
                 reconstructed = self.clf(batch)
@@ -301,7 +303,7 @@ class AutoEncoder_SecureBERT(BaseSecureBERT):
                 total_loss += loss.item()
 
             logger.debug(
-                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(X_tensor):.6f}"
+                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/n_samples:.6f}"
             )
         self.save_model()
 

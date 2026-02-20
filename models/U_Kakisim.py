@@ -426,15 +426,6 @@ class AutoEncoder_Kakisim:
         X_tensors = torch.FloatTensor(X).to(self.device)
         return X_tensors
 
-    def _sparse_to_tensor_batched(self, sparse_matrix, batch_size=4096):
-        n_samples = sparse_matrix.shape[0]
-        tensors = []
-        for i in range(0, n_samples, batch_size):
-            batch_end = min(i + batch_size, n_samples)
-            batch_dense = sparse_matrix[i:batch_end].toarray()
-            tensors.append(torch.FloatTensor(batch_dense))
-        return torch.cat(tensors, dim=0).to(self.device)
-
     def train_model(
         self,
         df: pd.DataFrame,
@@ -457,17 +448,16 @@ class AutoEncoder_Kakisim:
         optimizer = torch.optim.Adam(self.clf.parameters(), lr=self.learning_rate)
 
         if self.use_scaler:
-            scaled_data = self._scaler.fit_transform(f_matrix)
-            train_data = self._sparse_to_tensor_batched(scaled_data, batch_size=10000)
-        else:
-            train_data = self._sparse_to_tensor_batched(f_matrix)
+            f_matrix = self._scaler.fit_transform(f_matrix)
 
+        n_samples = f_matrix.shape[0]
         self.clf.train()
         for epoch in range(self.epochs):
             total_loss = 0
-            for i in range(0, len(train_data), self.batch_size):
-                batch = train_data[i : i + self.batch_size]
-                batch = batch.to(self.device)
+            for i in range(0, n_samples, self.batch_size):
+                batch = torch.FloatTensor(
+                    f_matrix[i : i + self.batch_size].toarray()
+                ).to(self.device)
                 optimizer.zero_grad()
                 reconstructed = self.clf(batch)
                 loss = criterion(reconstructed, batch)
@@ -476,7 +466,7 @@ class AutoEncoder_Kakisim:
                 total_loss += loss.item()
 
             logger.debug(
-                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/len(train_data):.6f}"
+                f"Epoch {epoch}/{self.epochs}, Loss: {total_loss/n_samples:.6f}"
             )
 
     def save_model(self, save_path: str, threshold: float = None):
