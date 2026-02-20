@@ -12,7 +12,7 @@ echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
 
 cd ~/repos/sqlia-dataset/
-source venv-3.12.3/bin/activate
+source venv-3.12.12/bin/activate
 
 DATASETS_DIR=$HOME/datasets/100k-training/
 MODELS_DIR=./models/output/models/ae_kakisim_w2v_generic/

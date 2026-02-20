@@ -4,7 +4,8 @@ echo "Job started at: $(date)"
 
 # Activate the environment
 cd ~/repos/sqlia-dataset/
-# source venv-3.12.3/bin/activate
+# source venv-3.12.12/bin/activate
+
 
 TESTING=false
 

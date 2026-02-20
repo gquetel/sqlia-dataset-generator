@@ -9,6 +9,7 @@ result
 cache/**
 venv-3.12.3
 venv-3.10.12
+venv-3.12.12
 CLAUDE.md
 .claude
 
