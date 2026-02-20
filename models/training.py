@@ -874,6 +874,7 @@ def train_ae_kakisim(
         epochs=100,
         batch_size=4096,
         use_scaler=use_scaler,
+        min_df=10,
     )
     cache_dir = project_paths.features_cache_path if use_feature_cache else None
     model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
@@ -957,6 +958,7 @@ def train_ae_kakisim_enriched(
         batch_size=4096,
         use_scaler=use_scaler,
         views=["E"],
+        min_df=10,
     )
     cache_dir = project_paths.features_cache_path if use_feature_cache else None
     model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)

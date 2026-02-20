@@ -183,14 +183,14 @@ class KakisimVectorizer:
     The `views` argument selects which views to include (default: all three).
     """
 
-    def __init__(self, views: list[str] | None = None):
+    def __init__(self, views: list[str] | None = None, min_df: int = 1):
         self._views = set(views) if views is not None else {"T", "C", "E"}
         if "T" in self._views:
-            self._cv_t = CountVectorizer()
+            self._cv_t = CountVectorizer(min_df=min_df)
         if "C" in self._views:
-            self._cv_c = CountVectorizer()
+            self._cv_c = CountVectorizer(min_df=min_df)
         if "E" in self._views:
-            self._cv_e = CountVectorizer()
+            self._cv_e = CountVectorizer(min_df=min_df)
 
     def _to_view_strings(self, queries) -> tuple[list[str], list[str], list[str]]:
         str_queries = [str(q) for q in queries]
@@ -352,6 +352,7 @@ class AutoEncoder_Kakisim:
         batch_size: int = 32,
         use_scaler: bool = False,
         views: list[str] | None = None,
+        min_df: int = 1,
     ):
         self.random_state = GENERIC.RANDOM_SEED
         self.clf = None
@@ -359,7 +360,7 @@ class AutoEncoder_Kakisim:
         self.model_name = None
         self.cache_dir = None
 
-        self.vectorizer = KakisimVectorizer(views=views)
+        self.vectorizer = KakisimVectorizer(views=views, min_df=min_df)
         self.use_scaler = use_scaler
         self.device = device
         self.threshold = None
