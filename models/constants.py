@@ -62,6 +62,12 @@ class ProjectPaths:
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 
+    @property
+    def features_cache_path(self) -> str:
+        path = f"{self.base_path}/cache/features/"
+        Path(path).mkdir(exist_ok=True, parents=True)
+        return path
+
 
 class MyAutoEncoder(nn.Module):
     # From: https://github.com/udacity/deep-learning-v2-pytorch/blob/master/autoencoder/linear-autoencoder/Simple_Autoencoder_Solution.ipynb

@@ -1,5 +1,6 @@
 """Definition of ML models configuration."""
 
+import hashlib
 import os
 from typing import Any, Callable
 
@@ -35,8 +36,14 @@ from U_Sentence_BERT import (
     OCSVM_SecureBERT,
     preprocessing_sbert,
 )
+from U_Kakisim import (
+    AutoEncoder_Kakisim,
+    OCSVM_Kakisim,
+    preprocessing_kakisim,
+)
 from constants import DotDict, ProjectPaths
 
+from cache_utils import hash_df, load_cache, save_cache
 from evaluation import compute_all_metrics, get_threshold_for_max_rate
 from explain import (
     plot_pr_curves_plt_from_scores,
@@ -61,6 +68,7 @@ training_results = []
 save_model_path = None  # Set via --save-model-path argument
 
 n_jobs = min(64, int(os.cpu_count() * 0.8))
+use_feature_cache = True  # Disable with --no-feature-cache
 
 
 def init_logging(args):
@@ -155,6 +163,13 @@ def init_args() -> argparse.Namespace:
         help="Path to save trained model (without extension). Only works with ae_li and ae_sbert.",
     )
 
+    parser.add_argument(
+        "--no-feature-cache",
+        action="store_true",
+        dest="no_feature_cache",
+        help="Disable the feature matrix disk cache (enabled by default).",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -167,6 +182,104 @@ def set_global_seed():
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def _model_state_tag(model) -> str:
+    """Return a short hex string capturing the fitted vectorizer vocabulary.
+
+    For models with no fitted vectorizer (Li, SBERT) the tag is constant, so
+    cached test features are keyed purely on the df content. For model with a
+    vocabulary (such as Kakisim), this tag varies. It is returned
+    """
+    v = getattr(model, "vectorizer", None)
+    if v is None:
+        return "nofeat"
+
+    if hasattr(v, "_cv_t") and hasattr(v._cv_t, "vocabulary_"):
+        vocab = str(sorted(v._cv_t.vocabulary_.items()))
+        return hashlib.md5(vocab.encode()).hexdigest()[:8]
+
+    if hasattr(v, "vocabulary_"):
+        vocab = str(sorted(v.vocabulary_.items()))
+        return hashlib.md5(vocab.encode()).hexdigest()[:8]
+
+    return "nofeat"
+
+
+def _cached_preprocess_preds(
+    preprocess_fn,
+    model,
+    df: pd.DataFrame,
+    cache_dir: str,
+    split: str,
+    use_scaler: bool = False,
+):
+    """Wrap a preprocessing function with file-based caching.
+
+    Cache key = model class name + split tag + SHA-256 of the df content,
+    consistent with SecureBERT's own embedding cache convention.
+    Torch tensors are stored on CPU for portability and moved back to the
+    model device on load.
+
+    Note: SecureBERT models have their own embedding cache in embeddings/.
+    The outer feature cache (features/) is compatible with it: on first run
+    both caches are populated; on subsequent runs this cache is hit first,
+    short-circuiting even SecureBERT's inner cache read.
+    """
+    # Kakisim models cache internally in preprocess_for_preds; skip outer wrapping.
+    if getattr(model, "cache_dir", None) is not None:
+        return preprocess_fn(model, df, use_scaler=use_scaler)
+
+    df_hash = hash_df(df)
+    state_tag = _model_state_tag(model)
+    model_tag = type(model).__name__
+    path = os.path.join(cache_dir, f"{model_tag}-{split}-{df_hash}-{state_tag}.pkl")
+
+    cached = load_cache(path)
+    if cached is not None:
+        X, labels = cached
+        if isinstance(X, torch.Tensor) and hasattr(model, "device"):
+            X = X.to(model.device)
+        return X, labels
+
+    X, labels = preprocess_fn(model, df, use_scaler=use_scaler)
+
+    # Always persist tensors on CPU so the cache is device-agnostic.
+    save_obj = (X.cpu() if isinstance(X, torch.Tensor) else X, labels)
+    save_cache(path, save_obj)
+    return X, labels
+
+
+def get_scores_with_cache(
+    df: pd.DataFrame,
+    model,
+    preprocess_fn,
+    score_fn,
+    cache_dir: str,
+    split: str,
+    use_scaler: bool = False,
+    batch_size: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Preprocess the full DataFrame (with caching), then score in batches."""
+    X, labels = _cached_preprocess_preds(
+        preprocess_fn=preprocess_fn,
+        model=model,
+        df=df,
+        cache_dir=cache_dir,
+        split=split,
+        use_scaler=use_scaler,
+    )
+    labels = np.array(labels)
+
+    if batch_size is None:
+        return labels, np.array(score_fn(model, X))
+
+    all_scores = []
+    n = len(labels)
+    for start in tqdm(range(0, n, batch_size), desc=f"Scoring {split}"):
+        end = min(start + batch_size, n)
+        all_scores.extend(score_fn(model, X[start:end]))
+    return labels, np.array(all_scores)
 
 
 # ------------- MODELS TRAINING -------------
@@ -295,23 +408,46 @@ def compute_metrics_generic(
     """
     # Get test and val scores
     batch = 4096 if use_batches else None
-    l_test, s_test = get_scores_generic(
-        df=df_test,
-        batch_size=batch,
-        model=model,
-        preprocess_fn=preprocess_fn,
-        score_fn=get_decision_scores_fn,
-        use_scaler=use_scaler,
-    )
 
-    _, s_val = get_scores_generic(
-        df=df_val,
-        batch_size=4096,
-        model=model,
-        use_scaler=use_scaler,
-        preprocess_fn=preprocess_fn,
-        score_fn=get_decision_scores_fn,
-    )
+    if use_feature_cache:
+        cache_dir = project_paths.features_cache_path
+        l_test, s_test = get_scores_with_cache(
+            df=df_test,
+            model=model,
+            preprocess_fn=preprocess_fn,
+            score_fn=get_decision_scores_fn,
+            cache_dir=cache_dir,
+            split="test",
+            use_scaler=use_scaler,
+            batch_size=batch,
+        )
+        _, s_val = get_scores_with_cache(
+            df=df_val,
+            model=model,
+            preprocess_fn=preprocess_fn,
+            score_fn=get_decision_scores_fn,
+            cache_dir=cache_dir,
+            split="val",
+            use_scaler=use_scaler,
+            batch_size=4096,
+        )
+    else:
+        l_test, s_test = get_scores_generic(
+            df=df_test,
+            batch_size=batch,
+            model=model,
+            preprocess_fn=preprocess_fn,
+            score_fn=get_decision_scores_fn,
+            use_scaler=use_scaler,
+        )
+        _, s_val = get_scores_generic(
+            df=df_val,
+            batch_size=4096,
+            model=model,
+            use_scaler=use_scaler,
+            preprocess_fn=preprocess_fn,
+            score_fn=get_decision_scores_fn,
+        )
 
     # Threshold selection
     threshold = get_threshold_for_max_rate(s_val=s_val)
@@ -674,6 +810,82 @@ def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.Dat
     return labels, scores, threshold
 
 
+def train_ocsvm_kakisim(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
+):
+    set_global_seed()
+    model_name = "Kakisim and OCSVM"
+    if use_scaler:
+        model_name += "-scaler"
+    logger.info(f"Training model: {model_name}")
+    model = OCSVM_Kakisim(
+        GENERIC=GENERIC,
+        nu=0.05,
+        kernel="rbf",
+        gamma="scale",
+        max_iter=10000,
+        use_scaler=use_scaler,
+    )
+    cache_dir = project_paths.features_cache_path if use_feature_cache else None
+    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
+
+    labels, scores, threshold = compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_kakisim,
+        get_decision_scores_fn=decision_score_generic,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+    return labels, scores, threshold
+
+
+def train_ae_kakisim(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    df_val: pd.DataFrame,
+    use_scaler: bool = False,
+):
+    set_global_seed()
+    random.seed(GENERIC.RANDOM_SEED)
+    np.random.seed(GENERIC.RANDOM_SEED)
+    torch.manual_seed(GENERIC.RANDOM_SEED)
+
+    model_name = "Kakisim and AE"
+    if use_scaler:
+        model_name += "-scaler"
+    logger.info(f"Training model: {model_name}")
+    model = AutoEncoder_Kakisim(
+        GENERIC=GENERIC,
+        device=init_device(),
+        learning_rate=0.001,
+        epochs=100,
+        batch_size=4096,
+        use_scaler=use_scaler,
+    )
+    cache_dir = project_paths.features_cache_path if use_feature_cache else None
+    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
+
+    labels, scores, threshold = compute_metrics_generic(
+        model=model,
+        df_test=df_test,
+        df_val=df_val,
+        model_name=model_name,
+        preprocess_fn=preprocessing_generic_ae,
+        get_decision_scores_fn=decision_score_ae,
+        use_scaler=use_scaler,
+        insider_as_fn=False,
+        use_batches=True,
+    )
+    return labels, scores, threshold
+
+
 def save_results(args):
     dfres = pd.DataFrame(training_results)
     resdir = project_paths.output_path
@@ -691,6 +903,7 @@ def select_models(args):
         "li": ["ocsvm_li", "lof_li", "ae_li"],
         "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
         "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
+        "kakisim": ["ocsvm_kakisim", "ae_kakisim"],
     }
 
     MODEL_REGISTRY = {
@@ -715,6 +928,12 @@ def select_models(args):
         "ocsvm_sbert": train_ocsvm_sbert,
         "lof_sbert": train_lof_sbert,
         "ae_sbert": train_ae_sbert,
+        "ocsvm_kakisim": lambda df_train, df_test, df_val: train_ocsvm_kakisim(
+            df_train=df_train, df_test=df_test, df_val=df_val
+        ),
+        "ae_kakisim": lambda df_train, df_test, df_val: train_ae_kakisim(
+            df_train=df_train, df_test=df_test, df_val=df_val
+        ),
     }
 
     if "all" in args.models:
@@ -824,6 +1043,9 @@ if __name__ == "__main__":
 
     if args.save_model_path:
         save_model_path = args.save_model_path
+
+    if args.no_feature_cache:
+        use_feature_cache = False
 
     if args.on_user_inputs:
         preprocess_for_user_inputs_training(df=df)

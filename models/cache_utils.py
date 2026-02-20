@@ -1,0 +1,32 @@
+"""Lightweight file-based caching utilities for feature matrices."""
+
+import hashlib
+import logging
+import os
+import pickle
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+def hash_df(df: pd.DataFrame) -> str:
+    """Return a SHA-256 hex digest of a DataFrame's content."""
+    return hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+
+
+def load_cache(path: str):
+    """Return the unpickled object at *path*, or None if the file is missing."""
+    if os.path.isfile(path):
+        logger.debug("Cache hit: %s", path)
+        with open(path, "rb") as fh:
+            return pickle.load(fh)
+    return None
+
+
+def save_cache(path: str, obj) -> None:
+    """Pickle *obj* to *path*, creating parent directories as needed."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as fh:
+        pickle.dump(obj, fh)
+    logger.debug("Cache saved: %s", path)
