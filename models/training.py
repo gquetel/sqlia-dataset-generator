@@ -72,19 +72,24 @@ use_feature_cache = True  # Disable with --no-feature-cache
 
 
 def init_logging(args):
+    # the File handler has always debug.
     lf = TimedRotatingFileHandler(
         project_paths.logs_path + "/training.log",
         when="midnight",
     )
+    lf.setLevel(logging.DEBUG)
 
     lg_lvl = logging.DEBUG if args.debug else logging.INFO
-    lf.setLevel(lg_lvl)
     lstdo = logging.StreamHandler(sys.stdout)
     lstdo.setLevel(lg_lvl)
+    lstdo.setFormatter(logging.Formatter(" %(message)s"))
 
-    lstdof = logging.Formatter(" %(message)s")
-    lstdo.setFormatter(lstdof)
-    logging.basicConfig(level=lg_lvl, handlers=[lf, lstdo])
+    # Configure the root logger so submodule loggers also get captured
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(lf)
+    root.addHandler(lstdo)
 
 
 def init_device() -> torch.device:

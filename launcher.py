@@ -25,13 +25,12 @@ def init_logging(debug_mode: bool):
     # -> mode = 'w'
     lf = logging.FileHandler("./logs/generation.log", "w")
 
-    logging_lvl = logging.DEBUG if debug_mode else logging.INFO
-    lf.setLevel(logging_lvl)
+    lf.setLevel(logging.DEBUG)
     lstdo = logging.StreamHandler(sys.stdout)
-    lstdo.setLevel(logging_lvl)
+    lstdo.setLevel(logging.DEBUG if debug_mode else logging.INFO)
     lstdof = logging.Formatter(" %(message)s")
     lstdo.setFormatter(lstdof)
-    logging.basicConfig(level=logging_lvl, handlers=[lf, lstdo])
+    logging.basicConfig(level=logging.DEBUG, handlers=[lf, lstdo])
 
 
 def init_args() -> argparse.Namespace:
