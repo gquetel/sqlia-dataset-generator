@@ -1,4 +1,3 @@
-import hashlib
 import logging
 from pathlib import Path
 from typing import List
@@ -10,6 +9,7 @@ import torch
 import torch.nn as nn
 import transformers
 
+from cache_utils import hash_df, load_cache, save_cache
 from constants import MyAutoEncoderTanh, ProjectPaths
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
@@ -51,12 +51,9 @@ class BaseSecureBERT:
 
     # Shared proprocessing functions
     def _cache_path(self, df: pd.DataFrame) -> str:
-        hash_val = hashlib.sha256(
-            pd.util.hash_pandas_object(df, index=True).values
-        ).hexdigest()
         return os.path.join(
             self.project_paths.embeddings_path,
-            f"embeddings-{hash_val}.pkl",
+            f"embeddings-{hash_df(df)}.pkl",
         )
 
     def _load_or_compute_embeddings(
@@ -64,9 +61,10 @@ class BaseSecureBERT:
     ) -> List[np.ndarray]:
 
         cache_path = self._cache_path(df)
-        if os.path.isfile(cache_path):
-            logger.info(f"Loaded cached SBERT embeddings from {cache_path}")
-            return pd.read_pickle(cache_path)
+        cached = load_cache(cache_path)
+        if cached is not None:
+            logger.info("Loaded cached SBERT embeddings from %s", cache_path)
+            return cached
 
         queries = df["full_query"].values
         embeddings = []
@@ -87,7 +85,7 @@ class BaseSecureBERT:
                 batch_embeddings = outputs.pooler_output.cpu().numpy()
                 embeddings.extend(batch_embeddings)
 
-        pd.to_pickle(embeddings, cache_path)
+        save_cache(cache_path, embeddings)
         return embeddings
 
     def preprocess(self, df: pd.DataFrame, batch_size: int = 64):

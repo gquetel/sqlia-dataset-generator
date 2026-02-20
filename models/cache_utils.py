@@ -18,7 +18,7 @@ def hash_df(df: pd.DataFrame) -> str:
 def load_cache(path: str):
     """Return the unpickled object at *path*, or None if the file is missing."""
     if os.path.isfile(path):
-        logger.debug("Cache hit: %s", path)
+        logger.info("Cache hit: %s", path)
         with open(path, "rb") as fh:
             return pickle.load(fh)
     return None
