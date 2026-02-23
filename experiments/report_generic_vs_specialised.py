@@ -1,0 +1,782 @@
+"""
+Generic vs Specialised Comparison + Transfer Learning Matrix Report
+
+Generates all comparison plots across all feature extractor types:
+  1. Generic vs Specialised: bar charts, ROC curves, recall heatmaps
+  2. Transfer Learning matrices: AUROC / AUPRC / F1 for every train×test pair
+
+Expected results directory structure (flat, one directory per model×scenario):
+
+    {results_dir}/
+      ae_li_generic/
+        ae_li_BCD_on_A/results.csv
+        ae_li_BCD_on_A/roc_curves/ae_li_BCD.csv
+        ae_li_ABC_on_D/results.csv   ← also used by TL matrix
+        ...
+      ae_li_specialised/
+        ae_li_A_on_A/results.csv
+        ae_li_A_on_A/roc_curves/ae_li_A.csv
+        ae_li_A_on_B/results.csv     ← cross-domain, used by TL matrix
+        ...
+      ae_sbert_generic/ ...
+      ae_sbert_specialised/ ...
+      ...
+
+Output layout:
+
+    {output_dir}/
+      generic-vs-specialised/
+        metrics_ae_li.png
+        roc_ae_li.png
+        recall_technique_ae_li.png
+        recall_stmt_ae_li.png
+        ...
+        balanced_accuracy_combined_heatmap.png
+      tl-matrix/
+        tl_ae_li_auroc.png
+        tl_ae_li_auprc.png
+        tl_ae_li_f1.png
+        ...
+
+Usage:
+    # Auto-discover models from results directory
+    python experiments/report_generic_vs_specialised.py \\
+        --results-dir ~/experiences-results/2026-02-23
+
+    # Specify models explicitly
+    python experiments/report_generic_vs_specialised.py \\
+        --results-dir ~/experiences-results/2026-02-23 \\
+        --models ae_li ae_sbert ae_kakisim_c ae_kakisim_w2v ae_loginov
+
+    # Custom output directory and format(s)
+    python experiments/report_generic_vs_specialised.py \\
+        --results-dir ~/experiences-results/2026-02-23 \\
+        --output-dir output/experiments \\
+        --format png pdf
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+# ── Dataset constants ──────────────────────────────────────────────────────────
+
+DATASETS = ["AdventureWorks", "OHR", "OurAirports", "sakila"]
+
+DATASET_LETTERS = {
+    "OurAirports": "A",
+    "sakila": "B",
+    "AdventureWorks": "C",
+    "OHR": "D",
+}
+ALL_LETTERS = set(DATASET_LETTERS.values())
+
+# Human-readable labels for known model prefixes; unknown prefixes fall back to the prefix itself
+KNOWN_LABELS: dict[str, str] = {
+    "ae_li": "Li + AE",
+    "ae_sbert": "SecureBERT + AE",
+    "ae_gaur": "GAUR + AE",
+    "ae_kakisim_c": "Kakisim-C + AE",
+    "ae_kakisim_w2v": "Kakisim-W2V + AE",
+    "ae_loginov": "Loginov + AE",
+}
+
+COLORS = {"generic": "#636EFA", "specialised": "#EF553B"}
+
+METRIC_LABELS: dict[str, str] = {
+    "accuracy": "Accuracy (%)",
+    "precision": "Precision (%)",
+    "recall": "Recall (%)",
+    "fone": "F1 Score (%)",
+    "rocauc": "AUROC",
+    "auprc": "AUPRC",
+    "balanced_accuracy_per_technique": "Balanced Accuracy (%)",
+}
+
+MAIN_METRICS = ["fone", "rocauc", "auprc", "balanced_accuracy_per_technique"]
+
+TECHNIQUE_COLS: dict[str, str] = {
+    "recalltime": "Time-based",
+    "recallboolean": "Boolean",
+    "recallstacked": "Stacked",
+    "recallerror": "Error-based",
+    "recallunion": "UNION",
+    "recallinsider": "Insider",
+    "recallinline": "Inline",
+}
+
+STMT_TYPE_COLS: dict[str, str] = {
+    "recall_select": "SELECT",
+    "recall_insert": "INSERT",
+    "recall_update": "UPDATE",
+    "recall_delete": "DELETE",
+    "recall_insider": "Insider",
+}
+
+_PCT_COLS = [
+    "fone",
+    "accuracy",
+    "precision",
+    "recall",
+    "fpr",
+    "balanced_accuracy_per_technique",
+]
+
+# TL matrix: leave-one-out training sets and single-dataset training sets
+TL_GENERIC_TRAIN_SETS = ["ABC", "ABD", "ACD", "BCD"]
+TL_SPECIALISED_TRAIN_SETS = ["A", "B", "C", "D"]
+TL_TEST_SETS = ["A", "B", "C", "D"]
+TL_METRIC_DISPLAY = {"auroc": "AUROC", "auprc": "AUPRC", "f1": "F1 Score"}
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def leave_one_out_complement(letter: str) -> str:
+    return "".join(sorted(ALL_LETTERS - {letter}))
+
+
+def model_label(prefix: str) -> str:
+    return KNOWN_LABELS.get(prefix, prefix)
+
+
+def _parse_pct(val) -> float:
+    """Parse a value that may be a '88.53%' string or already a float."""
+    if isinstance(val, str):
+        return float(val.rstrip("%"))
+    return float(val)
+
+
+# ── Data loading ───────────────────────────────────────────────────────────────
+
+
+def load_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
+    """Load generic/specialised results for the 4 leave-one-out configurations.
+
+    Paths:
+      generic:     {results_dir}/{prefix}_generic/{prefix}_{complement}_on_{letter}/results.csv
+      specialised: {results_dir}/{prefix}_specialised/{prefix}_{letter}_on_{letter}/results.csv
+    """
+    rows = []
+    for dataset in DATASETS:
+        letter = DATASET_LETTERS[dataset]
+        complement = leave_one_out_complement(letter)
+        for scenario in ("generic", "specialised"):
+            if scenario == "generic":
+                run = f"{model_prefix}_{complement}_on_{letter}"
+            else:
+                run = f"{model_prefix}_{letter}_on_{letter}"
+            path = results_dir / f"{model_prefix}_{scenario}" / run / "results.csv"
+            if path.exists():
+                df = pd.read_csv(path)
+                df["dataset"] = dataset
+                df["type"] = scenario
+                rows.append(df)
+
+    if not rows:
+        return pd.DataFrame()
+
+    combined = pd.concat(rows, ignore_index=True)
+    for col in _PCT_COLS:
+        if col in combined.columns and combined[col].dtype == object:
+            combined[col] = combined[col].str.rstrip("%").astype(float)
+    for col in [
+        c for c in combined.columns if c.startswith("recall") and c != "recall"
+    ]:
+        if combined[col].dtype == object:
+            combined[col] = combined[col].str.rstrip("%").astype(float)
+    return combined
+
+
+def discover_models(results_dir: Path) -> list[str]:
+    """Return model prefixes found as *_generic/*_specialised pairs in results_dir."""
+    prefixes = []
+    for p in sorted(results_dir.glob("*_generic")):
+        prefix = p.name.removesuffix("_generic")
+        if (results_dir / f"{prefix}_specialised").exists():
+            prefixes.append(prefix)
+    return prefixes
+
+
+def load_tl_matrix(
+    results_dir: Path, model_prefix: str, scenario: str
+) -> dict[str, pd.DataFrame]:
+    """Load a full train×test results matrix for one scenario.
+
+    Path: {results_dir}/{prefix}_{scenario}/{prefix}_{train}_on_{test}/results.csv
+
+    Returns a dict with keys "auroc", "auprc", "f1", each a DataFrame
+    indexed by training set with test-set columns.
+    """
+    train_sets = (
+        TL_GENERIC_TRAIN_SETS if scenario == "generic" else TL_SPECIALISED_TRAIN_SETS
+    )
+    subdir = results_dir / f"{model_prefix}_{scenario}"
+
+    auroc = pd.DataFrame(index=train_sets, columns=TL_TEST_SETS, dtype=float)
+    auprc = pd.DataFrame(index=train_sets, columns=TL_TEST_SETS, dtype=float)
+    f1 = pd.DataFrame(index=train_sets, columns=TL_TEST_SETS, dtype=float)
+
+    for train in train_sets:
+        for test in TL_TEST_SETS:
+            csv_path = subdir / f"{model_prefix}_{train}_on_{test}" / "results.csv"
+            if csv_path.exists():
+                row = pd.read_csv(csv_path).iloc[0]
+                auroc.loc[train, test] = _parse_pct(row["rocauc"])
+                auprc.loc[train, test] = _parse_pct(row["auprc"])
+                f1.loc[train, test] = _parse_pct(row["fone"])
+
+    return {"auroc": auroc, "auprc": auprc, "f1": f1}
+
+
+# ── Plot functions (generic vs specialised) ────────────────────────────────────
+
+
+def plot_main_metrics(results_df: pd.DataFrame, title: str):
+    """Bar chart comparing main metrics (F1, AUROC, AUPRC, balanced accuracy)."""
+    if results_df.empty:
+        print(f"  [skip] no data: {title}")
+        return None
+
+    fig = make_subplots(
+        rows=1,
+        cols=len(MAIN_METRICS),
+        subplot_titles=[METRIC_LABELS[m] for m in MAIN_METRICS],
+        vertical_spacing=0.15,
+    )
+    for idx, metric in enumerate(MAIN_METRICS):
+        col = idx + 1
+        for model_type in ("generic", "specialised"):
+            subset = results_df[results_df["type"] == model_type]
+            fig.add_trace(
+                go.Bar(
+                    x=subset["dataset"],
+                    y=subset[metric],
+                    name=model_type.capitalize(),
+                    marker_color=COLORS[model_type],
+                    showlegend=(idx == 0),
+                    legendgroup=model_type,
+                ),
+                row=1,
+                col=col,
+            )
+    fig.update_layout(title=title, barmode="group", height=300, width=1300)
+    return fig
+
+
+def plot_roc_curves(
+    results_df: pd.DataFrame, results_dir: Path, model_prefix: str, title: str
+):
+    """2×2 ROC curve grid (one subplot per dataset)."""
+    if results_df.empty:
+        print(f"  [skip] no data: {title}")
+        return None
+
+    fig = make_subplots(rows=2, cols=2, subplot_titles=DATASETS, vertical_spacing=0.12)
+    for idx, dataset in enumerate(DATASETS):
+        row, col = idx // 2 + 1, idx % 2 + 1
+        letter = DATASET_LETTERS[dataset]
+        complement = leave_one_out_complement(letter)
+
+        for model_type in ("generic", "specialised"):
+            if model_type == "generic":
+                run = f"{model_prefix}_{complement}_on_{letter}"
+                roc_filename = f"{model_prefix}_{complement}.csv"
+            else:
+                run = f"{model_prefix}_{letter}_on_{letter}"
+                roc_filename = f"{model_prefix}_{letter}.csv"
+
+            roc_dir = results_dir / f"{model_prefix}_{model_type}" / run / "roc_curves"
+            roc_path = roc_dir / roc_filename
+
+            # Fallback: first CSV in roc_curves/ (handles non-standard naming)
+            if not roc_path.exists() and roc_dir.exists():
+                candidates = list(roc_dir.glob("*.csv"))
+                if candidates:
+                    roc_path = candidates[0]
+
+            if roc_path.exists():
+                roc_df = pd.read_csv(roc_path)
+                fig.add_trace(
+                    go.Scatter(
+                        x=roc_df["fpr"],
+                        y=roc_df["tpr"],
+                        mode="lines",
+                        name=model_type.capitalize(),
+                        line=dict(color=COLORS[model_type]),
+                        showlegend=(idx == 0),
+                        legendgroup=model_type,
+                    ),
+                    row=row,
+                    col=col,
+                )
+            else:
+                print(f"  [warn] missing ROC data in: {roc_dir}")
+
+        fig.add_trace(
+            go.Scatter(
+                x=[0, 1],
+                y=[0, 1],
+                mode="lines",
+                line=dict(dash="dash", color="gray"),
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
+        fig.update_xaxes(title_text="FPR", row=row, col=col)
+        fig.update_yaxes(title_text="TPR", row=row, col=col)
+
+    fig.update_layout(title=title, height=700, width=900)
+    return fig
+
+
+def _heatmap_fig(results_df: pd.DataFrame, col_map: dict[str, str], title: str):
+    """Generic Generic/Specialised heatmap for any recall-column mapping."""
+    available = {k: v for k, v in col_map.items() if k in results_df.columns}
+    if not available:
+        print(f"  [skip] no matching columns: {title}")
+        return None
+
+    col_keys = list(available.keys())
+    col_labels = list(available.values())
+
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=["Generic", "Specialised"],
+        horizontal_spacing=0.15,
+    )
+    for col_idx, model_type in enumerate(("generic", "specialised"), 1):
+        subset = results_df[results_df["type"] == model_type].sort_values("dataset")
+        z = [[row[c] for c in col_keys] for _, row in subset.iterrows()]
+        text = [[f"{v:.1f}" for v in row] for row in z]
+        fig.add_trace(
+            go.Heatmap(
+                z=z,
+                x=col_labels,
+                y=subset["dataset"].tolist(),
+                text=text,
+                texttemplate="%{text}",
+                colorscale="RdYlGn",
+                zmin=0,
+                zmax=100,
+                showscale=(col_idx == 2),
+                colorbar=dict(title="Recall (%)"),
+            ),
+            row=1,
+            col=col_idx,
+        )
+    fig.update_layout(title=title, height=350, width=1000)
+    return fig
+
+
+def plot_recall_per_technique(results_df: pd.DataFrame, title: str):
+    return _heatmap_fig(results_df, TECHNIQUE_COLS, title)
+
+
+def plot_recall_per_statement_type(results_df: pd.DataFrame, title: str):
+    return _heatmap_fig(results_df, STMT_TYPE_COLS, title)
+
+
+def plot_combined_metric(
+    all_results: dict[str, pd.DataFrame],
+    models: list[dict],
+    metric: str,
+    title: str | None = None,
+):
+    """Heatmap comparing one metric across all models (generic vs specialised)."""
+    rows = []
+    for m in models:
+        df = all_results[m["prefix"]]
+        if not df.empty and metric in df.columns:
+            tmp = df[["dataset", "type", metric]].copy()
+            tmp["approach"] = m["label"]
+            rows.append(tmp)
+
+    if not rows:
+        print(f"  [skip] no data for metric '{metric}'")
+        return None
+
+    combined = pd.concat(rows, ignore_index=True)
+    label = METRIC_LABELS.get(metric, metric)
+    if title is None:
+        title = f"{label}: Generic vs Specialised across Feature Extractors"
+
+    approach_order = [m["label"] for m in models]
+    is_pct = combined[metric].max() > 1
+    fmt = ".1f" if is_pct else ".4f"
+    zmin, zmax = 0, (100 if is_pct else 1)
+
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=["Generic", "Specialised"],
+        horizontal_spacing=0.15,
+    )
+    ds_order = sorted(combined["dataset"].unique())
+    for col_idx, model_type in enumerate(("generic", "specialised"), 1):
+        subset = combined[combined["type"] == model_type]
+        z, text = [], []
+        for ds in ds_order:
+            row_z, row_t = [], []
+            for approach in approach_order:
+                mask = (subset["dataset"] == ds) & (subset["approach"] == approach)
+                val = subset.loc[mask, metric]
+                v = val.values[0] if len(val) else float("nan")
+                row_z.append(v)
+                row_t.append(f"{v:{fmt}}")
+            z.append(row_z)
+            text.append(row_t)
+        fig.add_trace(
+            go.Heatmap(
+                z=z,
+                x=approach_order,
+                y=ds_order,
+                text=text,
+                texttemplate="%{text}",
+                colorscale="RdYlGn",
+                zmin=zmin,
+                zmax=zmax,
+                showscale=(col_idx == 2),
+                colorbar=dict(title=label),
+            ),
+            row=1,
+            col=col_idx,
+        )
+    fig.update_layout(title=title, height=350, width=700)
+    return fig
+
+
+# ── Plot functions (TL matrix) ─────────────────────────────────────────────────
+
+
+def _tl_heatmap(matrix: pd.DataFrame, title: str) -> go.Figure:
+    """Heatmap for one TL matrix (one metric, one scenario).
+
+    Out-of-domain cells (test set not seen during training) are rendered in bold
+    to highlight generalisation performance.
+    """
+    flat = matrix.values.astype(float)
+    has_data = ~pd.isna(flat)
+    is_pct = flat[has_data].max() > 1 if has_data.any() else False
+    zmin = 50.0 if is_pct else 0.5
+    zmax = 100.0 if is_pct else 1.0
+    fmt = ".1f" if is_pct else ".3f"
+    low_threshold = 70.0 if is_pct else 0.7
+
+    annotations = []
+    for train in matrix.index:
+        for test in matrix.columns:
+            val = matrix.loc[train, test]
+            if pd.isna(val):
+                annotations.append(
+                    dict(
+                        x=test,
+                        y=train,
+                        text="N/A",
+                        font=dict(color="gray", size=12),
+                        showarrow=False,
+                    )
+                )
+            else:
+                is_generalization = test not in train
+                annotations.append(
+                    dict(
+                        x=test,
+                        y=train,
+                        text=f"{val:{fmt}}",
+                        font=dict(
+                            color="white" if val < low_threshold else "black",
+                            size=14,
+                            weight="bold" if is_generalization else "normal",
+                        ),
+                        showarrow=False,
+                    )
+                )
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=flat,
+            x=matrix.columns.tolist(),
+            y=matrix.index.tolist(),
+            colorscale="RdYlGn",
+            zmin=zmin,
+            zmax=zmax,
+            showscale=True,
+        )
+    )
+    fig.update_layout(
+        title=title,
+        xaxis_title="Test Dataset",
+        yaxis_title="Training Set",
+        annotations=annotations,
+        width=500,
+        height=400,
+    )
+    return fig
+
+
+def _tl_heatmap_combined(
+    generic_matrix: pd.DataFrame,
+    specialised_matrix: pd.DataFrame,
+    title: str,
+) -> go.Figure:
+    """Side-by-side heatmap: generic (left) and specialised (right) TL matrices."""
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=["Generic", "Specialised"],
+        horizontal_spacing=0.15,
+    )
+
+    for col_idx, matrix in enumerate((generic_matrix, specialised_matrix), 1):
+        flat = matrix.values.astype(float)
+        has_data = ~pd.isna(flat)
+        is_pct = flat[has_data].max() > 1 if has_data.any() else False
+        zmin = 50.0 if is_pct else 0.5
+        zmax = 100.0 if is_pct else 1.0
+        fmt = ".1f" if is_pct else ".3f"
+        low_threshold = 70.0 if is_pct else 0.7
+
+        annotations = []
+        for train in matrix.index:
+            for test in matrix.columns:
+                val = matrix.loc[train, test]
+                if pd.isna(val):
+                    annotations.append(
+                        dict(
+                            x=test,
+                            y=train,
+                            text="N/A",
+                            font=dict(color="gray", size=12),
+                            showarrow=False,
+                            xref=f"x{col_idx}" if col_idx > 1 else "x",
+                            yref=f"y{col_idx}" if col_idx > 1 else "y",
+                        )
+                    )
+                else:
+                    is_generalization = test not in train
+                    annotations.append(
+                        dict(
+                            x=test,
+                            y=train,
+                            text=f"{val:{fmt}}",
+                            font=dict(
+                                color="white" if val < low_threshold else "black",
+                                size=14,
+                                weight="bold" if is_generalization else "normal",
+                            ),
+                            showarrow=False,
+                            xref=f"x{col_idx}" if col_idx > 1 else "x",
+                            yref=f"y{col_idx}" if col_idx > 1 else "y",
+                        )
+                    )
+
+        fig.add_trace(
+            go.Heatmap(
+                z=flat,
+                x=matrix.columns.tolist(),
+                y=matrix.index.tolist(),
+                colorscale="RdYlGn",
+                zmin=zmin,
+                zmax=zmax,
+                showscale=(col_idx == 2),
+            ),
+            row=1,
+            col=col_idx,
+        )
+        fig.layout.annotations = list(fig.layout.annotations) + annotations
+
+    fig.update_layout(
+        title=title,
+        width=900,
+        height=400,
+    )
+    for col_idx in (1, 2):
+        fig.update_xaxes(title_text="Test Dataset", row=1, col=col_idx)
+        fig.update_yaxes(title_text="Training Set", row=1, col=col_idx)
+
+    return fig
+
+
+def plot_tl_matrices(
+    results_dir: Path,
+    model_prefix: str,
+    label: str,
+) -> dict[str, go.Figure]:
+    """Generate combined TL matrix figures (generic + specialised side-by-side) for one model."""
+    figs: dict[str, go.Figure] = {}
+
+    generic_matrices = load_tl_matrix(results_dir, model_prefix, "generic")
+    specialised_matrices = load_tl_matrix(results_dir, model_prefix, "specialised")
+
+    has_generic = any(m.notna().any().any() for m in generic_matrices.values())
+    has_specialised = any(m.notna().any().any() for m in specialised_matrices.values())
+
+    if not has_generic and not has_specialised:
+        print(f"  [skip] no TL matrix data for {label}")
+        return figs
+
+    for metric_key in generic_matrices:
+        g_mat = generic_matrices[metric_key]
+        s_mat = specialised_matrices[metric_key]
+        g_has = g_mat.notna().any().any()
+        s_has = s_mat.notna().any().any()
+
+        if not g_has and not s_has:
+            print(f"  [skip] {label} {metric_key}: no data")
+            continue
+
+        display = TL_METRIC_DISPLAY.get(metric_key, metric_key.upper())
+        title = f"{label}: {display} Matrix"
+        figs[f"tl_{model_prefix}_{metric_key}"] = _tl_heatmap_combined(
+            g_mat, s_mat, title
+        )
+
+    return figs
+
+
+# ── Export ─────────────────────────────────────────────────────────────────────
+
+
+def export_figure(fig: go.Figure, stem: Path, formats: list[str]) -> None:
+    for fmt in formats:
+        out = stem.with_suffix(f".{fmt}")
+        kwargs = {"scale": 2} if fmt == "png" else {}
+        fig.write_image(out, **kwargs)
+        print(f"  Exported {out.name}")
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate generic vs specialised comparison + TL matrix reports "
+            "for all model types."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument(
+        "--results-dir",
+        required=True,
+        type=Path,
+        help=(
+            "Root results directory. Must contain flat {prefix}_generic/ and "
+            "{prefix}_specialised/ subdirectories (e.g. ae_li_generic/, ae_li_specialised/)."
+        ),
+    )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        metavar="PREFIX",
+        default=None,
+        help=(
+            "Model prefixes to include (e.g. ae_li ae_sbert). "
+            "Auto-discovered from --results-dir when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output/experiments"),
+        help=(
+            "Root output directory (default: output/experiments). "
+            "Figures go to {output_dir}/generic-vs-specialised/ and {output_dir}/tl-matrix/."
+        ),
+    )
+    parser.add_argument(
+        "--format",
+        nargs="+",
+        choices=["png", "pdf", "svg"],
+        default=["png"],
+        help="Output format(s) (default: png).",
+    )
+    args = parser.parse_args()
+
+    results_dir = args.results_dir.expanduser().resolve()
+    if not results_dir.exists():
+        print(f"ERROR: --results-dir does not exist: {results_dir}")
+        return 1
+
+    if args.models:
+        prefixes = args.models
+    else:
+        prefixes = discover_models(results_dir)
+        if not prefixes:
+            print(f"ERROR: no *_generic/*_specialised pairs found in {results_dir}")
+            return 1
+        print(f"Discovered models: {prefixes}")
+
+    models = [{"prefix": p, "label": model_label(p)} for p in prefixes]
+
+    # Load generic/specialised results upfront
+    print("\nLoading results…")
+    all_results: dict[str, pd.DataFrame] = {}
+    for m in models:
+        df = load_results(results_dir, m["prefix"])
+        all_results[m["prefix"]] = df
+        print(f"  {m['prefix']}: {len(df)} rows")
+
+    gvs_dir = args.output_dir / "generic-vs-specialised"
+    tl_dir = args.output_dir / "tl-matrix"
+    gvs_dir.mkdir(parents=True, exist_ok=True)
+    tl_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Generic vs Specialised ──────────────────────────────────────────────────
+    for m in models:
+        prefix, label = m["prefix"], m["label"]
+        df = all_results[prefix]
+        print(f"\n── {label} ──")
+
+        per_model_figs = {
+            f"metrics_{prefix}": plot_main_metrics(
+                df, f"Generic vs Specialised ({label})"
+            ),
+            f"roc_{prefix}": plot_roc_curves(
+                df, results_dir, prefix, f"ROC Curves: Generic vs Specialised ({label})"
+            ),
+            f"recall_technique_{prefix}": plot_recall_per_technique(
+                df, f"Recall per Attack Technique: Generic vs Specialised ({label})"
+            ),
+            f"recall_stmt_{prefix}": plot_recall_per_statement_type(
+                df, f"Recall per Statement Type: Generic vs Specialised ({label})"
+            ),
+        }
+        for name, fig in per_model_figs.items():
+            if fig is not None:
+                export_figure(fig, gvs_dir / name, args.format)
+
+    print("\n── Combined balanced accuracy ──")
+    fig_combined = plot_combined_metric(
+        all_results, models, "balanced_accuracy_per_technique"
+    )
+    if fig_combined is not None:
+        export_figure(
+            fig_combined, gvs_dir / "balanced_accuracy_combined_heatmap", args.format
+        )
+
+    # ── Transfer Learning Matrices ──────────────────────────────────────────────
+    print("\n── Transfer Learning Matrices ──")
+    for m in models:
+        print(f"\n── TL: {m['label']} ──")
+        tl_figs = plot_tl_matrices(results_dir, m["prefix"], m["label"])
+        for name, fig in tl_figs.items():
+            export_figure(fig, tl_dir / name, args.format)
+
+    print(f"\nDone.")
+    print(f"  Generic vs specialised : {gvs_dir.resolve()}")
+    print(f"  TL matrices            : {tl_dir.resolve()}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
