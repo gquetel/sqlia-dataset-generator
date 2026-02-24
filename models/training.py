@@ -171,6 +171,9 @@ def _model_state_tag(model) -> str:
         else getattr(model, "vectorizer", None)
     )
     if v is None:
+        # Include extractor type in cache key to avoid collisions between different extractors
+        if extractor:
+            return f"nofeat-{type(extractor).__name__}"
         return "nofeat"
 
     if hasattr(v, "_cv_t") and hasattr(v._cv_t, "vocabulary_"):
