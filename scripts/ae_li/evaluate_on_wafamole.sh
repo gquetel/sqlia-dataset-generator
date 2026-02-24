@@ -31,18 +31,18 @@ python3 models/training.py \
 
 # Generic models (trained on 3 datasets, tested on E)
 echo "Evaluating generic models on WAFAMOLE..."
-python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_ABC_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_ABD.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_ABD_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_ACD.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_ACD_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_BCD.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_BCD_on_E/ --fixed-fpr=0.01
+python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_ABC.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_ABC_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_ABD.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_ABD_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_ACD.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_ACD_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$GENERIC_MODELS_DIR/ae_li_BCD.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$GENERIC_RESULTS_DIR/ae_li_BCD_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
 
 # Specialised models (trained on single dataset, tested on E)
 echo "Evaluating specialised models on WAFAMOLE..."
-python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_A.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_A_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_B.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_B_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_C.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_C_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_D.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_D_on_E/ --fixed-fpr=0.01
-python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_E.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_E_on_E/ --fixed-fpr=0.01
+python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_A.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_A_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_B.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_B_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_C.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_C_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_D.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_D_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
+python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_E.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_E_on_E/ --fixed-fpr=0.01 $TESTING_FLAG
 
 # Evaluate E model on all other datasets (E→A, E→B, E→C, E→D)
 echo "Evaluating ae_li_E on other datasets..."
@@ -54,7 +54,8 @@ for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "speciali
         --model-type=ae_li \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \
         --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_E_on_${TEST_LABEL}/ \
-        --fixed-fpr=0.01
+        --fixed-fpr=0.01 \
+        $TESTING_FLAG
 done
 
 # Print job completion time

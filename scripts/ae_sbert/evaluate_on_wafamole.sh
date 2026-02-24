@@ -47,7 +47,8 @@ for TRAIN in "ABC" "ABD" "ACD" "BCD"; do
         --model-type=ae_sbert \
         --test-dataset=$WAFAMOLE_DATASET \
         --output-dir=$GENERIC_RESULTS_DIR/ae_sbert_${TRAIN}_on_E/ \
-        --fixed-fpr=0.01
+        --fixed-fpr=0.01 \
+        $TESTING_FLAG
 done
 
 # Specialised models (trained on single dataset, tested on E)
@@ -58,7 +59,8 @@ for TRAIN in "A" "B" "C" "D" "E"; do
         --model-type=ae_sbert \
         --test-dataset=$WAFAMOLE_DATASET \
         --output-dir=$SPECIALISED_RESULTS_DIR/ae_sbert_${TRAIN}_on_E/ \
-        --fixed-fpr=0.01
+        --fixed-fpr=0.01 \
+        $TESTING_FLAG
 done
 
 # ── Phase 3: Evaluate E model on all other datasets (E→A, E→B, E→C, E→D) ────
@@ -71,7 +73,8 @@ for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "speciali
         --model-type=ae_sbert \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \
         --output-dir=$SPECIALISED_RESULTS_DIR/ae_sbert_E_on_${TEST_LABEL}/ \
-        --fixed-fpr=0.01
+        --fixed-fpr=0.01 \
+        $TESTING_FLAG
 done
 
 echo "Job finished at: $(date)"

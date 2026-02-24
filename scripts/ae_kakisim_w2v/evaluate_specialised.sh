@@ -71,7 +71,8 @@ for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "speciali
         --model-type=ae_kakisim_w2v \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \
         --output-dir=$RESULTS_DIR/${MODEL_NAME}_on_${TEST_LABEL}/ \
-        --fixed-fpr=0.01
+        --fixed-fpr=0.01 \
+        $TESTING_FLAG
 done
 
 echo "Job finished at: $(date)"

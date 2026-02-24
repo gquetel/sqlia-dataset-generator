@@ -18,6 +18,12 @@ source venv-3.12.12/bin/activate
 DATASETS_DIR=$HOME/datasets/100k-training/
 MODELS_DIR=./models/output/models/ae_sbert_specialised/
 RESULTS_DIR=./models/output/ae_sbert_specialised/
+TESTING=false
+
+TESTING_FLAG=""
+if [ "$TESTING" = "true" ]; then
+    TESTING_FLAG="--testing"
+fi
 
 # Get scenario from command line argument (1-4)
 SCENARIO=${1:-1}
@@ -56,7 +62,8 @@ python3 models/training.py \
     --dataset=$DATASETS_DIR/$TRAIN_DATASET \
     --models ae_sbert \
     --subfolder=${TRAIN_DATASET%.csv}-ae_sbert \
-    --save-model-path=$MODELS_DIR/$MODEL_NAME
+    --save-model-path=$MODELS_DIR/$MODEL_NAME \
+    $TESTING_FLAG
 
 # Evaluate on all test datasets
 for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "specialised-AdventureWorks.csv:C" "specialised-OHR.csv:D"; do
@@ -68,7 +75,8 @@ for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "speciali
         --model-type=ae_sbert \
         --test-dataset=$DATASETS_DIR/$TEST_FILE \
         --output-dir=$RESULTS_DIR/${MODEL_NAME}_on_${TEST_LABEL}/ \
-        --fixed-fpr=0.01
+        --fixed-fpr=0.01 \
+        $TESTING_FLAG
 done
 
 echo "Job finished at: $(date)"
