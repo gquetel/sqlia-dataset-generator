@@ -53,6 +53,11 @@ Usage:
         --results-dir ~/experiences-results/2026-02-23 \\
         --output-dir output/experiments \\
         --format png pdf
+
+    # Include WAFAMOLE (E) as external test-only dataset
+    python experiments/report_generic_vs_specialised.py \\
+        --results-dir ~/experiences-results/2026-02-23 \\
+        --include-wafamole
 """
 
 import argparse
@@ -129,7 +134,7 @@ _PCT_COLS = [
 
 # TL matrix: leave-one-out training sets and single-dataset training sets
 TL_GENERIC_TRAIN_SETS = ["ABC", "ABD", "ACD", "BCD"]
-TL_SPECIALISED_TRAIN_SETS = ["A", "B", "C", "D"]
+TL_SPECIALISED_TRAIN_SETS = ["D", "C", "B", "A"]
 TL_TEST_SETS = ["A", "B", "C", "D"]
 TL_METRIC_DISPLAY = {"auroc": "AUROC", "auprc": "AUPRC", "f1": "F1 Score"}
 
@@ -700,7 +705,26 @@ def main() -> int:
         default=["png"],
         help="Output format(s) (default: png).",
     )
+    parser.add_argument(
+        "--include-wafamole",
+        action="store_true",
+        default=False,
+        help=(
+            "Include WAFAMOLE (E) as an external test-only dataset. "
+            "Adds E to test sets and specialised training sets but not generic training."
+        ),
+    )
     args = parser.parse_args()
+
+    # Extend constants if WAFAMOLE is included
+    if args.include_wafamole:
+        global DATASETS, DATASET_LETTERS, ALL_LETTERS
+        global TL_TEST_SETS, TL_SPECIALISED_TRAIN_SETS
+        DATASET_LETTERS["wafamole"] = "E"
+        DATASETS = DATASETS + ["wafamole"]
+        ALL_LETTERS = set(DATASET_LETTERS.values())
+        TL_TEST_SETS = TL_TEST_SETS + ["E"]
+        TL_SPECIALISED_TRAIN_SETS = TL_SPECIALISED_TRAIN_SETS + ["E"]
 
     results_dir = args.results_dir.expanduser().resolve()
     if not results_dir.exists():
