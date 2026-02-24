@@ -226,6 +226,9 @@ class BaseAutoEncoderModel:
         elif hasattr(self.extractor, "get_feature_names_out"):
             self.feature_columns = self.extractor.get_feature_names_out()
 
+        if isinstance(X, list):
+            X = np.array(X)
+
         # Determine input dimension
         if hasattr(X, "shape"):
             input_dim = X.shape[1]
