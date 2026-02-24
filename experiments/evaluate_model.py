@@ -26,15 +26,13 @@ from explain import (
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
 )
-from training import (
+from registry import (
+    MODEL_CONFIGS,
+    build_model,
     decision_score_ae,
-    get_scores_generic,
     preprocessing_generic_ae,
 )
-from U_Kakisim import AutoEncoder_Kakisim, AutoEncoder_Kakisim_W2V
-from U_Li import AutoEncoder_Li
-from U_Loginov import AutoEncoder_Loginov
-from U_Sentence_BERT import AutoEncoder_SecureBERT
+from training import get_scores_generic
 
 logger = logging.getLogger(__name__)
 
@@ -90,46 +88,19 @@ def load_model(
     device: torch.device,
     embeddings_cache_dir: str = None,
 ):
-    """Load a model from disk.
+    """Load a model from disk using the registry."""
+    project_paths = ProjectPaths(GENERIC.BASE_PATH)
+    if embeddings_cache_dir:
+        Path(embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
+        project_paths._embeddings_override = embeddings_cache_dir
 
-    Args:
-        model_type: Type of model ("ae_li" or "ae_sbert").
-        model_path: Path to the saved model.
-        device: Torch device to use.
-        embeddings_cache_dir: Optional cache directory for SBERT embeddings.
-
-    Returns:
-        Loaded model instance.
-    """
-    if model_type == "ae_li":
-        model = AutoEncoder_Li(
-            GENERIC=GENERIC,
-            device=device,
-            use_scaler=True,
-        )
-        model.load_model(model_path)
-    elif model_type == "ae_sbert":
-        project_paths = ProjectPaths(GENERIC.BASE_PATH)
-        if embeddings_cache_dir:
-            Path(embeddings_cache_dir).mkdir(parents=True, exist_ok=True)
-            project_paths._embeddings_override = embeddings_cache_dir
-
-        model = AutoEncoder_SecureBERT(
-            device=device,
-            project_paths=project_paths,
-        )
-        model.load_model(load_path=model_path)
-    elif model_type == "ae_kakisim_c":
-        model = AutoEncoder_Kakisim(GENERIC=GENERIC, device=device, views=["C"])
-        model.load_model(model_path)
-    elif model_type == "ae_kakisim_w2v":
-        model = AutoEncoder_Kakisim_W2V(GENERIC=GENERIC, device=device)
-        model.load_model(model_path)
-    elif model_type == "ae_loginov":
-        model = AutoEncoder_Loginov(GENERIC=GENERIC, device=device, use_scaler=True)
-        model.load_model(model_path)
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
+    model = build_model(
+        config_name=model_type,
+        GENERIC=GENERIC,
+        device=device,
+        project_paths=project_paths,
+    )
+    model.load_model(model_path)
 
     if model.threshold is None:
         raise ValueError(
@@ -147,20 +118,7 @@ def evaluate_model(
     threshold: float,
     model_name: str,
 ) -> tuple[dict, np.ndarray]:
-    """Evaluate a model on test data using pre-computed scores.
-
-    Args:
-        df_test: Test dataset.
-        labels: Ground truth labels.
-        scores: Pre-computed anomaly scores.
-        threshold: Decision threshold.
-        model_name: Name for logging and results.
-
-    Returns:
-        Tuple of (metrics_dict, preds).
-    """
     logger.info(f"Using threshold: {threshold:.6f}")
-
     return compute_all_metrics(
         df_test=df_test,
         labels=labels,
@@ -206,10 +164,9 @@ def main():
         help="Directory to save evaluation results",
     )
     parser.add_argument(
-        "--test-size",
-        type=int,
-        default=None,
-        help="Maximum number of test samples (default: all)",
+        "--testing",
+        action="store_true",
+        help="Testing mode: limit test set to 500 samples",
     )
     parser.add_argument(
         "--embeddings-cache",
@@ -247,7 +204,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load test data and model
-    df_test = load_test_data(args.test_dataset, args.test_size)
+    df_test = load_test_data(args.test_dataset, 500 if args.testing else None)
     logger.info(f"Test set: {len(df_test)} samples")
 
     device = init_device()
@@ -259,7 +216,7 @@ def main():
         embeddings_cache_dir=args.embeddings_cache,
     )
 
-    # Score once — reused for both threshold computation and evaluation
+    # Score once, but reused for both threshold computation and evaluation
     labels, scores = get_scores_generic(
         df=df_test,
         batch_size=4096,
@@ -287,8 +244,6 @@ def main():
     results_df.to_csv(results_path, index=False)
     logger.info(f"Saved results to {results_path}")
 
-    # We save curves using existing function in explain.py
-    # For compatibility, we create a dummy object with output_path
     eval_paths = DotDict({"output_path": str(output_dir) + "/"})
     plot_roc_curves_plt_from_scores(
         labels=labels,

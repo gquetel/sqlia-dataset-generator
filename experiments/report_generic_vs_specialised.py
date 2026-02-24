@@ -70,8 +70,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-# ── Dataset constants ──────────────────────────────────────────────────────────
-
 DATASETS = ["AdventureWorks", "OHR", "OurAirports", "sakila"]
 
 DATASET_LETTERS = {
@@ -140,9 +138,6 @@ TL_TEST_SETS = ["A", "B", "C", "D"]
 TL_METRIC_DISPLAY = {"auroc": "AUROC", "auprc": "AUPRC", "f1": "F1 Score"}
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-
 def leave_one_out_complement(letter: str) -> str:
     return "".join(sorted(ALL_LETTERS - {letter}))
 
@@ -156,9 +151,6 @@ def _parse_pct(val) -> float:
     if isinstance(val, str):
         return float(val.rstrip("%"))
     return float(val)
-
-
-# ── Data loading ───────────────────────────────────────────────────────────────
 
 
 def load_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
@@ -238,9 +230,6 @@ def load_tl_matrix(
                 f1.loc[train, test] = _parse_pct(row["fone"])
 
     return {"auroc": auroc, "auprc": auprc, "f1": f1}
-
-
-# ── Plot functions (generic vs specialised) ────────────────────────────────────
 
 
 def plot_main_metrics(results_df: pd.DataFrame, title: str):
@@ -464,9 +453,6 @@ def plot_combined_metric(
     return fig
 
 
-# ── Plot functions (TL matrix) ─────────────────────────────────────────────────
-
-
 def _tl_heatmap(matrix: pd.DataFrame, title: str) -> go.Figure:
     """Heatmap for one TL matrix (one metric, one scenario).
 
@@ -653,18 +639,12 @@ def plot_tl_matrices(
     return figs
 
 
-# ── Export ─────────────────────────────────────────────────────────────────────
-
-
 def export_figure(fig: go.Figure, stem: Path, formats: list[str]) -> None:
     for fmt in formats:
         out = stem.with_suffix(f".{fmt}")
         kwargs = {"scale": 2} if fmt == "png" else {}
         fig.write_image(out, **kwargs)
         print(f"  Exported {out.name}")
-
-
-# ── Entry point ────────────────────────────────────────────────────────────────
 
 
 def main() -> int:
@@ -722,15 +702,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Extend constants if WAFAMOLE is included
+    # Extend constants if WAFAMOLE is included.
+    # WAFAMOLE is test-only and single-dataset specialised; it must NOT enter
+    # ALL_LETTERS because leave_one_out_complement() uses ALL_LETTERS to derive
+    # generic training sets (ABC, ABD, ACD, BCD) — adding E would corrupt them.
     if args.include_wafamole:
-        global DATASETS, DATASET_LETTERS, ALL_LETTERS
-        global TL_TEST_SETS, TL_SPECIALISED_TRAIN_SETS
         DATASET_LETTERS["wafamole"] = "E"
-        DATASETS = DATASETS + ["wafamole"]
-        ALL_LETTERS = set(DATASET_LETTERS.values())
-        TL_TEST_SETS = TL_TEST_SETS + ["E"]
-        TL_SPECIALISED_TRAIN_SETS = ["E"] + TL_SPECIALISED_TRAIN_SETS
+        DATASETS.append("wafamole")
+        TL_TEST_SETS.append("E")
+        TL_SPECIALISED_TRAIN_SETS.insert(0, "E")
 
     results_dir = args.results_dir.expanduser().resolve()
     if not results_dir.exists():

@@ -1,4 +1,11 @@
-"""Definition of ML models configuration."""
+"""Training pipeline for SQL injection detection models.
+
+Entry point: ``python training.py --dataset <path> --models <names>``
+
+Uses the config-driven registry (registry.py) instead of per-model train_*()
+functions.  The CLI, logging, data loading, and evaluation orchestration are
+unchanged from the original.
+"""
 
 import hashlib
 import os
@@ -6,9 +13,6 @@ from typing import Any, Callable
 
 from sklearn.model_selection import train_test_split
 
-# We force device on which training happens.
-# device = torch.device("cuda:0" if USE_CUDA else "cpu") is not taken
-# into account apparently...
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2"
 
 import argparse
@@ -22,40 +26,22 @@ import logging
 import torch
 from tqdm import tqdm
 
-
-from U_Li import AutoEncoder_Li, LOF_Li, OCSVM_Li, preprocess_li
-from U_CountVect import (
-    LOF_CV,
-    OCSVM_CV,
-    AutoEncoder_CV,
-    preprocessing_cv,
-)
-from U_Sentence_BERT import (
-    AutoEncoder_SecureBERT,
-    LOF_SecureBERT,
-    OCSVM_SecureBERT,
-    preprocessing_sbert,
-)
-from U_Kakisim import (
-    AutoEncoder_Kakisim,
-    OCSVM_Kakisim,
-    preprocessing_kakisim,
-    AutoEncoder_Kakisim_W2V,
-    OCSVM_Kakisim_W2V,
-    preprocessing_kakisim_w2v,
-)
-from U_Loginov import (
-    AutoEncoder_Loginov,
-    OCSVM_Loginov,
-    preprocess_loginov,
-)
 from constants import DotDict, ProjectPaths
-
 from cache_utils import hash_df, load_cache, save_cache
 from evaluation import compute_all_metrics, get_threshold_for_max_rate
 from explain import (
     plot_pr_curves_plt_from_scores,
     plot_roc_curves_plt_from_scores,
+)
+from registry import (
+    MODEL_CONFIGS,
+    build_model,
+    decision_score_ae,
+    decision_score_generic,
+    get_preprocess_fn,
+    get_score_fn,
+    preprocessing_generic_ae,
+    preprocessing_sklearn,
 )
 
 # ------------ Global variables  ------------
@@ -68,19 +54,18 @@ GENERIC = DotDict(
     }
 )
 
-# Bootstrap a custom object path.
 project_paths = ProjectPaths(GENERIC.BASE_PATH)
-# project_paths = ProjectPaths("/home/gquetel/repos/sqlia-dataset/models")
 logger = logging.getLogger(__name__)
 training_results = []
 save_model_path = None  # Set via --save-model-path argument
 
-n_jobs = min(64, int(os.cpu_count() * 0.8))
+n_jobs = min(
+    64, int(os.cpu_count() * 0.8)
+)  # We are nice and limit the number of jobs on the cluster.
 use_feature_cache = True  # Disable with --no-feature-cache
 
 
 def init_logging(args):
-    # the File handler has always debug.
     lf = TimedRotatingFileHandler(
         project_paths.logs_path + "/training.log",
         when="midnight",
@@ -92,7 +77,6 @@ def init_logging(args):
     lstdo.setLevel(lg_lvl)
     lstdo.setFormatter(logging.Formatter(" %(message)s"))
 
-    # Configure the root logger so submodule loggers also get captured
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.DEBUG)
@@ -101,11 +85,6 @@ def init_logging(args):
 
 
 def init_device() -> torch.device:
-    """Initialize the device to use for experiments
-
-    Returns:
-        torch.device: device to use
-    """
     USE_CUDA = torch.cuda.is_available()
     device = torch.device("cuda:0" if USE_CUDA else "cpu")
     if USE_CUDA:
@@ -117,11 +96,6 @@ def init_device() -> torch.device:
 
 
 def init_args() -> argparse.Namespace:
-    """Argsparse initializing function.
-
-    Returns:
-        argparse.Namespace: Parsed arguments.
-    """
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -131,51 +105,43 @@ def init_args() -> argparse.Namespace:
         required=True,
         help="Filepath to the dataset.",
     )
-
     parser.add_argument(
         "--debug",
         action="store_true",
         help="Prints more details on about model training",
     )
-
     parser.add_argument(
         "--on-user-inputs",
         action="store_true",
         help="Train algorithm on user inputs rather than full query",
     )
-
     parser.add_argument(
         "--capture-insider",
         action="store_true",
         help="Treat insider attacks as observable (otherwise, they are treated as false negatives)",
     )
-
     parser.add_argument(
         "--models",
         nargs="+",
         default=["all"],
         help="Models to train (e.g., --models ocsvm_li ae_cv). Use 'all' to run everything.",
     )
-
     parser.add_argument(
         "--subfolder",
         dest="subfolder",
         help="Save results in output subfolder. Used when computing on multiple nodes to prevent results overwrite.",
     )
-
     parser.add_argument(
         "--testing",
         action="store_true",
         help="Reduce dataset size to test correct code execution",
     )
-
     parser.add_argument(
         "--save-model-path",
         type=str,
         dest="save_model_path",
         help="Path to save trained model (without extension). Works with ae_li, ae_sbert, ae_kakisim, ae_kakisim_enriched, and ae_loginov.",
     )
-
     parser.add_argument(
         "--no-feature-cache",
         action="store_true",
@@ -183,8 +149,7 @@ def init_args() -> argparse.Namespace:
         help="Disable the feature matrix disk cache (enabled by default).",
     )
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def set_global_seed():
@@ -198,13 +163,13 @@ def set_global_seed():
 
 
 def _model_state_tag(model) -> str:
-    """Return a short hex string capturing the fitted vectorizer vocabulary.
-
-    For models with no fitted vectorizer (Li, SBERT) the tag is constant, so
-    cached test features are keyed purely on the df content. For model with a
-    vocabulary (such as Kakisim), this tag varies. It is returned
-    """
-    v = getattr(model, "vectorizer", None)
+    """Return a short hex string capturing the fitted vectorizer vocabulary."""
+    extractor = getattr(model, "extractor", None)
+    v = (
+        getattr(extractor, "vectorizer", None)
+        if extractor
+        else getattr(model, "vectorizer", None)
+    )
     if v is None:
         return "nofeat"
 
@@ -227,20 +192,10 @@ def _cached_preprocess_preds(
     split: str,
     use_scaler: bool = False,
 ):
-    """Wrap a preprocessing function with file-based caching.
-
-    Cache key = model class name + split tag + SHA-256 of the df content,
-    consistent with SecureBERT's own embedding cache convention.
-    Torch tensors are stored on CPU for portability and moved back to the
-    model device on load.
-
-    Note: SecureBERT models have their own embedding cache in embeddings/.
-    The outer feature cache (features/) is compatible with it: on first run
-    both caches are populated; on subsequent runs this cache is hit first,
-    short-circuiting even SecureBERT's inner cache read.
-    """
+    """Wrap a preprocessing function with file-based caching."""
     # Kakisim models cache internally in preprocess_for_preds; skip outer wrapping.
-    if getattr(model, "cache_dir", None) is not None:
+    extractor = getattr(model, "extractor", None)
+    if extractor and getattr(extractor, "cache_dir", None) is not None:
         return preprocess_fn(model, df, use_scaler=use_scaler)
 
     df_hash = hash_df(df)
@@ -257,7 +212,6 @@ def _cached_preprocess_preds(
 
     X, labels = preprocess_fn(model, df, use_scaler=use_scaler)
 
-    # Always persist tensors on CPU so the cache is device-agnostic.
     save_obj = (X.cpu() if isinstance(X, torch.Tensor) else X, labels)
     save_cache(path, save_obj)
     return X, labels
@@ -295,66 +249,12 @@ def get_scores_with_cache(
     return labels, np.array(all_scores)
 
 
-# ------------- MODELS TRAINING -------------
-
-
 def preprocess_for_user_inputs_training(df: pd.DataFrame):
-    """Preprocess DataFrame for model training on user inputs.
-    Args:
-        df (pd.DataFrame): _description_
-    """
-    # remove samples for which user_inputcolumn  is null.
     c = len(df)
     df.dropna(subset=["user_inputs"], inplace=True)
-    # Then replace full_query by user_input content
     dropped_count = c - len(df)
     logger.info(f"Dropped {dropped_count} samples with no user_input")
     df["full_query"] = df["user_inputs"]
-
-
-# --------------- Generic Evaluation Functions ---------------
-def decision_score_generic(model: OCSVM_Li | LOF_Li | OCSVM_CV | LOF_CV, X: np.ndarray):
-    # dists are a distance to the separating hyperplane.
-    # Negative distance is an outlier (attack)
-    # Positive distance is an inlier (normal)
-    dists = model.clf.decision_function(X)
-
-    # Process dists so that positive class is > 0 as asked by
-    # average_precision_score & roc_auc_score
-    return -dists
-
-
-def decision_score_ae(model: AutoEncoder_CV | AutoEncoder_Li, X: np.ndarray):
-    # dists are a distance to the separating hyperplane.
-    # Negative distance is an outlier (attack)
-    # Positive distance is an inlier (normal)
-    dists = model.clf.decision_function(X, is_tensor=True)
-
-    # Process dists so that positive class is > 0 as asked by
-    # average_precision_score & roc_auc_score
-    return -dists
-
-
-def preprocessing_generic_ae(
-    model: AutoEncoder_CV | AutoEncoder_Li | AutoEncoder_SecureBERT,
-    df: pd.DataFrame,
-    use_scaler: bool = False,
-) -> tuple[torch.Tensor, np.ndarray]:
-    """Preprocess queries from pandas DataFrame, returns tensors and associated labels.
-
-    Args:
-        model (AutoEncoder_CV | AutoEncoder_Li | AutoEncoder_SecureBERT ): _description_
-        df (pd.DataFrame): _description_
-        use_scaler (bool, optional): Ignored, kept for API compatibilty.. Defaults to False.
-
-    Returns:
-        tuple[torch.Tensor, np.ndarray]: _description_
-    """
-    X, labels = model.preprocess_for_preds(df=df)
-    # The scaling is dealt with internally in `X_to_tensor`.
-    # use_scaler is only kept to fit with how the function is called.
-    X_tensors = model.X_to_tensor(X)
-    return X_tensors, labels
 
 
 def get_scores_generic(
@@ -374,10 +274,8 @@ def get_scores_generic(
             batch_df = df.iloc[start_idx:end_idx]
             X, labels = preprocess_fn(model, batch_df, use_scaler=use_scaler)
             scores = score_fn(model, X)
-
             all_labels.extend(labels)
             all_scores.extend(scores)
-
     else:
         X, all_labels = preprocess_fn(model, df, use_scaler=use_scaler)
         all_scores = score_fn(model, X)
@@ -395,31 +293,7 @@ def compute_metrics_generic(
     use_scaler: bool,
     insider_as_fn: bool = False,
     use_batches: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Generic function to evaluate an anomaly detection model by computing prediction scores,
-    selecting a decision threshold, and logging evaluation metrics.
-
-    Args:
-        model: Trained anomaly detection model.
-        df_test (pd.DataFrame): Test dataset containing samples and true labels.
-        df_val (pd.DataFrame): Validation dataset used to compute the decision threshold.
-        model_name (str): Identifier used for logging and result tracking.
-        preprocess_fn (Callable): Function that takes (model, batch_df) and returns
-            a tuple (X, labels), where X can be passed to the model for scoring.
-        get_decision_scores_fn (Callable): Function that takes (model, X) and returns
-            anomaly scores (e.g., negative distances to decision boundary).
-        use_scaler (bool): Whether scaling should be used for the features.
-        insider_as_fn (bool): False by default. If set to True, the queries with the
-            attack_technique "insider" will be considered as False Negative: the data
-            collector is not able to collect information for this attack.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: A tuple containing:
-            - Ground truth labels from the test set.
-            - Computed anomaly scores for the test set.
-    """
-    # Get test and val scores
+) -> tuple[np.ndarray, np.ndarray, float]:
     batch = 4096 if use_batches else None
 
     if use_feature_cache:
@@ -462,7 +336,6 @@ def compute_metrics_generic(
             score_fn=get_decision_scores_fn,
         )
 
-    # Threshold selection
     threshold = get_threshold_for_max_rate(s_val=s_val)
     num_above_threshold = np.sum(s_val > threshold)
     proportion = num_above_threshold / len(s_val)
@@ -471,8 +344,6 @@ def compute_metrics_generic(
         f"samples ({proportion:.1%}) above threshold"
     )
 
-    # Here, set preds where attack_technique = "insider" to min(scores) ->
-    # It should be classifier as normal to be a false negative.
     if insider_as_fn:
         insider_mask = df_test["attack_technique"].eq("insider")
         if insider_mask.any():
@@ -495,576 +366,87 @@ def compute_metrics_generic(
     return l_test, s_test, threshold
 
 
-def train_ocsvm_cv(
+# --------------- Registry-driven training ---------------
+
+AUTHORIZED_GROUPS = {
+    "li": ["ocsvm_li", "lof_li", "ae_li"],
+    "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
+    "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
+    "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
+    "kakisim_w2v": ["ocsvm_kakisim_w2v", "ae_kakisim_w2v"],
+    "loginov": ["ocsvm_loginov", "ae_loginov"],
+}
+
+
+def select_models(args) -> list[str]:
+    """Return list of model config names to train."""
+    if "all" in args.models:
+        return list(MODEL_CONFIGS.keys())
+
+    requested = []
+    for item in args.models:
+        if item in AUTHORIZED_GROUPS:
+            requested.extend(AUTHORIZED_GROUPS[item])
+        else:
+            requested.append(item)
+
+    valid = []
+    for name in requested:
+        if name in MODEL_CONFIGS:
+            valid.append(name)
+        else:
+            logger.warning(f"Unrecognized model {name}, skipping.")
+    return valid
+
+
+def _train_single_model(
+    config_name: str,
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Build, train, evaluate, and optionally save one model."""
+    global save_model_path
     set_global_seed()
-    model_name = "CountVectorizer and OCSVM"
 
-    if use_scaler:
-        model_name += "-scaler"
-
+    config = MODEL_CONFIGS[config_name]
+    model_name = config.display_name
     logger.info(f"Training model: {model_name}")
-    model = OCSVM_CV(
+
+    device = init_device()
+    cache_dir = project_paths.features_cache_path if use_feature_cache else None
+
+    model = build_model(
+        config_name=config_name,
         GENERIC=GENERIC,
-        nu=0.05,
-        kernel="rbf",
-        gamma="scale",
-        max_iter=10000,
-        use_scaler=use_scaler,
-    )
-    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_cv,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_ocsvm_li(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    set_global_seed()
-    model_name = "Li and OCSVM"
-    if use_scaler:
-        model_name += "-scaler"
-
-    logger.info(f"Training model: {model_name}")
-    model = OCSVM_Li(
-        GENERIC=GENERIC,
-        nu=0.05,
-        kernel="rbf",
-        gamma="scale",
-        max_iter=1000,
-        use_scaler=use_scaler,
-    )
-
-    model.train_model(
-        df=df_train,
-        model_name=model_name,
-        project_paths=project_paths,
-    )
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocess_li,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_ocsvm_sbert(
-    df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame
-):
-    set_global_seed()
-    model_name = "SecureBERT and OCSVM"
-    logger.info(f"Training model: {model_name}")
-    model = OCSVM_SecureBERT(
-        device=init_device(),
-        project_paths=project_paths,
-        max_iter=10000,
-        batch_size=1024,
-    )
-
-    model.train_model(df=df_train, model_name=model_name)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_sbert,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=False,  # We never use scaler for SecureBERT based models.
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_lof_cv(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    set_global_seed()
-    model_name = "CountVectorizer and LOF"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-
-    model = LOF_CV(
-        GENERIC=GENERIC,
-        n_jobs=n_jobs,
-        vectorizer_max_features=None,
-        use_scaler=use_scaler,
-    )
-    model.train_model(
-        df=df_train,
-        model_name=model_name,
-        project_paths=project_paths,
-    )
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_cv,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_lof_li(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    set_global_seed()
-    model_name = "Li and LOF"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = LOF_Li(GENERIC=GENERIC, n_jobs=n_jobs, use_scaler=use_scaler)
-    model.train_model(
-        df=df_train,
-        model_name=model_name,
-        project_paths=project_paths,
-    )
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocess_li,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_lof_sbert(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-):
-    set_global_seed()
-    model_name = "SBERT and LOF"
-    logger.info(f"Training model: {model_name}")
-    model = LOF_SecureBERT(
-        device=init_device(),
+        device=device,
         project_paths=project_paths,
         n_jobs=n_jobs,
-        batch_size=1024,
-    )
-    model.train_model(df=df_train, model_name=model_name)
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_sbert,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=False,  # We never use scaler for SecureBERT based models.
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-# -- Autoencoders --
-def train_ae_li(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    global save_model_path
-    set_global_seed()
-    random.seed(GENERIC.RANDOM_SEED)
-    np.random.seed(GENERIC.RANDOM_SEED)
-    torch.manual_seed(GENERIC.RANDOM_SEED)
-
-    model_name = "Li and AE"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Li(
-        GENERIC=GENERIC,
-        device=init_device(),
-        learning_rate=0.005,
-        epochs=100,
-        batch_size=8192,
-        use_scaler=use_scaler,
+        cache_dir=cache_dir,
     )
 
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_generic_ae,
-        get_decision_scores_fn=decision_score_ae,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-
-    if save_model_path:
-        model.save_model(save_model_path, threshold=threshold)
-
-    return labels, scores, threshold
-
-
-def train_ae_cv(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    set_global_seed()
-    random.seed(GENERIC.RANDOM_SEED)
-    np.random.seed(GENERIC.RANDOM_SEED)
-    torch.manual_seed(GENERIC.RANDOM_SEED)
-
-    model_name = "CountVectorizer and AE"
-    if use_scaler:
-        model_name += "-scaler"
-
-    logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_CV(
-        device=init_device(),
-        GENERIC=GENERIC,
-        learning_rate=0.001,
-        epochs=100,
-        batch_size=4096,
-        # Because a too big AE does not fit GPU Memory we limit the input_dim:
-        # We need enough size for both the model and the features
-        vectorizer_max_features=20000,
-        use_scaler=use_scaler,
-    )
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_generic_ae,
-        get_decision_scores_fn=decision_score_ae,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_ae_sbert(df_train: pd.DataFrame, df_test: pd.DataFrame, df_val: pd.DataFrame):
-    global save_model_path
-    set_global_seed()
-    model_name = "SecureBERT and AE"
-    logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_SecureBERT(
-        device=init_device(),
+    model.train_model(
+        df=df_train,
         project_paths=project_paths,
-        learning_rate=0.001,
-        epochs=100,
-        batch_size=512,
+        model_name=model_name,
     )
 
-    model.train_model(df=df_train, model_name=model_name)
+    preprocess_fn = get_preprocess_fn(config_name)
+    score_fn = get_score_fn(config_name)
 
     labels, scores, threshold = compute_metrics_generic(
         model=model,
         df_test=df_test,
         df_val=df_val,
         model_name=model_name,
-        preprocess_fn=preprocessing_generic_ae,
-        get_decision_scores_fn=decision_score_ae,
-        use_scaler=False,
+        preprocess_fn=preprocess_fn,
+        get_decision_scores_fn=score_fn,
+        use_scaler=config.use_scaler,
         insider_as_fn=False,
         use_batches=True,
     )
 
-    if save_model_path:
-        model.save_model(save_path=save_model_path, threshold=threshold)
-
-    return labels, scores, threshold
-
-
-def train_ocsvm_kakisim_c(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    set_global_seed()
-    model_name = "Kakisim-C and OCSVM"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = OCSVM_Kakisim(
-        GENERIC=GENERIC,
-        nu=0.05,
-        kernel="rbf",
-        gamma="scale",
-        max_iter=10000,
-        use_scaler=use_scaler,
-        views=["C"],
-    )
-    cache_dir = project_paths.features_cache_path if use_feature_cache else None
-    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_kakisim,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_ae_kakisim_c(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    global save_model_path
-    set_global_seed()
-    random.seed(GENERIC.RANDOM_SEED)
-    np.random.seed(GENERIC.RANDOM_SEED)
-    torch.manual_seed(GENERIC.RANDOM_SEED)
-
-    model_name = "Kakisim-C and AE"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Kakisim(
-        GENERIC=GENERIC,
-        device=init_device(),
-        learning_rate=0.001,
-        epochs=100,
-        batch_size=4096,
-        use_scaler=use_scaler,
-        views=["C"],
-        min_df=1,
-    )
-    cache_dir = project_paths.features_cache_path if use_feature_cache else None
-    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_generic_ae,
-        get_decision_scores_fn=decision_score_ae,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-
-    if save_model_path:
-        model.save_model(save_model_path, threshold=threshold)
-
-    return labels, scores, threshold
-
-
-def train_ocsvm_kakisim_w2v(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    set_global_seed()
-    model_name = "Kakisim-W2V and OCSVM"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = OCSVM_Kakisim_W2V(
-        GENERIC=GENERIC,
-        nu=0.05,
-        kernel="rbf",
-        gamma="scale",
-        max_iter=10000,
-        use_scaler=use_scaler,
-        vector_size=256,
-    )
-    cache_dir = project_paths.features_cache_path if use_feature_cache else None
-    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_kakisim_w2v,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_ae_kakisim_w2v(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = False,
-):
-    global save_model_path
-    set_global_seed()
-    random.seed(GENERIC.RANDOM_SEED)
-    np.random.seed(GENERIC.RANDOM_SEED)
-    torch.manual_seed(GENERIC.RANDOM_SEED)
-
-    model_name = "Kakisim-W2V and AE"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Kakisim_W2V(
-        GENERIC=GENERIC,
-        device=init_device(),
-        learning_rate=0.001,
-        epochs=100,
-        batch_size=4096,
-        use_scaler=use_scaler,
-        vector_size=256,
-    )
-    cache_dir = project_paths.features_cache_path if use_feature_cache else None
-    model.train_model(df=df_train, model_name=model_name, cache_dir=cache_dir)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_generic_ae,
-        get_decision_scores_fn=decision_score_ae,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-
-    if save_model_path:
-        model.save_model(save_model_path, threshold=threshold)
-
-    return labels, scores, threshold
-
-
-def train_ocsvm_loginov(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = True,
-):
-    set_global_seed()
-    model_name = "Loginov and OCSVM"
-    if use_scaler:
-        model_name += "-scaler"
-
-    logger.info(f"Training model: {model_name}")
-    model = OCSVM_Loginov(
-        GENERIC=GENERIC,
-        nu=0.05,
-        kernel="rbf",
-        gamma="scale",
-        max_iter=1000,
-        use_scaler=use_scaler,
-    )
-    model.train_model(df=df_train, model_name=model_name, project_paths=project_paths)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocess_loginov,
-        get_decision_scores_fn=decision_score_generic,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-    return labels, scores, threshold
-
-
-def train_ae_loginov(
-    df_train: pd.DataFrame,
-    df_test: pd.DataFrame,
-    df_val: pd.DataFrame,
-    use_scaler: bool = True,
-):
-    global save_model_path
-    set_global_seed()
-    random.seed(GENERIC.RANDOM_SEED)
-    np.random.seed(GENERIC.RANDOM_SEED)
-    torch.manual_seed(GENERIC.RANDOM_SEED)
-
-    model_name = "Loginov and AE"
-    if use_scaler:
-        model_name += "-scaler"
-    logger.info(f"Training model: {model_name}")
-    model = AutoEncoder_Loginov(
-        GENERIC=GENERIC,
-        device=init_device(),
-        learning_rate=0.005,
-        epochs=100,
-        batch_size=8192,
-        use_scaler=use_scaler,
-    )
-    model.train_model(df=df_train, project_paths=project_paths, model_name=model_name)
-
-    labels, scores, threshold = compute_metrics_generic(
-        model=model,
-        df_test=df_test,
-        df_val=df_val,
-        model_name=model_name,
-        preprocess_fn=preprocessing_generic_ae,
-        get_decision_scores_fn=decision_score_ae,
-        use_scaler=use_scaler,
-        insider_as_fn=False,
-        use_batches=True,
-    )
-
-    if save_model_path:
+    if save_model_path and config.model_type == "ae":
         model.save_model(save_model_path, threshold=threshold)
 
     return labels, scores, threshold
@@ -1074,93 +456,17 @@ def save_results(args):
     dfres = pd.DataFrame(training_results)
     resdir = project_paths.output_path
     filepath = f"{resdir}/results"
-
     if args.on_user_inputs:
         filepath += "-on-user-inputs"
-
     filepath += ".csv"
     dfres.to_csv(filepath, index=False)
-
-
-def select_models(args):
-    AUTHORIZED_GROUPS = {
-        "li": ["ocsvm_li", "lof_li", "ae_li"],
-        "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
-        "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
-        "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
-        "kakisim_w2v": ["ocsvm_kakisim_w2v", "ae_kakisim_w2v"],
-        "loginov": ["ocsvm_loginov", "ae_loginov"],
-    }
-
-    MODEL_REGISTRY = {
-        "ocsvm_li": lambda df_train, df_test, df_val: train_ocsvm_li(
-            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-        ),
-        "lof_cv": lambda df_train, df_test, df_val: train_lof_cv(
-            df_train=df_train, df_test=df_test, df_val=df_val
-        ),
-        "ocsvm_cv": lambda df_train, df_test, df_val: train_ocsvm_cv(
-            df_train=df_train, df_test=df_test, df_val=df_val
-        ),
-        "lof_li": lambda df_train, df_test, df_val: train_lof_li(
-            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-        ),
-        "ae_li": lambda df_train, df_test, df_val: train_ae_li(
-            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-        ),
-        "ae_cv": lambda df_train, df_test, df_val: train_ae_cv(
-            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=False
-        ),
-        "ocsvm_sbert": train_ocsvm_sbert,
-        "lof_sbert": train_lof_sbert,
-        "ae_sbert": train_ae_sbert,
-        "ocsvm_kakisim_c": lambda df_train, df_test, df_val: train_ocsvm_kakisim_c(
-            df_train=df_train, df_test=df_test, df_val=df_val
-        ),
-        "ae_kakisim_c": lambda df_train, df_test, df_val: train_ae_kakisim_c(
-            df_train=df_train, df_test=df_test, df_val=df_val
-        ),
-        "ocsvm_kakisim_w2v": lambda df_train, df_test, df_val: train_ocsvm_kakisim_w2v(
-            df_train=df_train, df_test=df_test, df_val=df_val
-        ),
-        "ae_kakisim_w2v": lambda df_train, df_test, df_val: train_ae_kakisim_w2v(
-            df_train=df_train, df_test=df_test, df_val=df_val
-        ),
-        "ocsvm_loginov": lambda df_train, df_test, df_val: train_ocsvm_loginov(
-            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-        ),
-        "ae_loginov": lambda df_train, df_test, df_val: train_ae_loginov(
-            df_train=df_train, df_test=df_test, df_val=df_val, use_scaler=True
-        ),
-    }
-
-    if "all" in args.models:
-        return MODEL_REGISTRY
-
-    requested = []
-
-    # List all requested models (by name or group name)
-    for item in args.models:
-        if item in AUTHORIZED_GROUPS:
-            requested.extend(AUTHORIZED_GROUPS[item])
-        else:
-            requested.append(item)
-
-    # Now check if names are valid.
-    valid = {}
-    for model_name in requested:
-        if model_name in MODEL_REGISTRY:
-            valid[model_name] = MODEL_REGISTRY[model_name]
-        else:
-            logger.warning(f"Unrecognized model {model_name}, skipping.")
-    return valid
 
 
 def train_models(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
-    selected_models: dict,
+    selected_models: list[str],
     args,
 ):
     logger.info(
@@ -1172,24 +478,22 @@ def train_models(
         f" and number of normals {len(df_test[df_test['label'] == 0])}"
     )
 
-    # Train models and get their output.
     models_output = {}
-
-    for model_name, model_fn in selected_models.items():
-        labels, scores, threshold = model_fn(df_train, df_test, df_val)
-        models_output[model_name] = (labels, scores)
+    for config_name in selected_models:
+        labels, scores, threshold = _train_single_model(
+            config_name, df_train, df_test, df_val
+        )
+        models_output[config_name] = (labels, scores)
         save_results(args=args)
 
-    # consistency checks, curve plotting, etc.
     labels_list = [l for l, _ in models_output.values()]
     scores_list = [s for _, s in models_output.values()]
     names_list = list(models_output.keys())
 
     ref_labels = labels_list[0]
     for labels in labels_list[1:]:
-        # assert np.array_equal(ref_labels, labels)
         if not np.array_equal(ref_labels, labels):
-            logger.critical(f"Label mismatch detected")
+            logger.critical("Label mismatch detected")
 
     plot_pr_curves_plt_from_scores(
         labels=ref_labels,
@@ -1197,7 +501,6 @@ def train_models(
         l_model_names=names_list,
         project_paths=project_paths,
     )
-
     plot_roc_curves_plt_from_scores(
         labels=ref_labels,
         l_scores=scores_list,
