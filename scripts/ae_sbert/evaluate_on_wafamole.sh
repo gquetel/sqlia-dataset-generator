@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
-#SBATCH --time=12:00:00
+#SBATCH --time=4:00:00
 
 echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
@@ -58,6 +58,19 @@ for TRAIN in "A" "B" "C" "D" "E"; do
         --model-type=ae_sbert \
         --test-dataset=$WAFAMOLE_DATASET \
         --output-dir=$SPECIALISED_RESULTS_DIR/ae_sbert_${TRAIN}_on_E/ \
+        --fixed-fpr=0.01
+done
+
+# ── Phase 3: Evaluate E model on all other datasets (E→A, E→B, E→C, E→D) ────
+echo "Evaluating ae_sbert_E on other datasets..."
+for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "specialised-AdventureWorks.csv:C" "specialised-OHR.csv:D"; do
+    TEST_FILE="${TEST%:*}"
+    TEST_LABEL="${TEST#*:}"
+    python3 experiments/evaluate_model.py \
+        --model-path=$SPECIALISED_MODELS_DIR/ae_sbert_E.pth \
+        --model-type=ae_sbert \
+        --test-dataset=$DATASETS_DIR/$TEST_FILE \
+        --output-dir=$SPECIALISED_RESULTS_DIR/ae_sbert_E_on_${TEST_LABEL}/ \
         --fixed-fpr=0.01
 done
 

@@ -61,6 +61,7 @@ Usage:
 """
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -277,14 +278,19 @@ def plot_main_metrics(results_df: pd.DataFrame, title: str):
 def plot_roc_curves(
     results_df: pd.DataFrame, results_dir: Path, model_prefix: str, title: str
 ):
-    """2×2 ROC curve grid (one subplot per dataset)."""
+    """ROC curve grid (one subplot per dataset, dynamically sized)."""
     if results_df.empty:
         print(f"  [skip] no data: {title}")
         return None
 
-    fig = make_subplots(rows=2, cols=2, subplot_titles=DATASETS, vertical_spacing=0.12)
+    n = len(DATASETS)
+    ncols = 2
+    nrows = math.ceil(n / ncols)
+    fig = make_subplots(
+        rows=nrows, cols=ncols, subplot_titles=DATASETS, vertical_spacing=0.12
+    )
     for idx, dataset in enumerate(DATASETS):
-        row, col = idx // 2 + 1, idx % 2 + 1
+        row, col = idx // ncols + 1, idx % ncols + 1
         letter = DATASET_LETTERS[dataset]
         complement = leave_one_out_complement(letter)
 
@@ -337,7 +343,7 @@ def plot_roc_curves(
         fig.update_xaxes(title_text="FPR", row=row, col=col)
         fig.update_yaxes(title_text="TPR", row=row, col=col)
 
-    fig.update_layout(title=title, height=700, width=900)
+    fig.update_layout(title=title, height=350 * nrows, width=900)
     return fig
 
 
@@ -724,7 +730,7 @@ def main() -> int:
         DATASETS = DATASETS + ["wafamole"]
         ALL_LETTERS = set(DATASET_LETTERS.values())
         TL_TEST_SETS = TL_TEST_SETS + ["E"]
-        TL_SPECIALISED_TRAIN_SETS = TL_SPECIALISED_TRAIN_SETS + ["E"]
+        TL_SPECIALISED_TRAIN_SETS = ["E"] + TL_SPECIALISED_TRAIN_SETS
 
     results_dir = args.results_dir.expanduser().resolve()
     if not results_dir.exists():

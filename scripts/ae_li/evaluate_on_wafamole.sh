@@ -44,5 +44,18 @@ python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li
 python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_D.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_D_on_E/ --fixed-fpr=0.01
 python3 experiments/evaluate_model.py --model-path=$SPECIALISED_MODELS_DIR/ae_li_E.pth --model-type=ae_li --test-dataset=$WAFAMOLE_DATASET --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_E_on_E/ --fixed-fpr=0.01
 
+# Evaluate E model on all other datasets (E→A, E→B, E→C, E→D)
+echo "Evaluating ae_li_E on other datasets..."
+for TEST in "specialised-OurAirports.csv:A" "specialised-sakila.csv:B" "specialised-AdventureWorks.csv:C" "specialised-OHR.csv:D"; do
+    TEST_FILE="${TEST%:*}"
+    TEST_LABEL="${TEST#*:}"
+    python3 experiments/evaluate_model.py \
+        --model-path=$SPECIALISED_MODELS_DIR/ae_li_E.pth \
+        --model-type=ae_li \
+        --test-dataset=$DATASETS_DIR/$TEST_FILE \
+        --output-dir=$SPECIALISED_RESULTS_DIR/ae_li_E_on_${TEST_LABEL}/ \
+        --fixed-fpr=0.01
+done
+
 # Print job completion time
 echo "Job finished at: $(date)"
