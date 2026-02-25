@@ -129,6 +129,23 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
         extractor_kwargs=dict(vector_size=256),
     ),
+    # ---- BiLSTM W2V ----
+    "ae_bilstm_w2v": ModelConfig(
+        extractor_type="bilstm_w2v",
+        model_type="ae",
+        use_scaler=False,
+        display_name="BiLSTM-W2V and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=4096),
+        extractor_kwargs=dict(w2v_vector_size=256, lstm_hidden_size=128),
+    ),
+    "ocsvm_bilstm_w2v": ModelConfig(
+        extractor_type="bilstm_w2v",
+        model_type="ocsvm",
+        use_scaler=False,
+        display_name="BiLSTM-W2V and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(w2v_vector_size=256, lstm_hidden_size=128),
+    ),
     # ---- Loginov ----
     "ocsvm_loginov": ModelConfig(
         extractor_type="loginov",
@@ -186,6 +203,13 @@ def _make_extractor(
         ext.cache_dir = cache_dir
         return ext
 
+    if config.extractor_type == "bilstm_w2v":
+        from extractors.bilstm_w2v import BiLSTMW2VExtractor
+
+        ext = BiLSTMW2VExtractor(device=device, **kwargs)
+        ext.cache_dir = cache_dir
+        return ext
+
     if config.extractor_type == "loginov":
         return LoginovExtractor()
 
@@ -200,7 +224,7 @@ def _output_activation(config: ModelConfig) -> str:
     - use_scaler=False → relu (non-negative features)
     - sbert            → tanh (embeddings in [-1, 1])
     """
-    if config.extractor_type == "sbert":
+    if config.extractor_type in ("sbert", "bilstm_w2v"):
         return "tanh"
     if config.use_scaler:
         return "sigmoid"

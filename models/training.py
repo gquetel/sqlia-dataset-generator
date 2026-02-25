@@ -377,6 +377,7 @@ AUTHORIZED_GROUPS = {
     "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
     "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
     "kakisim_w2v": ["ocsvm_kakisim_w2v", "ae_kakisim_w2v"],
+    "bilstm_w2v": ["ocsvm_bilstm_w2v", "ae_bilstm_w2v"],
     "loginov": ["ocsvm_loginov", "ae_loginov"],
 }
 
