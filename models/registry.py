@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModelConfig:
     extractor_type: (
-        str  # "li", "countvect", "sbert", "kakisim", "kakisim_w2v", "loginov"
+        str  # "li", "countvect", "sbert", "roberta", "kakisim", "kakisim_w2v", "loginov"
     )
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
@@ -70,6 +70,27 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         display_name="CountVectorizer and AE",
         hyperparams=dict(lr=0.001, epochs=100, batch_size=4096),
         extractor_kwargs=dict(max_features=20000),
+    ),
+    # ---- RoBERTa-base ----
+    "ocsvm_roberta": ModelConfig(
+        extractor_type="roberta",
+        model_type="ocsvm",
+        display_name="RoBERTa-base and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    "lof_roberta": ModelConfig(
+        extractor_type="roberta",
+        model_type="lof",
+        display_name="RoBERTa-base and LOF",
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    "ae_roberta": ModelConfig(
+        extractor_type="roberta",
+        model_type="ae",
+        display_name="RoBERTa-base and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=512),
+        extractor_kwargs=dict(batch_size=64),
     ),
     # ---- SecureBERT ----
     "ocsvm_sbert": ModelConfig(
@@ -193,6 +214,15 @@ def _make_extractor(
         )
         return ext
 
+    if config.extractor_type == "roberta":
+        from extractors.roberta import RobertaExtractor
+
+        return RobertaExtractor(
+            device=device,
+            embeddings_path=project_paths.embeddings_path,
+            **kwargs,
+        )
+
     if config.extractor_type == "kakisim":
         ext = KakisimExtractor(**kwargs)
         ext.cache_dir = cache_dir
@@ -224,7 +254,7 @@ def _output_activation(config: ModelConfig) -> str:
     - use_scaler=False → relu (non-negative features)
     - sbert            → tanh (embeddings in [-1, 1])
     """
-    if config.extractor_type in ("sbert", "bilstm_w2v"):
+    if config.extractor_type in ("sbert", "roberta", "bilstm_w2v"):
         return "tanh"
     if config.use_scaler:
         return "sigmoid"

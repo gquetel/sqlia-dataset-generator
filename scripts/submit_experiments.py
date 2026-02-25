@@ -51,12 +51,14 @@ SLURM_PROFILES = {
 
 MODEL_PROFILES = {
     "ae_sbert": "gpu_standard",
+    "ae_roberta": "gpu_standard",
     "ae_kakisim_c": "gpu_high_mem",
     "ae_kakisim_w2v": "gpu_high_mem",
     "ae_bilstm_w2v": "gpu_high_mem",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ocsvm_sbert": "gpu_short",
+    "ocsvm_roberta": "gpu_short",
     "ocsvm_li": "cpu",
     "ocsvm_loginov": "cpu",
 }
