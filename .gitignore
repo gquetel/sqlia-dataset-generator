@@ -12,6 +12,7 @@ venv-3.10.12
 venv-3.12.12
 CLAUDE.md
 .claude
+scripts/generated
 
 # MySQL local development
 .mysql/

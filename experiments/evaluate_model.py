@@ -147,6 +147,7 @@ def main():
             "ae_sbert",
             "ae_kakisim_c",
             "ae_kakisim_w2v",
+            "ae_bilstm_w2v",
             "ae_loginov",
         ],
         help="Type of model",
@@ -154,8 +155,16 @@ def main():
     parser.add_argument(
         "--test-dataset",
         type=str,
-        required=True,
-        help="Path to test dataset CSV file",
+        default=None,
+        help="Path to test dataset CSV file (single dataset)",
+    )
+    parser.add_argument(
+        "--test-datasets",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Multiple test datasets as path:label pairs "
+        "(e.g. generic-OurAirports.csv:A generic-sakila.csv:B)",
     )
     parser.add_argument(
         "--output-dir",
@@ -194,18 +203,32 @@ def main():
     )
     # Initialization code
     args = parser.parse_args()
+
+    # Validate test dataset arguments
+    if args.test_dataset is None and args.test_datasets is None:
+        parser.error("one of --test-dataset or --test-datasets is required")
+    if args.test_dataset is not None and args.test_datasets is not None:
+        parser.error("--test-dataset and --test-datasets are mutually exclusive")
+
+    # Build list of (path, label) pairs
+    if args.test_datasets:
+        test_items = []
+        for item in args.test_datasets:
+            if ":" not in item:
+                parser.error(
+                    f"--test-datasets entries must be path:label, got '{item}'"
+                )
+            path, label = item.rsplit(":", 1)
+            test_items.append((path, label))
+    else:
+        test_items = [(args.test_dataset, None)]
+
     log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(
         level=log_level,
         format="%(message)s",
     )
     set_global_seed(args.seed)
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load test data and model
-    df_test = load_test_data(args.test_dataset, 500 if args.testing else None)
-    logger.info(f"Test set: {len(df_test)} samples")
 
     device = init_device()
     model_name = Path(args.model_path).stem
@@ -216,47 +239,63 @@ def main():
         embeddings_cache_dir=args.embeddings_cache,
     )
 
-    # Score once, but reused for both threshold computation and evaluation
-    labels, scores = get_scores_generic(
-        df=df_test,
-        batch_size=4096,
-        model=model,
-        preprocess_fn=preprocessing_generic_ae,
-        score_fn=decision_score_ae,
-        use_scaler=False,
-    )
+    for test_path, test_label in test_items:
+        if test_label:
+            cur_output_dir = Path(args.output_dir) / f"{model_name}_on_{test_label}"
+            logger.info(f"=== Evaluating on {test_label} ({test_path}) ===")
+        else:
+            cur_output_dir = Path(args.output_dir)
+        cur_output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine threshold
-    if args.fixed_fpr is not None:
-        logger.info(
-            f"Computing threshold for fixed FPR={args.fixed_fpr} from test set normal samples"
+        # Load test data
+        df_test = load_test_data(test_path, 500 if args.testing else None)
+        logger.info(f"Test set: {len(df_test)} samples")
+
+        # Score
+        labels, scores = get_scores_generic(
+            df=df_test,
+            batch_size=4096,
+            model=model,
+            preprocess_fn=preprocessing_generic_ae,
+            score_fn=decision_score_ae,
+            use_scaler=False,
         )
-        normal_scores = scores[labels == 0]
-        threshold = get_threshold_for_max_rate(normal_scores, max_rate=args.fixed_fpr)
-        logger.info(f"Fixed-FPR threshold: {threshold:.6f}")
-    else:
-        threshold = model.threshold
 
-    # Evaluate model and save results
-    metrics, preds = evaluate_model(df_test, labels, scores, threshold, model_name)
-    results_df = pd.DataFrame([metrics])
-    results_path = output_dir / "results.csv"
-    results_df.to_csv(results_path, index=False)
-    logger.info(f"Saved results to {results_path}")
+        # Determine threshold
+        if args.fixed_fpr is not None:
+            logger.info(
+                f"Computing threshold for fixed FPR={args.fixed_fpr} from test set normal samples"
+            )
+            normal_scores = scores[labels == 0]
+            threshold = get_threshold_for_max_rate(
+                normal_scores, max_rate=args.fixed_fpr
+            )
+            logger.info(f"Fixed-FPR threshold: {threshold:.6f}")
+        else:
+            threshold = model.threshold
 
-    eval_paths = DotDict({"output_path": str(output_dir) + "/"})
-    plot_roc_curves_plt_from_scores(
-        labels=labels,
-        l_scores=[scores],
-        l_model_names=[model_name],
-        project_paths=eval_paths,
-    )
-    plot_pr_curves_plt_from_scores(
-        labels=labels,
-        l_scores=[scores],
-        l_model_names=[model_name],
-        project_paths=eval_paths,
-    )
+        # Evaluate model and save results
+        metrics, preds = evaluate_model(
+            df_test, labels, scores, threshold, model_name
+        )
+        results_df = pd.DataFrame([metrics])
+        results_path = cur_output_dir / "results.csv"
+        results_df.to_csv(results_path, index=False)
+        logger.info(f"Saved results to {results_path}")
+
+        eval_paths = DotDict({"output_path": str(cur_output_dir) + "/"})
+        plot_roc_curves_plt_from_scores(
+            labels=labels,
+            l_scores=[scores],
+            l_model_names=[model_name],
+            project_paths=eval_paths,
+        )
+        plot_pr_curves_plt_from_scores(
+            labels=labels,
+            l_scores=[scores],
+            l_model_names=[model_name],
+            project_paths=eval_paths,
+        )
 
 
 if __name__ == "__main__":
