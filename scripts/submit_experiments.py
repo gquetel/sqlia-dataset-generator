@@ -32,6 +32,7 @@ SLURM_PROFILES = {
         "cpus": 16,
         "mem": "32G",
         "time": "4:00:00",
+        "exclude": ["node13"],  # buggy nodes
     },
     "gpu_long": {
         "partition": "A100",
@@ -59,9 +60,9 @@ SLURM_PROFILES = {
 MODEL_PROFILES = {
     "ae_sbert": "gpu_standard",
     "ae_roberta": "gpu_v100",
-    "ae_kakisim_c": "gpu_short",
-    "ae_kakisim_w2v": "gpu_long",
-    "ae_bilstm_w2v": "gpu_short",
+    "ae_kakisim_c": "gpu_long",
+    "ae_kakisim_w2v": "gpu_standard", # 4H is sufficient
+    "ae_bilstm_w2v": "gpu_standard", # 4H is sufficient
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ocsvm_sbert": "gpu_short",
@@ -172,6 +173,8 @@ def sbatch_header(model: str, job_suffix: str, log_path: str) -> str:
     ]
     if profile["gres"]:
         lines.append(f"#SBATCH --gres={profile['gres']}")
+    if profile.get("exclude"):
+        lines.append(f"#SBATCH --exclude={','.join(profile['exclude'])}")
     lines.extend(
         [
             f"#SBATCH --cpus-per-task={profile['cpus']}",
