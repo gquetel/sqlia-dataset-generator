@@ -10,6 +10,7 @@ import argparse
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
 
@@ -132,15 +133,24 @@ def dataset_filename(mode: str, db_name: str) -> str:
     return f"{mode}-{db_name}.csv"
 
 
-def sbatch_header(model: str, job_suffix: str) -> str:
+def log_dir_for(model: str, job_suffix: str) -> str:
+    """Return the absolute log directory path."""
+    return f"{REPO_ROOT}/logs/{model}/{job_suffix}"
+
+
+def make_timestamp() -> str:
+    return datetime.now().strftime("%Y-%m-%d_%H%M")
+
+
+def sbatch_header(model: str, job_suffix: str, log_path: str) -> str:
     """Generate SBATCH header lines for a model."""
     profile = get_profile(model)
     job_name = f"{model}_{job_suffix}"
     lines = [
         "#!/bin/bash",
         f"#SBATCH --job-name={job_name}",
-        "#SBATCH --output=../logs/%x_%j.out",
-        "#SBATCH --error=../logs/%x_%j.err",
+        f"#SBATCH --output={log_path}",
+        f"#SBATCH --error={log_path}",
         f"#SBATCH --partition={profile['partition']}",
     ]
     if profile["gres"]:
@@ -155,14 +165,17 @@ def sbatch_header(model: str, job_suffix: str) -> str:
     return "\n".join(lines)
 
 
-def env_setup(testing: bool, datasets_dir: str) -> str:
-    """Generate environment setup lines."""
+def env_setup(testing: bool, datasets_dir: str, log_dir: str, log_file: str) -> str:
+    """Generate environment setup lines with log directory creation and latest symlink."""
     return dedent(f"""\
         echo "Starting job on node: $(hostname)"
         echo "Job started at: $(date)"
 
         cd ~/repos/sqlia-dataset/
         source venv-3.12.12/bin/activate
+
+        mkdir -p {log_dir}
+        ln -sfn {log_file} {log_dir}/latest.log
 
         DATASETS_DIR={datasets_dir}
         TESTING_FLAG="{'--testing' if testing else ''}"
@@ -218,6 +231,12 @@ def generate_generic_script(
     models_dir = f"./models/output/models/{model}_generic"
     results_dir = f"./models/output/{model}_generic"
 
+    job_suffix = f"generic_s{scenario_num}"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
     test_datasets = [
         (dataset_filename("generic", DATASETS[label]), label)
         for label in scenario["test_labels"]
@@ -225,11 +244,11 @@ def generate_generic_script(
 
     parts = []
     if slurm:
-        parts.append(sbatch_header(model, f"generic_s{scenario_num}"))
+        parts.append(sbatch_header(model, job_suffix, log_path))
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir))
+    parts.append(env_setup(testing, datasets_dir, log_dir, log_file))
     parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
@@ -252,6 +271,12 @@ def generate_specialised_script(
     models_dir = f"./models/output/models/{model}_specialised"
     results_dir = f"./models/output/{model}_specialised"
 
+    job_suffix = f"specialised_s{scenario_num}"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
     test_datasets = [
         (dataset_filename("specialised", DATASETS[label]), label)
         for label in scenario["test_labels"]
@@ -259,11 +284,11 @@ def generate_specialised_script(
 
     parts = []
     if slurm:
-        parts.append(sbatch_header(model, f"specialised_s{scenario_num}"))
+        parts.append(sbatch_header(model, job_suffix, log_path))
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir))
+    parts.append(env_setup(testing, datasets_dir, log_dir, log_file))
     parts.append(
         f'echo "Running specialised scenario {scenario_num}: {model_name}"'
     )
@@ -290,13 +315,19 @@ def generate_wafamole_script(
     gen_results_dir = f"./models/output/{model}_generic"
     wafamole_file = dataset_filename("specialised", "wafamole")
 
+    job_suffix = "wafamole"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
     parts = []
     if slurm:
-        parts.append(sbatch_header(model, "wafamole"))
+        parts.append(sbatch_header(model, job_suffix, log_path))
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir))
+    parts.append(env_setup(testing, datasets_dir, log_dir, log_file))
 
     # Phase 1: Train E model
     model_name_e = f"{model}_E"
