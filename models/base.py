@@ -226,14 +226,13 @@ class BaseAutoEncoderModel:
         elif hasattr(self.extractor, "get_feature_names_out"):
             self.feature_columns = self.extractor.get_feature_names_out()
 
+        if isinstance(X, pd.DataFrame):
+            X = X.values
         if isinstance(X, list):
             X = np.array(X)
 
         # Determine input dimension
-        if hasattr(X, "shape"):
-            input_dim = X.shape[1]
-        else:
-            input_dim = len(self.feature_columns)
+        input_dim = X.shape[1]
 
         # Apply scaler if needed
         if self.use_scaler:
