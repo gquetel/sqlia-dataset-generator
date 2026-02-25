@@ -24,9 +24,16 @@ SLURM_PROFILES = {
         "gres": "gpu:1",
         "cpus": 16,
         "mem": "32G",
-        "time": "12:00:00",
+        "time": "4:00:00",
     },
-    "gpu_high_mem": {
+    "gpu_v100": {
+        "partition": "V100",
+        "gres": "gpu:1",
+        "cpus": 16,
+        "mem": "32G",
+        "time": "4:00:00",
+    },
+    "gpu_long": {
         "partition": "A100",
         "gres": "gpu:1",
         "cpus": 16,
@@ -34,11 +41,11 @@ SLURM_PROFILES = {
         "time": "12:00:00",
     },
     "gpu_short": {
-        "partition": "A30",
+        "partition": "A40",
         "gres": "gpu:1",
-        "cpus": 16,
-        "mem": "64G",
-        "time": "24:00:00",
+        "cpus": 12,  # Fewer CPUs to reach smaller machines
+        "mem": "32G",
+        "time": "4:00:00",
     },
     "cpu": {
         "partition": "CPU",
@@ -51,10 +58,10 @@ SLURM_PROFILES = {
 
 MODEL_PROFILES = {
     "ae_sbert": "gpu_standard",
-    "ae_roberta": "gpu_standard",
-    "ae_kakisim_c": "gpu_high_mem",
-    "ae_kakisim_w2v": "gpu_high_mem",
-    "ae_bilstm_w2v": "gpu_high_mem",
+    "ae_roberta": "gpu_v100",
+    "ae_kakisim_c": "gpu_short",
+    "ae_kakisim_w2v": "gpu_long",
+    "ae_bilstm_w2v": "gpu_short",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ocsvm_sbert": "gpu_short",
@@ -127,6 +134,14 @@ def get_profile(model: str) -> dict:
     return SLURM_PROFILES[profile_name]
 
 
+def venv_for(model: str) -> str:
+    """Return the virtualenv path for a model based on its target partition."""
+    profile = get_profile(model)
+    if profile["partition"] == "V100":
+        return "venv-3.10.12"
+    return "venv-3.12.12"
+
+
 def dataset_filename(mode: str, db_name: str) -> str:
     """Return the CSV filename for a dataset.
 
@@ -167,14 +182,14 @@ def sbatch_header(model: str, job_suffix: str, log_path: str) -> str:
     return "\n".join(lines)
 
 
-def env_setup(testing: bool, datasets_dir: str, log_dir: str, log_file: str) -> str:
+def env_setup(testing: bool, datasets_dir: str, log_dir: str, log_file: str, venv: str = "venv-3.12.12") -> str:
     """Generate environment setup lines with log directory creation and latest symlink."""
     return dedent(f"""\
         echo "Starting job on node: $(hostname)"
         echo "Job started at: $(date)"
 
         cd ~/repos/sqlia-dataset/
-        source venv-3.12.12/bin/activate
+        source {venv}/bin/activate
 
         mkdir -p {log_dir}
         ln -sfn {log_file} {log_dir}/latest.log
@@ -250,7 +265,7 @@ def generate_generic_script(
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir, log_dir, log_file))
+    parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
     parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
@@ -290,7 +305,7 @@ def generate_specialised_script(
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir, log_dir, log_file))
+    parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
     parts.append(
         f'echo "Running specialised scenario {scenario_num}: {model_name}"'
     )
@@ -329,7 +344,7 @@ def generate_wafamole_script(
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir, log_dir, log_file))
+    parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
 
     # Phase 1: Train E model
     model_name_e = f"{model}_E"
