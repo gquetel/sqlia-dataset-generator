@@ -24,5 +24,8 @@ sqlparse==0.5.3
 ## Word2Vec vectorizer
 gensim
 
+# For plotly exports
+kaleido==1.2.0
+
 # Testing
 pytest==9.0.2  # Built-in subtests support

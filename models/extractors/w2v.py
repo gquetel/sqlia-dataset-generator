@@ -43,18 +43,30 @@ class Word2VecMeanPoolVectorizer:
             min_count=self.min_count,
             workers=self.workers,
         )
-        return self._mean_pool(sequences)
+        return self._max_pool(sequences)
 
     def transform(self, queries) -> np.ndarray:
-        return self._mean_pool(self._to_sequences(queries))
+        return self._max_pool(self._to_sequences(queries))
 
-    def _mean_pool(self, sequences) -> np.ndarray:
+    # def _mean_pool(self, sequences) -> np.ndarray:
+    #     out = np.zeros((len(sequences), self.vector_size), dtype=np.float32)
+    #     wv = self._w2v.wv
+    #     for i, tokens in enumerate(sequences):
+    #         vecs = [wv[t] for t in tokens if t in wv]
+    #         if vecs:
+    #             out[i] = np.mean(vecs, axis=0)
+    #     return out
+
+    def transform(self, queries) -> np.ndarray:
+        return self._max_pool(self._to_sequences(queries))
+
+    def _max_pool(self, sequences) -> np.ndarray:
         out = np.zeros((len(sequences), self.vector_size), dtype=np.float32)
         wv = self._w2v.wv
         for i, tokens in enumerate(sequences):
             vecs = [wv[t] for t in tokens if t in wv]
             if vecs:
-                out[i] = np.mean(vecs, axis=0)
+                out[i] = np.max(vecs, axis=0)
         return out
 
     @property
