@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "sbert", "roberta", "kakisim", "kakisim_w2v", "w2v", "loginov"
+    extractor_type: (
+        str  # "li", "countvect", "sbert", "roberta", "kakisim", "w2v", "loginov"
+    )
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -131,23 +133,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
         extractor_kwargs=dict(views=["C"], min_df=1),
     ),
-    # ---- Kakisim W2V ----
-    "ocsvm_kakisim_w2v": ModelConfig(
-        extractor_type="kakisim_w2v",
-        model_type="ocsvm",
-        use_scaler=False,
-        display_name="Kakisim-W2V and OCSVM",
-        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(vector_size=256),
-    ),
-    "ae_kakisim_w2v": ModelConfig(
-        extractor_type="kakisim_w2v",
-        model_type="ae",
-        use_scaler=False,
-        display_name="Kakisim-W2V and AE",
-        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
-        extractor_kwargs=dict(vector_size=256),
-    ),
     # ---- W2V Mean Pool ----
     "ocsvm_w2v": ModelConfig(
         extractor_type="w2v",
@@ -210,7 +195,7 @@ def _make_extractor(
     from extractors.li import LiExtractor
     from extractors.countvect import CountVectExtractor
     from extractors.sbert import SecureBERTExtractor
-    from extractors.kakisim import KakisimExtractor, KakisimW2VExtractor
+    from extractors.kakisim import KakisimExtractor
     from extractors.loginov import LoginovExtractor
 
     kwargs = dict(config.extractor_kwargs)
@@ -240,11 +225,6 @@ def _make_extractor(
 
     if config.extractor_type == "kakisim":
         ext = KakisimExtractor(**kwargs)
-        ext.cache_dir = cache_dir
-        return ext
-
-    if config.extractor_type == "kakisim_w2v":
-        ext = KakisimW2VExtractor(**kwargs)
         ext.cache_dir = cache_dir
         return ext
 

@@ -146,7 +146,6 @@ def main():
             "ae_li",
             "ae_sbert",
             "ae_kakisim_c",
-            "ae_kakisim_w2v",
             "ae_bilstm_w2v",
             "ae_loginov",
             "ae_w2v",

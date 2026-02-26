@@ -46,7 +46,7 @@ Usage:
     # Specify models explicitly
     python experiments/report_generic_vs_specialised.py \\
         --results-dir ~/experiences-results/2026-02-23 \\
-        --models ae_li ae_sbert ae_kakisim_c ae_kakisim_w2v ae_loginov
+        --models ae_li ae_sbert ae_kakisim_c ae_loginov
 
     # Custom output directory and format(s)
     python experiments/report_generic_vs_specialised.py \\
@@ -86,7 +86,6 @@ KNOWN_LABELS: dict[str, str] = {
     "ae_sbert": "SecureBERT + AE",
     "ae_gaur": "GAUR + AE",
     "ae_kakisim_c": "Kakisim-C + AE",
-    "ae_kakisim_w2v": "Kakisim-W2V + AE",
     "ae_loginov": "Loginov + AE",
 }
 

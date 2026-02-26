@@ -35,7 +35,6 @@ EXTRACTOR_CONFIG_MAP = {
     "sbert": "ae_sbert",
     "roberta": "ae_roberta",
     "kakisim": "ae_kakisim_c",
-    "kakisim_w2v": "ae_kakisim_w2v",
     "loginov": "ae_loginov",
     "bilstm_w2v": "ae_bilstm_w2v",
 }

@@ -61,7 +61,6 @@ MODEL_PROFILES = {
     "ae_sbert": "gpu_standard",
     "ae_roberta": "gpu_v100",
     "ae_kakisim_c": "gpu_long",
-    "ae_kakisim_w2v": "gpu_standard",  # 4H is sufficient
     "ae_bilstm_w2v": "gpu_standard",  # 4H is sufficient
     "ae_w2v": "gpu_v100",
     "ae_li": "cpu",
