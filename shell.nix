@@ -67,6 +67,37 @@ let
     doCheck = false;
   };
 
+  gaur-sql-detect = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "gaur-sql-detect";
+    version = "0.1.0";
+    pyproject = true;
+    src = pkgs.fetchFromGitHub {
+      owner = "gquetel";
+      repo = "gaur-sql-detect";
+      rev = "38706dd9972fe5dea46987418394b875a2cfb8a6";
+      sha256 = "sha256-GkG3pR9TKrCr96X/sdOHXHhBBqkzmUQp6k4F6bz/hp8=";
+    };
+    build-system = [ pkgs.python313Packages.setuptools ];
+    dependencies = with pkgs.python313Packages; [
+      pandas
+      numpy
+      tqdm
+      scipy
+      scikit-learn
+      plotly
+      matplotlib
+      tabulate
+      torch
+      transformers
+      accelerate
+      sentence-transformers
+      evaluate
+      mysql-connector
+      kaleido
+    ];
+    doCheck = false;
+  };
+
   # gensim 4.3.3 in nixpkgs is not supported for python3.13; use 4.4.0 wheel directly.
   gensim = pkgs.python313.pkgs.buildPythonPackage {
     pname = "gensim";
@@ -132,6 +163,11 @@ let
         ps.evaluate
         ps.torch
         ps.transformers
+        ps.sentence-transformers
+
+        # gaur-sql-detect dependencies
+        ps.scipy
+        ps.tabulate
 
       ]
       ++ [
@@ -139,6 +175,7 @@ let
         pytest
         kaleido
         gensim
+        gaur-sql-detect
       ]
     )).override
       (args: {
