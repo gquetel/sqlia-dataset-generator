@@ -149,7 +149,8 @@ def main():
             "ae_kakisim_w2v",
             "ae_bilstm_w2v",
             "ae_loginov",
-            "ae_roberta"
+            "ae_w2v",
+            "ae_roberta",
         ],
         help="Type of model",
     )
@@ -276,9 +277,7 @@ def main():
             threshold = model.threshold
 
         # Evaluate model and save results
-        metrics, preds = evaluate_model(
-            df_test, labels, scores, threshold, model_name
-        )
+        metrics, preds = evaluate_model(df_test, labels, scores, threshold, model_name)
         results_df = pd.DataFrame([metrics])
         results_path = cur_output_dir / "results.csv"
         results_df.to_csv(results_path, index=False)

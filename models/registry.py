@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: (
-        str  # "li", "countvect", "sbert", "roberta", "kakisim", "kakisim_w2v", "loginov"
-    )
+    extractor_type: str  # "li", "countvect", "sbert", "roberta", "kakisim", "kakisim_w2v", "w2v", "loginov"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -150,6 +148,23 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
         extractor_kwargs=dict(vector_size=256),
     ),
+    # ---- W2V Mean Pool ----
+    "ocsvm_w2v": ModelConfig(
+        extractor_type="w2v",
+        model_type="ocsvm",
+        use_scaler=False,
+        display_name="W2V-MeanPool and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(vector_size=256),
+    ),
+    "ae_w2v": ModelConfig(
+        extractor_type="w2v",
+        model_type="ae",
+        use_scaler=False,
+        display_name="W2V-MeanPool and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(vector_size=256),
+    ),
     # ---- BiLSTM W2V ----
     "ae_bilstm_w2v": ModelConfig(
         extractor_type="bilstm_w2v",
@@ -230,6 +245,13 @@ def _make_extractor(
 
     if config.extractor_type == "kakisim_w2v":
         ext = KakisimW2VExtractor(**kwargs)
+        ext.cache_dir = cache_dir
+        return ext
+
+    if config.extractor_type == "w2v":
+        from extractors.w2v import W2VMeanPoolExtractor
+
+        ext = W2VMeanPoolExtractor(**kwargs)
         ext.cache_dir = cache_dir
         return ext
 

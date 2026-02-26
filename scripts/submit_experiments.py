@@ -61,16 +61,13 @@ MODEL_PROFILES = {
     "ae_sbert": "gpu_standard",
     "ae_roberta": "gpu_v100",
     "ae_kakisim_c": "gpu_long",
-    "ae_kakisim_w2v": "gpu_standard", # 4H is sufficient
-    "ae_bilstm_w2v": "gpu_standard", # 4H is sufficient
+    "ae_kakisim_w2v": "gpu_standard",  # 4H is sufficient
+    "ae_bilstm_w2v": "gpu_standard",  # 4H is sufficient
+    "ae_w2v": "gpu_v100",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
-    "ocsvm_sbert": "gpu_short",
-    "ocsvm_roberta": "gpu_short",
     "ocsvm_li": "cpu",
-    "ocsvm_loginov": "cpu",
 }
-
 DATASETS = {
     "A": "OurAirports",
     "B": "sakila",
@@ -185,9 +182,16 @@ def sbatch_header(model: str, job_suffix: str, log_path: str) -> str:
     return "\n".join(lines)
 
 
-def env_setup(testing: bool, datasets_dir: str, log_dir: str, log_file: str, venv: str = "venv-3.12.12") -> str:
+def env_setup(
+    testing: bool,
+    datasets_dir: str,
+    log_dir: str,
+    log_file: str,
+    venv: str = "venv-3.12.12",
+) -> str:
     """Generate environment setup lines with log directory creation and latest symlink."""
-    return dedent(f"""\
+    return dedent(
+        f"""\
         echo "Starting job on node: $(hostname)"
         echo "Job started at: $(date)"
 
@@ -199,7 +203,8 @@ def env_setup(testing: bool, datasets_dir: str, log_dir: str, log_file: str, ven
 
         DATASETS_DIR={datasets_dir}
         TESTING_FLAG="{'--testing' if testing else ''}"
-    """)
+    """
+    )
 
 
 def train_cmd(
@@ -226,9 +231,7 @@ def eval_cmd(
     test_datasets: list[tuple[str, str]],
 ) -> str:
     """Generate an evaluation command using --test-datasets."""
-    td_args = " ".join(
-        f"$DATASETS_DIR/{path}:{label}" for path, label in test_datasets
-    )
+    td_args = " ".join(f"$DATASETS_DIR/{path}:{label}" for path, label in test_datasets)
     cmd = (
         f"python3 experiments/evaluate_model.py \\\n"
         f"    --model-path={models_dir}/{model_name}.pth \\\n"
@@ -309,14 +312,10 @@ def generate_specialised_script(
         parts.append("#!/bin/bash")
     parts.append("")
     parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
-    parts.append(
-        f'echo "Running specialised scenario {scenario_num}: {model_name}"'
-    )
+    parts.append(f'echo "Running specialised scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
-    parts.append(
-        train_cmd(model, "specialised", train_file, model_name, models_dir)
-    )
+    parts.append(train_cmd(model, "specialised", train_file, model_name, models_dir))
     parts.append("")
     parts.append(f"# Evaluate {model_name} on all test datasets")
     parts.append(eval_cmd(model, model_name, models_dir, results_dir, test_datasets))
@@ -496,9 +495,7 @@ def main():
         script = generate_wafamole_script(
             args.model, args.testing, args.datasets_dir, use_slurm
         )
-        write_and_submit(
-            script, f"{args.model}_wafamole.sh", args.dry_run, args.local
-        )
+        write_and_submit(script, f"{args.model}_wafamole.sh", args.dry_run, args.local)
     else:
         # Determine scenarios to run
         if args.scenario == "all":
