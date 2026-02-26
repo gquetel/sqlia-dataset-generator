@@ -9,12 +9,10 @@ import logging
 import sys
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import torch
 from scipy import sparse
 from sklearn.decomposition import PCA
@@ -29,15 +27,7 @@ from registry import MODEL_CONFIGS, _make_extractor
 
 logger = logging.getLogger(__name__)
 
-EXTRACTOR_CONFIG_MAP = {
-    "li": "ae_li",
-    "countvect": "ae_cv",
-    "sbert": "ae_sbert",
-    "roberta": "ae_roberta",
-    "kakisim": "ae_kakisim_c",
-    "loginov": "ae_loginov",
-    "bilstm_w2v": "ae_bilstm_w2v",
-}
+TSNE_PERPLEXITIES = [5, 10, 20, 40, 50, 100]
 
 CSV_DTYPES = {
     "full_query": str,
@@ -54,14 +44,14 @@ CSV_DTYPES = {
 }
 
 DATASET_COLORS = [
-    "tab:blue",
-    "tab:orange",
-    "tab:green",
-    "tab:red",
-    "tab:purple",
-    "tab:brown",
-    "tab:pink",
-    "tab:gray",
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
 ]
 
 
@@ -74,8 +64,8 @@ def sample_test_data(df: pd.DataFrame, name: str, n: int) -> pd.DataFrame:
     test_df = df[df["split"] == "test"]
     normal = test_df[test_df["label"] == 0]
     attack = test_df[test_df["label"] == 1]
-    sampled_normal = normal.sample(n=min(n, len(normal)), random_state=42)
-    sampled_attack = attack.sample(n=min(n, len(attack)), random_state=42)
+    sampled_normal = normal.sample(n=min(n, len(normal)), random_state=2)
+    sampled_attack = attack.sample(n=min(n, len(attack)), random_state=2)
     result = pd.concat([sampled_normal, sampled_attack]).copy()
     result["dataset_name"] = name
     return result
@@ -92,7 +82,7 @@ def to_dense(X) -> np.ndarray:
 
 
 def build_extractor(extractor_name: str, device, embeddings_path: str, cache_dir: str):
-    config = MODEL_CONFIGS[EXTRACTOR_CONFIG_MAP[extractor_name]]
+    config = MODEL_CONFIGS[extractor_name]
     project_paths = DotDict({"embeddings_path": embeddings_path})
     return _make_extractor(
         config, device=device, project_paths=project_paths, cache_dir=cache_dir
@@ -120,7 +110,7 @@ def plot_reduction(
     reduction_name: str,
     output_dir: Path,
 ):
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = go.Figure()
 
     for i, ds_name in enumerate(unique_datasets):
         color = DATASET_COLORS[i % len(DATASET_COLORS)]
@@ -128,38 +118,120 @@ def plot_reduction(
 
         mask_normal = mask_ds & (labels == 0)
         if mask_normal.any():
-            ax.scatter(
-                coords[mask_normal, 0],
-                coords[mask_normal, 1],
-                c=color,
-                marker="o",
-                alpha=0.5,
-                s=15,
-                label=f"{ds_name} - normal",
+            fig.add_trace(
+                go.Scatter(
+                    x=coords[mask_normal, 0],
+                    y=coords[mask_normal, 1],
+                    mode="markers",
+                    marker=dict(symbol="circle", color=color, size=5, opacity=0.5),
+                    name=f"{ds_name} - normal",
+                    legendgroup=ds_name,
+                )
             )
 
         mask_attack = mask_ds & (labels == 1)
         if mask_attack.any():
-            ax.scatter(
-                coords[mask_attack, 0],
-                coords[mask_attack, 1],
-                c=color,
-                marker="x",
-                alpha=0.7,
-                s=20,
-                label=f"{ds_name} - attack",
+            fig.add_trace(
+                go.Scatter(
+                    x=coords[mask_attack, 0],
+                    y=coords[mask_attack, 1],
+                    mode="markers",
+                    marker=dict(symbol="x", color=color, size=6, opacity=0.7),
+                    name=f"{ds_name} - attack",
+                    legendgroup=ds_name,
+                )
             )
 
-    ax.set_title(f"{reduction_name} — {extractor_name} extractor (n={len(coords)})")
-    ax.set_xlabel(f"{reduction_name} Component 1")
-    ax.set_ylabel(f"{reduction_name} Component 2")
-    ax.grid(True, alpha=0.3)
-    ax.legend(markerscale=2, fontsize=8)
-    fig.tight_layout()
+    fig.update_layout(
+        title=f"{reduction_name} — {extractor_name} extractor (n={len(coords)})",
+        xaxis_title=f"{reduction_name} Component 1",
+        yaxis_title=f"{reduction_name} Component 2",
+        legend=dict(itemsizing="constant"),
+        width=900,
+        height=700,
+    )
 
-    fname = output_dir / f"{reduction_name.lower()}_{extractor_name}.png"
-    fig.savefig(fname, dpi=300, bbox_inches="tight")
-    plt.close(fig)
+    fname = output_dir / f"{reduction_name.lower()}_{extractor_name}.svg"
+    fig.write_image(str(fname))
+    print(f"Saved {fname}")
+
+
+def plot_tsne_grid(
+    coords_per_perplexity: list[tuple[int, np.ndarray]],
+    dataset_names: np.ndarray,
+    labels: np.ndarray,
+    unique_datasets: list,
+    extractor_name: str,
+    output_dir: Path,
+):
+    """Plot t-SNE results for multiple perplexities in a single subplot grid."""
+    n_plots = len(coords_per_perplexity)
+    ncols = 3
+    nrows = (n_plots + ncols - 1) // ncols
+
+    fig = make_subplots(
+        rows=nrows,
+        cols=ncols,
+        subplot_titles=[f"perplexity={p}" for p, _ in coords_per_perplexity],
+    )
+
+    # Track which legend entries have been shown to avoid duplicates across subplots
+    shown = set()
+
+    for idx, (perplexity, coords) in enumerate(coords_per_perplexity):
+        row, col = divmod(idx, ncols)
+        row += 1
+        col += 1
+
+        for i, ds_name in enumerate(unique_datasets):
+            color = DATASET_COLORS[i % len(DATASET_COLORS)]
+            mask_ds = dataset_names == ds_name
+
+            mask_normal = mask_ds & (labels == 0)
+            if mask_normal.any():
+                key_normal = f"{ds_name} - normal"
+                fig.add_trace(
+                    go.Scatter(
+                        x=coords[mask_normal, 0],
+                        y=coords[mask_normal, 1],
+                        mode="markers",
+                        marker=dict(symbol="circle", color=color, size=5, opacity=0.5),
+                        name=key_normal,
+                        legendgroup=key_normal,
+                        showlegend=key_normal not in shown,
+                    ),
+                    row=row,
+                    col=col,
+                )
+                shown.add(key_normal)
+
+            mask_attack = mask_ds & (labels == 1)
+            if mask_attack.any():
+                key_attack = f"{ds_name} - attack"
+                fig.add_trace(
+                    go.Scatter(
+                        x=coords[mask_attack, 0],
+                        y=coords[mask_attack, 1],
+                        mode="markers",
+                        marker=dict(symbol="x", color=color, size=6, opacity=0.7),
+                        name=key_attack,
+                        legendgroup=key_attack,
+                        showlegend=key_attack not in shown,
+                    ),
+                    row=row,
+                    col=col,
+                )
+                shown.add(key_attack)
+
+    fig.update_layout(
+        title=f"t-SNE — {extractor_name} extractor (n={len(labels)})",
+        legend=dict(itemsizing="constant"),
+        width=ncols * 900,
+        height=nrows * 800,
+    )
+
+    fname = output_dir / f"tsne_{extractor_name}.svg"
+    fig.write_image(str(fname))
     print(f"Saved {fname}")
 
 
@@ -170,8 +242,9 @@ def main():
     parser.add_argument(
         "--extractor",
         required=True,
-        choices=list(EXTRACTOR_CONFIG_MAP.keys()),
-        help="Feature extractor to use",
+        nargs="+",
+        choices=list(MODEL_CONFIGS.keys()),
+        help="Feature extractor(s) to use (repeatable)",
     )
     parser.add_argument(
         "--dataset",
@@ -184,15 +257,15 @@ def main():
     parser.add_argument(
         "--samples",
         type=int,
-        default=1000,
-        help="Number of samples per label per dataset (default: 1000)",
+        default=100,
+        help="Number of samples per label per dataset (default: 200)",
     )
     parser.add_argument("--pca", action="store_true", help="Compute PCA projection")
     parser.add_argument("--tsne", action="store_true", help="Compute t-SNE projection")
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="output/feature_space",
+        default="output/experiments/feature_space_viz",
         help="Output directory for plots",
     )
     parser.add_argument(
@@ -249,52 +322,58 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    extractor = build_extractor(
-        args.extractor,
-        device=device,
-        embeddings_path=embeddings_path,
-        cache_dir=cache_dir,
-    )
-
-    print("Fitting extractor on training data ...")
-    fit_extractor(extractor, df_train_combined)
-
-    print("Extracting features from test samples ...")
-    X_raw = extractor.extract_features(df_sampled)
-    X = to_dense(X_raw)
-    print(f"Feature matrix shape: {X.shape}")
-
-    if args.pca:
-        print("Computing PCA ...")
-        coords_pca = PCA(n_components=2).fit_transform(X)
-        plot_reduction(
-            coords_pca,
-            dataset_names,
-            labels,
-            unique_datasets,
-            args.extractor,
-            "pca",
-            output_dir,
+    for extractor_name in args.extractor:
+        print(f"\n=== Extractor: {extractor_name} ===")
+        extractor = build_extractor(
+            extractor_name,
+            device=device,
+            embeddings_path=embeddings_path,
+            cache_dir=cache_dir,
         )
 
-    if args.tsne:
-        print("Computing t-SNE ...")
-        n = len(X)
-        coords_tsne = TSNE(
-            n_components=2,
-            perplexity=min(50, n - 1),
-            random_state=42,
-            n_jobs=-1,
-        ).fit_transform(X)
-        plot_reduction(
-            coords_tsne,
-            dataset_names,
-            labels,
-            unique_datasets,
-            args.extractor,
-            "tsne",
-            output_dir,
-        )
+        print("Fitting extractor on training data ...")
+        fit_extractor(extractor, df_train_combined)
+
+        print("Extracting features from test samples ...")
+        X_raw = extractor.extract_features(df_sampled)
+        X = to_dense(X_raw)
+        print(f"Feature matrix shape: {X.shape}")
+
+        if args.pca:
+            print("Computing PCA ...")
+            coords_pca = PCA(n_components=2).fit_transform(X)
+            plot_reduction(
+                coords_pca,
+                dataset_names,
+                labels,
+                unique_datasets,
+                extractor_name,
+                "pca",
+                output_dir,
+            )
+
+        if args.tsne:
+            n = len(X)
+            valid_perplexities = [p for p in TSNE_PERPLEXITIES if p < n]
+            coords_per_perplexity = []
+            for perplexity in valid_perplexities:
+                print(f"Computing t-SNE (perplexity={perplexity}) ...")
+                coords_tsne = TSNE(
+                    n_components=2,
+                    perplexity=perplexity,
+                    random_state=2,
+                    n_jobs=-1,
+                    max_iter=5000,  # Is typically enough to converge https://distill.pub/2016/misread-tsne/
+                ).fit_transform(X)
+                coords_per_perplexity.append((perplexity, coords_tsne))
+            plot_tsne_grid(
+                coords_per_perplexity,
+                dataset_names,
+                labels,
+                unique_datasets,
+                extractor_name,
+                output_dir,
+            )
 
 
 if __name__ == "__main__":

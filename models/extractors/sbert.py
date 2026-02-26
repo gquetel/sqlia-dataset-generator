@@ -34,6 +34,7 @@ class SecureBERTExtractor(BaseExtractor):
         self.bert_model = bert_model
         self.batch_size = batch_size
 
+        # We want reproducibility in the embeddings.
         torch.manual_seed(2)
         self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
         self.rb_model = transformers.RobertaModel.from_pretrained(self.bert_model)
