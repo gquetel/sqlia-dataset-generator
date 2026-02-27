@@ -1,4 +1,4 @@
-"""SecureBERT embedding-based feature extractor."""
+"""CodeBERT embedding-based feature extractor."""
 
 import logging
 from typing import List
@@ -13,17 +13,16 @@ from extractors.hf_base import HuggingFaceExtractor
 logger = logging.getLogger(__name__)
 
 
-class SecureBERTExtractor(HuggingFaceExtractor):
-    """Extracts 768-dim embeddings from the ehsanaghaei/SecureBERT model."""
+class CodeBERTExtractor(HuggingFaceExtractor):
+    """Extracts 768-dim embeddings from microsoft/codebert-base."""
 
-    # Backward-compatible: no prefix so existing cache files still match.
-    cache_name: str = ""
+    cache_name: str = "codebert"
 
     def __init__(
         self,
         device: torch.device,
         embeddings_path: str,
-        bert_model: str = "ehsanaghaei/SecureBERT",
+        bert_model: str = "microsoft/codebert-base",
         batch_size: int = 16,
     ):
         self.device = device

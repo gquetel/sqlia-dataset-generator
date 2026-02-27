@@ -99,6 +99,27 @@ let
     doCheck = false;
   };
 
+  llm2vec = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "llm2vec";
+    version = "0.2.3";
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/79/45/4b71b3d3112d7cb17e9e221ef0a2acd35563f206d7d22ddcf13f460c78c6/llm2vec-0.2.3.tar.gz";
+      sha256 = "sha256-SrdJFHgUfaA/B85U0kVnDHLLCeR9TeDIdS7wCEFtNfw=";
+    };
+    build-system = [ pkgs.python313Packages.setuptools ];
+    dependencies = with pkgs.python313Packages; [
+      numpy
+      tqdm
+      torch
+      peft
+      transformers
+      datasets
+      evaluate
+      scikit-learn
+    ];
+    doCheck = false;
+  };
+
   # gensim 4.3.3 in nixpkgs is not supported for python3.13; use 4.4.0 wheel directly.
   gensim = pkgs.python313.pkgs.buildPythonPackage {
     pname = "gensim";
@@ -177,6 +198,7 @@ let
         kaleido
         gensim
         gaur-sql-detect
+        llm2vec
       ]
     )).override
       (args: {

@@ -16,6 +16,8 @@ evaluate==0.4.3
 torch==2.6.0
 transformers==4.51.3
 plotly==6.3.1
+sentence-transformers
+llm2vec==0.2.3
 
 ## Used for diversity evaluation:
 sqlglot==26.16.2

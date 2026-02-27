@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "sbert", "roberta", "kakisim", "w2v", "loginov", "gaur"
+    extractor_type: str  # "li", "countvect", "sbert", "roberta", "kakisim", "w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -213,6 +213,38 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
         extractor_kwargs=dict(use_hybrid=True, mode="chatgpt"),
     ),
+    # ---- CodeBERT ----
+    "ae_codebert": ModelConfig(
+        extractor_type="codebert",
+        model_type="ae",
+        display_name="CodeBERT and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    # ---- Flan-T5 Small ----
+    "ae_flan_t5": ModelConfig(
+        extractor_type="flan_t5",
+        model_type="ae",
+        display_name="Flan-T5-Small and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    # ---- SentenceBERT (all-mpnet-base-v2) ----
+    "ae_sentbert": ModelConfig(
+        extractor_type="sentbert",
+        model_type="ae",
+        display_name="SentenceBERT-mpnet and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    # ---- LLM2Vec (Mistral-7B) ----
+    "ae_llm2vec": ModelConfig(
+        extractor_type="llm2vec",
+        model_type="ae",
+        display_name="LLM2Vec-Mistral and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(batch_size=64),
+    ),
 }
 
 
@@ -283,6 +315,42 @@ def _make_extractor(
         ext.cache_dir = cache_dir
         return ext
 
+    if config.extractor_type == "codebert":
+        from extractors.codebert import CodeBERTExtractor
+
+        return CodeBERTExtractor(
+            device=device,
+            embeddings_path=project_paths.embeddings_path,
+            **kwargs,
+        )
+
+    if config.extractor_type == "flan_t5":
+        from extractors.flan_t5 import FlanT5Extractor
+
+        return FlanT5Extractor(
+            device=device,
+            embeddings_path=project_paths.embeddings_path,
+            **kwargs,
+        )
+
+    if config.extractor_type == "sentbert":
+        from extractors.sentbert import SentBERTExtractor
+
+        return SentBERTExtractor(
+            device=device,
+            embeddings_path=project_paths.embeddings_path,
+            **kwargs,
+        )
+
+    if config.extractor_type == "llm2vec":
+        from extractors.llm2vec_ext import LLM2VecExtractor
+
+        return LLM2VecExtractor(
+            device=device,
+            embeddings_path=project_paths.embeddings_path,
+            **kwargs,
+        )
+
     raise ValueError(f"Unknown extractor type: {config.extractor_type}")
 
 
@@ -294,7 +362,15 @@ def _output_activation(config: ModelConfig) -> str:
     - use_scaler=False → relu (non-negative features)
     - sbert            → tanh (embeddings in [-1, 1])
     """
-    if config.extractor_type in ("sbert", "roberta", "bilstm_w2v"):
+    if config.extractor_type in (
+        "sbert",
+        "roberta",
+        "bilstm_w2v",
+        "codebert",
+        "flan_t5",
+        "sentbert",
+        "llm2vec",
+    ):
         return "tanh"
     if config.use_scaler:
         return "sigmoid"

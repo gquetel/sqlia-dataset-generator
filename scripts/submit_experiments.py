@@ -33,7 +33,7 @@ SLURM_PROFILES = {
         "cpus": 16,
         "mem": "32G",
         "time": "4:00:00",
-        "exclude": ["node13"],  # buggy nodes
+        "exclude": ["node13", "node42"],  # buggy nodes
     },
     "gpu_long": {
         "partition": "A100",
@@ -71,6 +71,10 @@ MODEL_PROFILES = {
     "ocsvm_gaur": "cpu",
     "ae_gaur_chatgpt": "cpu",
     "ocsvm_gaur_chatgpt": "cpu",
+    "ae_codebert": "gpu_v100",
+    "ae_flan_t5": "gpu_v100",
+    "ae_sentbert": "gpu_v100",
+    "ae_llm2vec": "gpu_v100",
 }
 DATASETS = {
     "A": "OurAirports",
