@@ -2,7 +2,6 @@
 
 import logging
 import os
-import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -275,8 +274,7 @@ class BaseAutoEncoderModel:
         torch.save(self.clf.state_dict(), model_path)
 
         metadata = self._build_metadata(threshold)
-        with open(meta_path, "wb") as f:
-            pickle.dump(metadata, f)
+        pd.to_pickle(metadata, meta_path, compression="zstd")
 
         logger.info(f"Saved model to {model_path}")
         if threshold is not None:
@@ -326,8 +324,7 @@ class BaseAutoEncoderModel:
         if not meta_path.exists():
             raise FileNotFoundError(f"Model metadata not found: {meta_path}")
 
-        with open(meta_path, "rb") as f:
-            metadata = pickle.load(f)
+        metadata = pd.read_pickle(meta_path, compression="zstd")
 
         self.learning_rate = metadata.get("learning_rate", self.learning_rate)
         self.epochs = metadata.get("epochs", self.epochs)

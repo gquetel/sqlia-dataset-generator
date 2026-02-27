@@ -6,7 +6,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pickle
 import sqlglot
 import sqlglot.errors
 import sqlparse
@@ -108,7 +107,7 @@ def compute_and_save_embeddings(df: pd.DataFrame, output_dir: Path):
 
     if os.path.isfile(fp_cache):
         print(f"Loaded already preprocessed embeddings located from {fp_cache}")
-        return pd.read_pickle(fp_cache)
+        return pd.read_pickle(fp_cache, compression="zstd")
     else:
         bert_model = "ehsanaghaei/SecureBERT"
         tokenizer = RobertaTokenizerFast.from_pretrained(bert_model)
@@ -143,7 +142,7 @@ def compute_and_save_embeddings(df: pd.DataFrame, output_dir: Path):
 
         embeddings = np.array(embeddings)
         print(f"Saved preprocessed embeddings at {fp_cache}")
-        pd.to_pickle(embeddings, fp_cache)
+        pd.to_pickle(embeddings, fp_cache, compression="zstd")
 
     return embeddings
 
@@ -185,8 +184,7 @@ def print_dataset_tsne(
 
     print(f"t-SNE results saved to tsne-{name}-{type}.pkl")
 
-    with open(output_dir / f"tsne-{name}-{type}.pkl", "wb") as f:
-        pickle.dump(results, f)
+    pd.to_pickle(results, output_dir / f"tsne-{name}-{type}.pkl", compression="zstd")
 
     # Now plot individual results.
     plt.figure(figsize=(12, 8))
@@ -260,18 +258,18 @@ def load_wafamole_samples():
     fp_psane = CACHE_DIR / "parsed-wafamole-sane.pkl"
 
     if fp_patks.is_file():
-        attacks = pd.read_pickle(fp_patks)
+        attacks = pd.read_pickle(fp_patks, compression="zstd")
     else:
         attack = open(fp_attacks, "r").read()
         attacks = sqlparse.split(attack)
-        pd.to_pickle(attacks, fp_patks)
+        pd.to_pickle(attacks, fp_patks, compression="zstd")
 
     if fp_psane.is_file():
-        sanes = pd.read_pickle(fp_psane)
+        sanes = pd.read_pickle(fp_psane, compression="zstd")
     else:
         sane = open(fp_sane, "r").read()
         sanes = sqlparse.split(sane)
-        pd.to_pickle(sanes, fp_psane)
+        pd.to_pickle(sanes, fp_psane, compression="zstd")
 
     df_sane = pd.DataFrame(sanes, columns=["full_query"])
     df_attack = pd.DataFrame(attacks, columns=["full_query"])

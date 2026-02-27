@@ -29,5 +29,7 @@ gensim
 # For plotly exports
 kaleido==1.2.0
 
+zstandard
+
 # Testing
 pytest==9.0.2  # Built-in subtests support

@@ -3,7 +3,6 @@
 import hashlib
 import logging
 import os
-import pickle
 
 import pandas as pd
 
@@ -19,14 +18,12 @@ def load_cache(path: str):
     """Return the unpickled object at *path*, or None if the file is missing."""
     if os.path.isfile(path):
         logger.info("Cache hit: %s", path)
-        with open(path, "rb") as fh:
-            return pickle.load(fh)
+        return pd.read_pickle(path, compression="zstd")
     return None
 
 
 def save_cache(path: str, obj) -> None:
     """Pickle *obj* to *path*, creating parent directories as needed."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as fh:
-        pickle.dump(obj, fh)
+    pd.to_pickle(obj, path, compression="zstd")
     logger.debug("Cache saved: %s", path)
