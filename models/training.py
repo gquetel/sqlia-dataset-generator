@@ -378,6 +378,7 @@ AUTHORIZED_GROUPS = {
     "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
     "bilstm_w2v": ["ocsvm_bilstm_w2v", "ae_bilstm_w2v"],
     "loginov": ["ocsvm_loginov", "ae_loginov"],
+    "gaur": ["ocsvm_gaur", "ae_gaur", "ocsvm_gaur_chatgpt", "ae_gaur_chatgpt"],
 }
 
 

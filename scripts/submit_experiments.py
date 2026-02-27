@@ -8,6 +8,7 @@ across generic, specialised, and wafamole experiment modes.
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -66,6 +67,10 @@ MODEL_PROFILES = {
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ocsvm_li": "cpu",
+    "ae_gaur": "cpu",
+    "ocsvm_gaur": "cpu",
+    "ae_gaur_chatgpt": "cpu",
+    "ocsvm_gaur_chatgpt": "cpu",
 }
 DATASETS = {
     "A": "OurAirports",
@@ -123,6 +128,9 @@ SPECIALISED_SCENARIOS = {
         "test_labels": ["A", "B", "C", "D"],
     },
 }
+
+
+GAUR_MODELS = {m for m in MODEL_PROFILES if "gaur" in m}
 
 
 def get_profile(model: str) -> dict:
@@ -487,6 +495,16 @@ def main():
 
     if args.dry_run and args.local:
         parser.error("--dry-run and --local are mutually exclusive")
+
+    if args.model in GAUR_MODELS:
+        if not args.local and not args.dry_run:
+            parser.error(
+                f"Model '{args.model}' requires --local (gaur experiments cannot run on SLURM)"
+            )
+        if args.local and shutil.which("nix") is None:
+            parser.error(
+                "nix is not available in PATH — required to build instrumented servers for gaur experiments"
+            )
 
     use_slurm = not args.local and not args.dry_run
 

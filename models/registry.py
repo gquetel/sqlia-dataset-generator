@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: (
-        str  # "li", "countvect", "sbert", "roberta", "kakisim", "w2v", "loginov"
-    )
+    extractor_type: str  # "li", "countvect", "sbert", "roberta", "kakisim", "w2v", "loginov", "gaur"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -182,6 +180,39 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         display_name="Loginov and AE-scaler",
         hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
     ),
+    # ---- GAUR ----
+    "ocsvm_gaur": ModelConfig(
+        extractor_type="gaur",
+        model_type="ocsvm",
+        use_scaler=True,
+        display_name="GAUR expert+hybrid and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=1000),
+        extractor_kwargs=dict(use_hybrid=True, mode="expert"),
+    ),
+    "ae_gaur": ModelConfig(
+        extractor_type="gaur",
+        model_type="ae",
+        use_scaler=True,
+        display_name="GAUR expert+hybrid and AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(use_hybrid=True, mode="expert"),
+    ),
+    "ocsvm_gaur_chatgpt": ModelConfig(
+        extractor_type="gaur",
+        model_type="ocsvm",
+        use_scaler=True,
+        display_name="GAUR chatgpt+hybrid and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=1000),
+        extractor_kwargs=dict(use_hybrid=True, mode="chatgpt"),
+    ),
+    "ae_gaur_chatgpt": ModelConfig(
+        extractor_type="gaur",
+        model_type="ae",
+        use_scaler=True,
+        display_name="GAUR chatgpt+hybrid and AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(use_hybrid=True, mode="chatgpt"),
+    ),
 }
 
 
@@ -244,6 +275,13 @@ def _make_extractor(
 
     if config.extractor_type == "loginov":
         return LoginovExtractor()
+
+    if config.extractor_type == "gaur":
+        from extractors.gaur import GaurExtractor
+
+        ext = GaurExtractor(**kwargs)
+        ext.cache_dir = cache_dir
+        return ext
 
     raise ValueError(f"Unknown extractor type: {config.extractor_type}")
 

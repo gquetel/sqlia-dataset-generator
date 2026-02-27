@@ -150,6 +150,8 @@ def main():
             "ae_loginov",
             "ae_w2v",
             "ae_roberta",
+            "ae_gaur",
+            "ae_gaur_chatgpt",
         ],
         help="Type of model",
     )

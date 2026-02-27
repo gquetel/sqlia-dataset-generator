@@ -74,8 +74,8 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "gquetel";
       repo = "gaur-sql-detect";
-      rev = "38706dd9972fe5dea46987418394b875a2cfb8a6";
-      sha256 = "sha256-GkG3pR9TKrCr96X/sdOHXHhBBqkzmUQp6k4F6bz/hp8=";
+      rev = "35b6db06df38dfdefa62d7f085a5db606204619a";
+      sha256 = "sha256-4C7n1NX9m7D19zaywXsK+ppwHmQaFGyTfpyArDkvlxo=";
     };
     build-system = [ pkgs.python313Packages.setuptools ];
     dependencies = with pkgs.python313Packages; [
@@ -94,6 +94,7 @@ let
       evaluate
       mysql-connector
       kaleido
+      zstandard
     ];
     doCheck = false;
   };
