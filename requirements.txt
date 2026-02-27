@@ -14,10 +14,14 @@ matplotlib==3.10.1
 accelerate==1.5.2
 evaluate==0.4.3
 torch==2.6.0
-transformers==4.51.3
+transformers==4.44.2 # llm2vec requires <= 4.44.2
 plotly==6.3.1
 sentence-transformers
+
+# Another cursed package
 llm2vec==0.2.3
+peft==0.13.2 # We pin this other wise we get: 
+# AttributeError: module 'torch.distributed' has no attribute 'tensor
 
 ## Used for diversity evaluation:
 sqlglot==26.16.2
@@ -28,7 +32,6 @@ gensim
 
 # For plotly exports
 kaleido==1.2.0
-
 zstandard
 
 # Testing

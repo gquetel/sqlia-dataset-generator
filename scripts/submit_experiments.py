@@ -33,7 +33,7 @@ SLURM_PROFILES = {
         "cpus": 16,
         "mem": "32G",
         "time": "4:00:00",
-        "exclude": ["node13", "node42"],  # buggy nodes
+        "exclude": ["node13", "node42", "node43"],  # nodes with != python version
     },
     "gpu_long": {
         "partition": "A100",
@@ -42,12 +42,12 @@ SLURM_PROFILES = {
         "mem": "64G",
         "time": "12:00:00",
     },
-    "gpu_short": {
+    "gpu_A40": {
         "partition": "A40",
         "gres": "gpu:1",
         "cpus": 12,  # Fewer CPUs to reach smaller machines
         "mem": "32G",
-        "time": "4:00:00",
+        "time": "12:00:00",
     },
     "cpu": {
         "partition": "CPU",
@@ -66,15 +66,13 @@ MODEL_PROFILES = {
     "ae_w2v": "gpu_v100",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
-    "ocsvm_li": "cpu",
     "ae_gaur": "cpu",
-    "ocsvm_gaur": "cpu",
     "ae_gaur_chatgpt": "cpu",
-    "ocsvm_gaur_chatgpt": "cpu",
     "ae_codebert": "gpu_v100",
     "ae_flan_t5": "gpu_v100",
     "ae_sentbert": "gpu_v100",
-    "ae_llm2vec": "gpu_v100",
+    "ae_llm2vec": "gpu_A40",  # Requires 32Gb+ GPU
+    "ocsvm_li": "cpu",
 }
 DATASETS = {
     "A": "OurAirports",
@@ -256,7 +254,12 @@ def eval_cmd(
 
 
 def generate_generic_script(
-    model: str, scenario_num: int, testing: bool, datasets_dir: str, slurm: bool
+    model: str,
+    scenario_num: int,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+    no_matrix: bool = False,
 ) -> str:
     """Generate a script for a generic (leave-one-out) scenario."""
     scenario = GENERIC_SCENARIOS[scenario_num]
@@ -271,9 +274,12 @@ def generate_generic_script(
     log_file = f"{timestamp}.log"
     log_path = f"{log_dir}/{log_file}"
 
+    if no_matrix:
+        test_labels = [l for l in "ABCD" if l not in scenario["train_label"]]
+    else:
+        test_labels = scenario["test_labels"]
     test_datasets = [
-        (dataset_filename("generic", DATASETS[label]), label)
-        for label in scenario["test_labels"]
+        (dataset_filename("generic", DATASETS[label]), label) for label in test_labels
     ]
 
     parts = []
@@ -296,7 +302,12 @@ def generate_generic_script(
 
 
 def generate_specialised_script(
-    model: str, scenario_num: int, testing: bool, datasets_dir: str, slurm: bool
+    model: str,
+    scenario_num: int,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+    no_matrix: bool = False,
 ) -> str:
     """Generate a script for a specialised (single-dataset) scenario."""
     scenario = SPECIALISED_SCENARIOS[scenario_num]
@@ -311,9 +322,13 @@ def generate_specialised_script(
     log_file = f"{timestamp}.log"
     log_path = f"{log_dir}/{log_file}"
 
+    if no_matrix:
+        test_labels = [scenario["train_label"]]
+    else:
+        test_labels = scenario["test_labels"]
     test_datasets = [
         (dataset_filename("specialised", DATASETS[label]), label)
-        for label in scenario["test_labels"]
+        for label in test_labels
     ]
 
     parts = []
@@ -336,7 +351,11 @@ def generate_specialised_script(
 
 
 def generate_wafamole_script(
-    model: str, testing: bool, datasets_dir: str, slurm: bool
+    model: str,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+    no_matrix: bool = False,
 ) -> str:
     """Generate a script for wafamole experiments (3 phases)."""
     spec_models_dir = f"./models/output/models/{model}_specialised"
@@ -368,29 +387,32 @@ def generate_wafamole_script(
     parts.append("")
 
     # Phase 2: Evaluate all existing models on E
-    parts.append("# ── Phase 2: Evaluate all models on wafamole (E) ──")
-    wafamole_test = [(wafamole_file, "E")]
+    if not no_matrix:
+        parts.append("# ── Phase 2: Evaluate all models on wafamole (E) ──")
+        wafamole_test = [(wafamole_file, "E")]
 
-    parts.append('echo "Evaluating generic models on wafamole..."')
-    for scenario in GENERIC_SCENARIOS.values():
-        gname = f"{model}_{scenario['train_label']}"
+        parts.append('echo "Evaluating generic models on wafamole..."')
+        for scenario in GENERIC_SCENARIOS.values():
+            gname = f"{model}_{scenario['train_label']}"
+            parts.append(
+                eval_cmd(model, gname, gen_models_dir, gen_results_dir, wafamole_test)
+            )
+            parts.append("")
+
+        parts.append('echo "Evaluating specialised models on wafamole..."')
+        for scenario in SPECIALISED_SCENARIOS.values():
+            sname = f"{model}_{scenario['train_label']}"
+            parts.append(
+                eval_cmd(model, sname, spec_models_dir, spec_results_dir, wafamole_test)
+            )
+            parts.append("")
+        # Also evaluate E on E
         parts.append(
-            eval_cmd(model, gname, gen_models_dir, gen_results_dir, wafamole_test)
+            eval_cmd(
+                model, model_name_e, spec_models_dir, spec_results_dir, wafamole_test
+            )
         )
         parts.append("")
-
-    parts.append('echo "Evaluating specialised models on wafamole..."')
-    for scenario in SPECIALISED_SCENARIOS.values():
-        sname = f"{model}_{scenario['train_label']}"
-        parts.append(
-            eval_cmd(model, sname, spec_models_dir, spec_results_dir, wafamole_test)
-        )
-        parts.append("")
-    # Also evaluate E on E
-    parts.append(
-        eval_cmd(model, model_name_e, spec_models_dir, spec_results_dir, wafamole_test)
-    )
-    parts.append("")
 
     # Phase 3: Evaluate E model on all other datasets
     parts.append("# ── Phase 3: Evaluate E model on other datasets ──")
@@ -495,6 +517,11 @@ def main():
         action="store_true",
         help="Run locally instead of submitting to SLURM",
     )
+    parser.add_argument(
+        "--no-matrix",
+        action="store_true",
+        help="Only evaluate on the key dataset (left-out for generic, trained for specialised); skips wafamole phase 2",
+    )
     args = parser.parse_args()
 
     if args.dry_run and args.local:
@@ -514,7 +541,7 @@ def main():
 
     if args.mode == "wafamole":
         script = generate_wafamole_script(
-            args.model, args.testing, args.datasets_dir, use_slurm
+            args.model, args.testing, args.datasets_dir, use_slurm, args.no_matrix
         )
         write_and_submit(script, f"{args.model}_wafamole.sh", args.dry_run, args.local)
     else:
@@ -537,7 +564,12 @@ def main():
         )
         for n in scenario_nums:
             script = generator(
-                args.model, n, args.testing, args.datasets_dir, use_slurm
+                args.model,
+                n,
+                args.testing,
+                args.datasets_dir,
+                use_slurm,
+                args.no_matrix,
             )
             write_and_submit(
                 script,
