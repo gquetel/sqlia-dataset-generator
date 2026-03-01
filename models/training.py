@@ -431,6 +431,7 @@ def _train_single_model(
         project_paths=project_paths,
         n_jobs=n_jobs,
         cache_dir=cache_dir,
+        no_cache=not use_feature_cache,
     )
 
     model.train_model(

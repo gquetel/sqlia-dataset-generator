@@ -253,6 +253,7 @@ def _make_extractor(
     device: torch.device = None,
     project_paths=None,
     cache_dir: str | None = None,
+    no_cache: bool = False,
 ) -> BaseExtractor:
     """Instantiate the right extractor from config."""
     from extractors.li import LiExtractor
@@ -262,6 +263,7 @@ def _make_extractor(
     from extractors.loginov import LoginovExtractor
 
     kwargs = dict(config.extractor_kwargs)
+    embeddings_path = None if no_cache else project_paths.embeddings_path
 
     if config.extractor_type == "li":
         return LiExtractor()
@@ -272,7 +274,7 @@ def _make_extractor(
     if config.extractor_type == "sbert":
         ext = SecureBERTExtractor(
             device=device,
-            embeddings_path=project_paths.embeddings_path,
+            embeddings_path=embeddings_path,
             **kwargs,
         )
         return ext
@@ -282,7 +284,7 @@ def _make_extractor(
 
         return RobertaExtractor(
             device=device,
-            embeddings_path=project_paths.embeddings_path,
+            embeddings_path=embeddings_path,
             **kwargs,
         )
 
@@ -320,7 +322,7 @@ def _make_extractor(
 
         return CodeBERTExtractor(
             device=device,
-            embeddings_path=project_paths.embeddings_path,
+            embeddings_path=embeddings_path,
             **kwargs,
         )
 
@@ -329,7 +331,7 @@ def _make_extractor(
 
         return FlanT5Extractor(
             device=device,
-            embeddings_path=project_paths.embeddings_path,
+            embeddings_path=embeddings_path,
             **kwargs,
         )
 
@@ -338,7 +340,7 @@ def _make_extractor(
 
         return SentBERTExtractor(
             device=device,
-            embeddings_path=project_paths.embeddings_path,
+            embeddings_path=embeddings_path,
             **kwargs,
         )
 
@@ -347,7 +349,7 @@ def _make_extractor(
 
         return LLM2VecExtractor(
             device=device,
-            embeddings_path=project_paths.embeddings_path,
+            embeddings_path=embeddings_path,
             **kwargs,
         )
 
@@ -384,6 +386,7 @@ def build_model(
     project_paths=None,
     n_jobs: int = -1,
     cache_dir: str | None = None,
+    no_cache: bool = False,
 ):
     """Factory: instantiate extractor + wrap in OCSVM/AE/LOF.
 
@@ -391,7 +394,7 @@ def build_model(
     """
     config = MODEL_CONFIGS[config_name]
     extractor = _make_extractor(
-        config, device=device, project_paths=project_paths, cache_dir=cache_dir
+        config, device=device, project_paths=project_paths, cache_dir=cache_dir, no_cache=no_cache
     )
     hp = config.hyperparams
 

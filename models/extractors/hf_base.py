@@ -33,6 +33,10 @@ class HuggingFaceExtractor(BaseExtractor):
     def _load_or_compute_embeddings(
         self, df: pd.DataFrame, batch_size: int
     ) -> List[np.ndarray]:
+        if self.embeddings_path is None:
+            queries = df["full_query"].values
+            return self._compute_embeddings(queries, batch_size)
+
         cache_path = self._cache_path(df)
         cached = load_cache(cache_path)
         if cached is not None:

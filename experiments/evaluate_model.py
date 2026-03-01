@@ -87,6 +87,7 @@ def load_model(
     model_path: str,
     device: torch.device,
     embeddings_cache_dir: str = None,
+    no_cache: bool = False,
 ):
     """Load a model from disk using the registry."""
     project_paths = ProjectPaths(GENERIC.BASE_PATH)
@@ -99,6 +100,7 @@ def load_model(
         GENERIC=GENERIC,
         device=device,
         project_paths=project_paths,
+        no_cache=no_cache,
     )
     model.load_model(model_path)
 
@@ -208,6 +210,12 @@ def main():
         action="store_true",
         help="Enable debug logging",
     )
+    parser.add_argument(
+        "--no-feature-cache",
+        action="store_true",
+        dest="no_feature_cache",
+        help="Disable HuggingFace embeddings disk cache.",
+    )
     # Initialization code
     args = parser.parse_args()
 
@@ -244,6 +252,7 @@ def main():
         model_path=args.model_path,
         device=device,
         embeddings_cache_dir=args.embeddings_cache,
+        no_cache=args.no_feature_cache,
     )
 
     for test_path, test_label in test_items:
