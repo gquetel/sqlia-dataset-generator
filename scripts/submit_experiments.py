@@ -71,7 +71,7 @@ MODEL_PROFILES = {
     "ae_codebert": "gpu_v100",
     "ae_flan_t5": "gpu_v100",
     "ae_sentbert": "gpu_v100",
-    "ae_llm2vec": "gpu_A40",  # Requires 32Gb+ GPU
+    "ae_llm2vec": "gpu_long",  # Requires 32Gb+ GPU, and 64+ memory
     "ocsvm_li": "cpu",
 }
 DATASETS = {
