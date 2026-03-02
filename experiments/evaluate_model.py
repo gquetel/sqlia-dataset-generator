@@ -158,6 +158,8 @@ def main():
             "ae_flan_t5",
             "ae_sentbert",
             "ae_llm2vec",
+            "ae_kakisim_w2v_max",
+            "ocsvm_kakisim_w2v_max",
         ],
         help="Type of model",
     )

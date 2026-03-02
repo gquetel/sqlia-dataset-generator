@@ -64,6 +64,8 @@ MODEL_PROFILES = {
     "ae_kakisim_c": "gpu_long",
     "ae_bilstm_w2v": "gpu_standard",  # 4H is sufficient
     "ae_w2v": "gpu_v100",
+    "ae_kakisim_w2v_max": "gpu_v100",
+    "ocsvm_kakisim_w2v_max": "cpu",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ae_gaur": "cpu",
