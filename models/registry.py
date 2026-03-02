@@ -165,6 +165,22 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
         extractor_kwargs=dict(vector_size=256, pooling="max"),
     ),
+    "ae_kakisim_w2v_mean": ModelConfig(
+        extractor_type="kakisim_w2v",
+        model_type="ae",
+        use_scaler=False,
+        display_name="Kakisim-E W2V MeanPool and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(vector_size=256, pooling="mean"),
+    ),
+    "ocsvm_kakisim_w2v_mean": ModelConfig(
+        extractor_type="kakisim_w2v",
+        model_type="ocsvm",
+        use_scaler=False,
+        display_name="Kakisim-E W2V MeanPool and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(vector_size=256, pooling="mean"),
+    ),
     # ---- BiLSTM W2V ----
     "ae_bilstm_w2v": ModelConfig(
         extractor_type="bilstm_w2v",
@@ -419,7 +435,11 @@ def build_model(
     """
     config = MODEL_CONFIGS[config_name]
     extractor = _make_extractor(
-        config, device=device, project_paths=project_paths, cache_dir=cache_dir, no_cache=no_cache
+        config,
+        device=device,
+        project_paths=project_paths,
+        cache_dir=cache_dir,
+        no_cache=no_cache,
     )
     hp = config.hyperparams
 

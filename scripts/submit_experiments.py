@@ -66,6 +66,8 @@ MODEL_PROFILES = {
     "ae_w2v": "gpu_v100",
     "ae_kakisim_w2v_max": "gpu_v100",
     "ocsvm_kakisim_w2v_max": "cpu",
+    "ae_kakisim_w2v_mean": "gpu_standard",
+    "ocsvm_kakisim_w2v_mean": "cpu",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ae_gaur": "cpu",
@@ -219,7 +221,11 @@ def env_setup(
 
 
 def train_cmd(
-    model: str, mode: str, train_dataset: str, model_name: str, models_dir: str,
+    model: str,
+    mode: str,
+    train_dataset: str,
+    model_name: str,
+    models_dir: str,
     no_cache: bool = False,
 ) -> str:
     """Generate a training command."""
@@ -230,8 +236,7 @@ def train_cmd(
         f"    --models {model} \\\n"
         f"    --subfolder={subfolder} \\\n"
         f"    --save-model-path={models_dir}/{model_name} \\\n"
-        f"    $TESTING_FLAG"
-        + (" \\\n    --no-feature-cache" if no_cache else "")
+        f"    $TESTING_FLAG" + (" \\\n    --no-feature-cache" if no_cache else "")
     )
     return cmd
 
@@ -253,8 +258,7 @@ def eval_cmd(
         f"    --test-datasets {td_args} \\\n"
         f"    --output-dir={results_dir}/ \\\n"
         f"    --fixed-fpr=0.01 \\\n"
-        f"    $TESTING_FLAG"
-        + (" \\\n    --no-feature-cache" if no_cache else "")
+        f"    $TESTING_FLAG" + (" \\\n    --no-feature-cache" if no_cache else "")
     )
     return cmd
 
@@ -299,10 +303,18 @@ def generate_generic_script(
     parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
-    parts.append(train_cmd(model, "generic", train_file, model_name, models_dir, no_cache=no_cache))
+    parts.append(
+        train_cmd(
+            model, "generic", train_file, model_name, models_dir, no_cache=no_cache
+        )
+    )
     parts.append("")
     parts.append(f"# Evaluate {model_name} on all test datasets")
-    parts.append(eval_cmd(model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache))
+    parts.append(
+        eval_cmd(
+            model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache
+        )
+    )
     parts.append("")
     parts.append('echo "Job finished at: $(date)"')
     return "\n".join(parts)
@@ -349,10 +361,18 @@ def generate_specialised_script(
     parts.append(f'echo "Running specialised scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
-    parts.append(train_cmd(model, "specialised", train_file, model_name, models_dir, no_cache=no_cache))
+    parts.append(
+        train_cmd(
+            model, "specialised", train_file, model_name, models_dir, no_cache=no_cache
+        )
+    )
     parts.append("")
     parts.append(f"# Evaluate {model_name} on all test datasets")
-    parts.append(eval_cmd(model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache))
+    parts.append(
+        eval_cmd(
+            model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache
+        )
+    )
     parts.append("")
     parts.append('echo "Job finished at: $(date)"')
     return "\n".join(parts)
@@ -391,7 +411,14 @@ def generate_wafamole_script(
     model_name_e = f"{model}_E"
     parts.append("# ── Phase 1: Train E (specialised on wafamole) ──")
     parts.append(
-        train_cmd(model, "specialised", wafamole_file, model_name_e, spec_models_dir, no_cache=no_cache)
+        train_cmd(
+            model,
+            "specialised",
+            wafamole_file,
+            model_name_e,
+            spec_models_dir,
+            no_cache=no_cache,
+        )
     )
     parts.append("")
 
@@ -404,7 +431,14 @@ def generate_wafamole_script(
         for scenario in GENERIC_SCENARIOS.values():
             gname = f"{model}_{scenario['train_label']}"
             parts.append(
-                eval_cmd(model, gname, gen_models_dir, gen_results_dir, wafamole_test, no_cache=no_cache)
+                eval_cmd(
+                    model,
+                    gname,
+                    gen_models_dir,
+                    gen_results_dir,
+                    wafamole_test,
+                    no_cache=no_cache,
+                )
             )
             parts.append("")
 
@@ -412,13 +446,25 @@ def generate_wafamole_script(
         for scenario in SPECIALISED_SCENARIOS.values():
             sname = f"{model}_{scenario['train_label']}"
             parts.append(
-                eval_cmd(model, sname, spec_models_dir, spec_results_dir, wafamole_test, no_cache=no_cache)
+                eval_cmd(
+                    model,
+                    sname,
+                    spec_models_dir,
+                    spec_results_dir,
+                    wafamole_test,
+                    no_cache=no_cache,
+                )
             )
             parts.append("")
         # Also evaluate E on E
         parts.append(
             eval_cmd(
-                model, model_name_e, spec_models_dir, spec_results_dir, wafamole_test, no_cache=no_cache
+                model,
+                model_name_e,
+                spec_models_dir,
+                spec_results_dir,
+                wafamole_test,
+                no_cache=no_cache,
             )
         )
         parts.append("")
@@ -430,7 +476,14 @@ def generate_wafamole_script(
         for label in ["A", "B", "C", "D"]
     ]
     parts.append(
-        eval_cmd(model, model_name_e, spec_models_dir, spec_results_dir, other_test, no_cache=no_cache)
+        eval_cmd(
+            model,
+            model_name_e,
+            spec_models_dir,
+            spec_results_dir,
+            other_test,
+            no_cache=no_cache,
+        )
     )
     parts.append("")
     parts.append('echo "Job finished at: $(date)"')
@@ -555,7 +608,12 @@ def main():
 
     if args.mode == "wafamole":
         script = generate_wafamole_script(
-            args.model, args.testing, args.datasets_dir, use_slurm, args.no_matrix, args.no_cache
+            args.model,
+            args.testing,
+            args.datasets_dir,
+            use_slurm,
+            args.no_matrix,
+            args.no_cache,
         )
         write_and_submit(script, f"{args.model}_wafamole.sh", args.dry_run, args.local)
     else:

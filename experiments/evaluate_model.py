@@ -160,6 +160,8 @@ def main():
             "ae_llm2vec",
             "ae_kakisim_w2v_max",
             "ocsvm_kakisim_w2v_max",
+            "ae_kakisim_w2v_mean",
+            "ocsvm_kakisim_w2v_mean",
         ],
         help="Type of model",
     )
