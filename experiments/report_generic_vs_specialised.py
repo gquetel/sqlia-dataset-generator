@@ -18,8 +18,8 @@ Expected results directory structure (flat, one directory per model×scenario):
         ae_li_A_on_A/roc_curves/ae_li_A.csv
         ae_li_A_on_B/results.csv     ← cross-domain, used by TL matrix
         ...
-      ae_sbert_generic/ ...
-      ae_sbert_specialised/ ...
+      ae_securebert_generic/ ...
+      ae_securebert_specialised/ ...
       ...
 
 Output layout:
@@ -46,7 +46,7 @@ Usage:
     # Specify models explicitly
     python experiments/report_generic_vs_specialised.py \\
         --results-dir ~/experiences-results/2026-02-23 \\
-        --models ae_li ae_sbert ae_kakisim_c ae_loginov
+        --models ae_li ae_securebert ae_kakisim_c ae_loginov
 
     # Custom output directory and format(s)
     python experiments/report_generic_vs_specialised.py \\
@@ -83,7 +83,7 @@ ALL_LETTERS = set(DATASET_LETTERS.values())
 # Human-readable labels for known model prefixes; unknown prefixes fall back to the prefix itself
 KNOWN_LABELS: dict[str, str] = {
     "ae_li": "Li + AE",
-    "ae_sbert": "SecureBERT + AE",
+    "ae_securebert": "SecureBERT + AE",
     "ae_gaur": "GAUR + AE",
     "ae_kakisim_c": "Kakisim-C + AE",
     "ae_loginov": "Loginov + AE",
@@ -670,7 +670,7 @@ def main() -> int:
         metavar="PREFIX",
         default=None,
         help=(
-            "Model prefixes to include (e.g. ae_li ae_sbert). "
+            "Model prefixes to include (e.g. ae_li ae_securebert). "
             "Auto-discovered from --results-dir when omitted."
         ),
     )

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "sbert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec"
+    extractor_type: str  # "li", "countvect", "securebert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -91,23 +91,23 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         extractor_kwargs=dict(batch_size=64),
     ),
     # ---- SecureBERT ----
-    "ocsvm_sbert": ModelConfig(
-        extractor_type="sbert",
+    "ocsvm_securebert": ModelConfig(
+        extractor_type="securebert",
         model_type="ocsvm",
         use_scaler=False,
         display_name="SecureBERT and OCSVM",
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
         extractor_kwargs=dict(batch_size=64),
     ),
-    "lof_sbert": ModelConfig(
-        extractor_type="sbert",
+    "lof_securebert": ModelConfig(
+        extractor_type="securebert",
         model_type="lof",
         use_scaler=False,
-        display_name="SBERT and LOF",
+        display_name="SecureBERT and LOF",
         extractor_kwargs=dict(batch_size=64),
     ),
-    "ae_sbert": ModelConfig(
-        extractor_type="sbert",
+    "ae_securebert": ModelConfig(
+        extractor_type="securebert",
         model_type="ae",
         use_scaler=False,
         display_name="SecureBERT and AE",
@@ -291,7 +291,7 @@ def _make_extractor(
     """Instantiate the right extractor from config."""
     from extractors.li import LiExtractor
     from extractors.countvect import CountVectExtractor
-    from extractors.sbert import SecureBERTExtractor
+    from extractors.securebert import SecureBERTExtractor
     from extractors.kakisim import KakisimExtractor
     from extractors.loginov import LoginovExtractor
 
@@ -304,7 +304,7 @@ def _make_extractor(
     if config.extractor_type == "countvect":
         return CountVectExtractor(**kwargs)
 
-    if config.extractor_type == "sbert":
+    if config.extractor_type == "securebert":
         ext = SecureBERTExtractor(
             device=device,
             embeddings_path=embeddings_path,
@@ -402,10 +402,10 @@ def _output_activation(config: ModelConfig) -> str:
     Rule:
     - use_scaler=True  → sigmoid (features normalised to [0, 1])
     - use_scaler=False → relu (non-negative features)
-    - sbert            → tanh (embeddings in [-1, 1])
+    - securebert       → tanh (embeddings in [-1, 1])
     """
     if config.extractor_type in (
-        "sbert",
+        "securebert",
         "roberta",
         "bilstm_w2v",
         "kakisim_w2v",

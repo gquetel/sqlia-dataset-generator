@@ -140,7 +140,7 @@ def init_args() -> argparse.Namespace:
         "--save-model-path",
         type=str,
         dest="save_model_path",
-        help="Path to save trained model (without extension). Works with ae_li, ae_sbert, ae_kakisim, ae_kakisim_enriched, and ae_loginov.",
+        help="Path to save trained model (without extension). Works with ae_li, ae_securebert, ae_kakisim, ae_kakisim_enriched, and ae_loginov.",
     )
     parser.add_argument(
         "--no-feature-cache",
@@ -374,7 +374,7 @@ def compute_metrics_generic(
 AUTHORIZED_GROUPS = {
     "li": ["ocsvm_li", "lof_li", "ae_li"],
     "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
-    "sbert": ["ocsvm_sbert", "lof_sbert", "ae_sbert"],
+    "securebert": ["ocsvm_securebert", "lof_securebert", "ae_securebert"],
     "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
     "bilstm_w2v": ["ocsvm_bilstm_w2v", "ae_bilstm_w2v"],
     "loginov": ["ocsvm_loginov", "ae_loginov"],

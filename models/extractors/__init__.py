@@ -2,7 +2,7 @@
 
 from extractors.li import LiExtractor
 from extractors.countvect import CountVectExtractor
-from extractors.sbert import SecureBERTExtractor
+from extractors.securebert import SecureBERTExtractor
 from extractors.roberta import RobertaExtractor
 from extractors.kakisim import KakisimExtractor
 from extractors.loginov import LoginovExtractor

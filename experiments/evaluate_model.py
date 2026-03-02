@@ -146,7 +146,7 @@ def main():
         required=True,
         choices=[
             "ae_li",
-            "ae_sbert",
+            "ae_securebert",
             "ae_kakisim_c",
             "ae_bilstm_w2v",
             "ae_loginov",
