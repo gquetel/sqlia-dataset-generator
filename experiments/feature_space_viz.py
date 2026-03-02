@@ -101,6 +101,20 @@ def fit_extractor(extractor, df_train: pd.DataFrame):
         extractor.extract_features(df_train)  # triggers fit_transform, result discarded
 
 
+def axis_range(
+    coords: np.ndarray, sigma: float | None
+) -> tuple[list | None, list | None]:
+    """Return [min, max] axis ranges clipped to mean ± sigma·std, or None for auto."""
+    if sigma is None:
+        return None, None
+    x_mean, x_std = coords[:, 0].mean(), coords[:, 0].std()
+    y_mean, y_std = coords[:, 1].mean(), coords[:, 1].std()
+    return (
+        [x_mean - sigma * x_std, x_mean + sigma * x_std],
+        [y_mean - sigma * y_std, y_mean + sigma * y_std],
+    )
+
+
 def plot_reduction(
     coords: np.ndarray,
     dataset_names: np.ndarray,
@@ -109,6 +123,7 @@ def plot_reduction(
     extractor_name: str,
     reduction_name: str,
     output_dir: Path,
+    sigma: float | None = None,
 ):
     fig = go.Figure()
 
@@ -142,16 +157,23 @@ def plot_reduction(
                 )
             )
 
+    x_range, y_range = axis_range(coords, sigma)
+    title = f"{reduction_name} — {extractor_name} extractor (n={len(coords)})"
+    if sigma is not None:
+        title += f" [clipped ±{sigma}σ]"
     fig.update_layout(
-        title=f"{reduction_name} — {extractor_name} extractor (n={len(coords)})",
+        title=title,
         xaxis_title=f"{reduction_name} Component 1",
         yaxis_title=f"{reduction_name} Component 2",
+        xaxis_range=x_range,
+        yaxis_range=y_range,
         legend=dict(itemsizing="constant"),
         width=900,
         height=700,
     )
 
-    fname = output_dir / f"{reduction_name.lower()}_{extractor_name}.svg"
+    suffix = f"_clip{sigma}s" if sigma is not None else ""
+    fname = output_dir / f"{reduction_name.lower()}_{extractor_name}{suffix}.svg"
     fig.write_image(str(fname))
     print(f"Saved {fname}")
 
@@ -163,6 +185,7 @@ def plot_tsne_grid(
     unique_datasets: list,
     extractor_name: str,
     output_dir: Path,
+    sigma: float | None = None,
 ):
     """Plot t-SNE results for multiple perplexities in a single subplot grid."""
     n_plots = len(coords_per_perplexity)
@@ -223,14 +246,31 @@ def plot_tsne_grid(
                 )
                 shown.add(key_attack)
 
+    title = f"t-SNE — {extractor_name} extractor (n={len(labels)})"
+    if sigma is not None:
+        title += f" [clipped ±{sigma}σ]"
     fig.update_layout(
-        title=f"t-SNE — {extractor_name} extractor (n={len(labels)})",
+        title=title,
         legend=dict(itemsizing="constant"),
         width=ncols * 900,
         height=nrows * 800,
     )
 
-    fname = output_dir / f"tsne_{extractor_name}.svg"
+    # Apply per-subplot axis ranges after layout is set
+    if sigma is not None:
+        for idx, (_, coords) in enumerate(coords_per_perplexity):
+            row, col = divmod(idx, ncols)
+            x_range, y_range = axis_range(coords, sigma)
+            axis_suffix = "" if idx == 0 else str(idx + 1)
+            fig.update_layout(
+                **{
+                    f"xaxis{axis_suffix}_range": x_range,
+                    f"yaxis{axis_suffix}_range": y_range,
+                }
+            )
+
+    suffix = f"_clip{sigma}s" if sigma is not None else ""
+    fname = output_dir / f"tsne_{extractor_name}{suffix}.svg"
     fig.write_image(str(fname))
     print(f"Saved {fname}")
 
@@ -267,6 +307,13 @@ def main():
         type=str,
         default="output/experiments/feature_space_viz",
         help="Output directory for plots",
+    )
+    parser.add_argument(
+        "--sigma",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Clip plot axes to mean ± N·σ to focus on the main cluster (e.g. 3)",
     )
     parser.add_argument(
         "--testing",
@@ -342,15 +389,17 @@ def main():
         if args.pca:
             print("Computing PCA ...")
             coords_pca = PCA(n_components=2).fit_transform(X)
-            plot_reduction(
-                coords_pca,
-                dataset_names,
-                labels,
-                unique_datasets,
-                extractor_name,
-                "pca",
-                output_dir,
-            )
+            for s in [None, args.sigma] if args.sigma is not None else [None]:
+                plot_reduction(
+                    coords_pca,
+                    dataset_names,
+                    labels,
+                    unique_datasets,
+                    extractor_name,
+                    "pca",
+                    output_dir,
+                    sigma=s,
+                )
 
         if args.tsne:
             n = len(X)
@@ -366,14 +415,16 @@ def main():
                     max_iter=5000,  # Is typically enough to converge https://distill.pub/2016/misread-tsne/
                 ).fit_transform(X)
                 coords_per_perplexity.append((perplexity, coords_tsne))
-            plot_tsne_grid(
-                coords_per_perplexity,
-                dataset_names,
-                labels,
-                unique_datasets,
-                extractor_name,
-                output_dir,
-            )
+            for s in [None, args.sigma] if args.sigma is not None else [None]:
+                plot_tsne_grid(
+                    coords_per_perplexity,
+                    dataset_names,
+                    labels,
+                    unique_datasets,
+                    extractor_name,
+                    output_dir,
+                    sigma=s,
+                )
 
 
 if __name__ == "__main__":
