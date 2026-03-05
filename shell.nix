@@ -122,6 +122,19 @@ let
   #   doCheck = false;
   # };
 
+  vendi-score = pkgs.python313.pkgs.buildPythonPackage {
+    pname = "vendi-score";
+    version = "0.0.3";
+    pyproject = true;
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/7f/4c/ffff6368e4f13a17b8b65df59c868f6a2c8c9feadaaa203e7b6ac5e5f659/vendi-score-0.0.3.tar.gz";
+      sha256 = "7b133fd293d63038aea032b2933c68a7040991ee91d9b953fb6b1ede43526c53";
+    };
+    build-system = [ pkgs.python313Packages.setuptools ];
+    propagatedBuildInputs = with pkgs.python313Packages; [ numpy scipy scikit-learn ];
+    doCheck = false;
+  };
+
   # gensim 4.3.3 in nixpkgs is not supported for python3.13; use 4.4.0 wheel directly.
   gensim = pkgs.python313.pkgs.buildPythonPackage {
     pname = "gensim";
@@ -200,6 +213,7 @@ let
         kaleido
         gensim
         gaur-sql-detect
+        vendi-score
         # llm2vec
       ]
     )).override
@@ -240,6 +254,6 @@ pkgs.mkShell rec {
     # Put project scripts on PATH
     export PATH="$PWD/scripts:$PATH"
 
-    echo "Run 'mysql-start' to start MySQL, 'mysql-stop' to stop it."
+    echo "MySQL servers can be run 'mysql-start' to start MySQL, 'mysql-stop' to stop it."
   '';
 }

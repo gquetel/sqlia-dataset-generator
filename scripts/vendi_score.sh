@@ -16,12 +16,12 @@ source venv-3.12.12/bin/activate
 
 DATASET_DIR=~/datasets/100k-training
 
-srun python3 experiments/vendi_score.py \
+srun python3 experiments/vendi_diversity.py \
   --dataset A $DATASET_DIR/generic-OurAirports.csv \
   --dataset B $DATASET_DIR/generic-sakila.csv \
   --dataset C $DATASET_DIR/generic-AdventureWorks.csv \
   --dataset D $DATASET_DIR/generic-OHR.csv \
-  --extractor ae_li ae_loginov ae_securebert ae_kakisim_c ae_w2v ae_cv ae_roberta ae_bilstm_w2v ae_gaur ae_codebert \
-  --samples 10000 \
+  --extractor ae_li ae_loginov ae_securebert ae_kakisim_c ae_w2v ae_cv ae_roberta ae_bilstm_w2v ae_codebert \
+  --samples 1000 \
 
 echo "Job finished at: $(date)"

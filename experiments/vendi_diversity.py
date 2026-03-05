@@ -1,8 +1,9 @@
-"""Compute Vendi Score diversity metrics across SQL injection detection datasets.
+"""Compute Vendi Score diversity metrics across SQL injection detection datasets and plot results.
 
 For each extractor, computes intra-domain VS per dataset, pooled VS across all
 datasets, and per-scenario VS metrics (train pool, test, combined) for the 4
-generic transfer-learning scenarios.
+generic transfer-learning scenarios. After computing, produces a heatmap of
+relative VS delta across extractors and scenarios.
 
 The Vendi Score (Friedman & Dieng, 2022) is an entropy-based diversity measure
 computed from a kernel similarity matrix. Higher VS = more diverse feature space.
@@ -15,8 +16,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import torch
 from scipy import sparse
+from sklearn.metrics.pairwise import rbf_kernel
+from vendi_score import vendi
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 REPO_ROOT = SCRIPT_DIR.parent
@@ -48,8 +52,7 @@ SCENARIOS = {
     "BCD→A": (["B", "C", "D"], "A"),
 }
 
-# Specialized (baseline): train and test on the same dataset → ΔVS = 0 by definition
-SPECIALIZED_DATASETS = ["A", "B", "C", "D", "E"]
+SCENARIO_ORDER = ["ABC→D", "ABD→C", "ACD→B", "BCD→A"]
 
 
 def load_dataset(path: str) -> pd.DataFrame:
@@ -88,18 +91,59 @@ def sample_normal_test(df: pd.DataFrame, n: int) -> pd.DataFrame:
 
 
 def vendi_score(X: np.ndarray) -> float:
-    """Compute Vendi Score from feature matrix X (n_samples × n_features).
-
-    Uses RBF kernel similarity and the entropy of its normalised eigenspectrum.
-    VS = exp(H(eigenvalues of K/n)) — ranges from 1 (all identical) to n (all distinct).
-    """
-    from sklearn.metrics.pairwise import rbf_kernel
-
     K = rbf_kernel(X)
-    K_norm = K / len(X)
-    eigenvalues = np.linalg.eigvalsh(K_norm)
-    eigenvalues = eigenvalues[eigenvalues > 0]  # numerical stability
-    return float(np.exp(-np.sum(eigenvalues * np.log(eigenvalues))))
+    # Same similarity metric than the original paper.
+    return float(vendi.score_K(K, q=1))
+
+
+# --- Plotting ---
+
+
+def _fmt(v: float) -> str:
+    return f"{v:.1f}%"
+
+
+def load_scenario_data(input_dir: Path) -> pd.DataFrame:
+    csvs = sorted(input_dir.glob("*_scenarios.csv"))
+    if not csvs:
+        return pd.DataFrame()
+    df = pd.concat([pd.read_csv(f) for f in csvs], ignore_index=True)
+    return df[df["scenario_type"] == "generic"]
+
+
+def plot_heatmap(df: pd.DataFrame, output_dir: Path):
+    df = df.copy()
+    df["pct_delta_VS"] = df["delta_VS"] / df["VS_train"] * 100
+    pivot = df.pivot(index="scenario", columns="extractor", values="pct_delta_VS")
+    pivot = pivot.reindex([s for s in SCENARIO_ORDER if s in pivot.index])
+    pivot = pivot[sorted(pivot.columns)]
+    pivot.columns = [c.removeprefix("ae_") for c in pivot.columns]
+
+    text = [[_fmt(v) for v in row] for row in pivot.values]
+    fig = go.Figure(
+        go.Heatmap(
+            z=pivot.values,
+            x=list(pivot.columns),
+            y=list(pivot.index),
+            text=text,
+            texttemplate="%{text}",
+            colorscale="Blues",
+            colorbar=dict(title="Δ VS (%)"),
+        )
+    )
+    fig.update_layout(
+        title="Vendi Score Relative Delta (VS_pool − VS_train) / VS_train — Generic Scenarios",
+        xaxis_title="Feature Extractor",
+        yaxis_title="Training Scenario",
+        width=900,
+        height=400,
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for ext in ("svg", "png"):
+        path = output_dir / f"vendi_score_delta.{ext}"
+        fig.write_image(str(path))
+        print(f"Saved {path}")
 
 
 def main():
@@ -131,7 +175,7 @@ def main():
         "--output-dir",
         type=str,
         default="output/experiments/vendi_score",
-        help="Output directory for CSV results",
+        help="Output directory for CSV results and heatmap",
     )
     parser.add_argument(
         "--testing",
@@ -155,7 +199,6 @@ def main():
 
     dataset_names = [name for name, _ in args.dataset]
 
-    # Load all datasets
     datasets: dict[str, pd.DataFrame] = {}
     for name, path in args.dataset:
         print(f"Loading {name} from {path} ...")
@@ -166,14 +209,12 @@ def main():
     )
     print(f"Combined training set size: {len(df_train_combined)}")
 
-    # Sample normal test rows per dataset
     normal_samples: dict[str, pd.DataFrame] = {}
     for name, df in datasets.items():
         sampled = sample_normal_test(df, args.samples)
         print(f"  {name}: {len(sampled)} normal test samples")
         normal_samples[name] = sampled
 
-    # Determine which scenarios are computable given provided datasets
     available = set(dataset_names)
     active_scenarios = {
         scenario: (train_ds, test_ds)
@@ -202,7 +243,6 @@ def main():
         print("Fitting extractor on combined training data ...")
         fit_extractor(extractor, df_train_combined)
 
-        # Extract features per dataset
         features: dict[str, np.ndarray] = {}
         for name, df in normal_samples.items():
             print(f"Extracting features for dataset {name} ...")
@@ -210,12 +250,10 @@ def main():
             features[name] = to_dense(X_raw)
             print(f"  {name}: feature matrix {features[name].shape}")
 
-        # --- Intra-domain VS per dataset ---
         for name in dataset_names:
             vs = vendi_score(features[name])
             intra_rows.append({"extractor": extractor_name, "dataset": name, "VS": vs})
 
-        # --- Pooled VS (all datasets) ---
         X_all = np.concatenate([features[n] for n in dataset_names], axis=0)
         vs_pool = vendi_score(X_all)
         pool_label = "".join(dataset_names)
@@ -223,7 +261,6 @@ def main():
             {"extractor": extractor_name, "dataset": pool_label, "VS": vs_pool}
         )
 
-        # --- Generic scenario VS ---
         for scenario, (train_ds, test_ds) in active_scenarios.items():
             X_train = np.concatenate([features[n] for n in train_ds], axis=0)
             X_test = features[test_ds]
@@ -234,7 +271,9 @@ def main():
             vs_combined = vendi_score(X_combined)
             delta_vs = vs_combined - vs_train
 
-            print(f"  {scenario}: VS_train={vs_train:.4f}  VS_test={vs_test:.4f}  ΔVS={delta_vs:.4f}")
+            print(
+                f"  {scenario}: VS_train={vs_train:.4f}  VS_test={vs_test:.4f}  ΔVS={delta_vs:.4f}"
+            )
             scenario_rows.append(
                 {
                     "extractor": extractor_name,
@@ -242,30 +281,11 @@ def main():
                     "scenario_type": "generic",
                     "VS_train": vs_train,
                     "VS_test": vs_test,
-                    "VS_pool": vs_combined,
+                    "VS_combined": vs_combined,
                     "delta_VS": delta_vs,
                 }
             )
 
-        # --- Specialized scenario VS (baseline: train == test dataset) ---
-        # ΔVS = 0 by definition; VS_train captures intra-dataset diversity
-        active_specialized = [ds for ds in SPECIALIZED_DATASETS if ds in features]
-        for ds in active_specialized:
-            vs = vendi_score(features[ds])
-            print(f"  {ds}→{ds}: VS_train={vs:.4f}  VS_test={vs:.4f}  ΔVS=0.0000")
-            scenario_rows.append(
-                {
-                    "extractor": extractor_name,
-                    "scenario": f"{ds}→{ds}",
-                    "scenario_type": "specialized",
-                    "VS_train": vs,
-                    "VS_test": vs,
-                    "VS_pool": vs,
-                    "delta_VS": 0.0,
-                }
-            )
-
-        # Save CSVs
         intra_path = output_dir / f"{extractor_name}_vendi_scores_intra.csv"
         scenario_path = output_dir / f"{extractor_name}_vendi_scores_scenarios.csv"
 
@@ -276,6 +296,14 @@ def main():
         print(f"\nSaved {intra_path}")
         if scenario_rows:
             print(f"Saved {scenario_path}")
+
+    # Plot heatmap from all scenario CSVs written above
+    df_scenarios = load_scenario_data(output_dir)
+    if not df_scenarios.empty:
+        print("\nPlotting heatmap ...")
+        plot_heatmap(df_scenarios, output_dir)
+    else:
+        print("\nNo generic scenario data to plot.")
 
 
 if __name__ == "__main__":

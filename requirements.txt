@@ -26,6 +26,7 @@ peft==0.13.2 # We pin this other wise we get:
 ## Used for diversity evaluation:
 sqlglot==26.16.2
 sqlparse==0.5.3
+vendi-score==0.0.3
 
 ## Word2Vec vectorizer
 gensim
