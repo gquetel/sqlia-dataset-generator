@@ -148,8 +148,11 @@ def get_profile(model: str) -> dict:
 def venv_for(model: str) -> str:
     """Return the virtualenv path for a model based on its target partition."""
     profile = get_profile(model)
-    if profile["partition"] == "V100":
-        return "venv-3.10.12"
+    # They fixed it ! Same python version everywhere !
+    # I keep the old code in case some drift reappears.
+    # if profile["partition"] == "V100":
+    #     return "venv-3.10.12"
+
     return "venv-3.12.12"
 
 
