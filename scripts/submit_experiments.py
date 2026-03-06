@@ -33,7 +33,7 @@ SLURM_PROFILES = {
         "cpus": 16,
         "mem": "32G",
         "time": "4:00:00",
-        "exclude": ["node13", "node42", "node43"],  # nodes with != python version
+        "exclude": [],
     },
     "gpu_long": {
         "partition": "A100",
@@ -145,15 +145,13 @@ def get_profile(model: str) -> dict:
     return SLURM_PROFILES[profile_name]
 
 
-def venv_for(model: str) -> str:
-    """Return the virtualenv path for a model based on its target partition."""
-    profile = get_profile(model)
-    # They fixed it ! Same python version everywhere !
-    # I keep the old code in case some drift reappears.
-    # if profile["partition"] == "V100":
-    #     return "venv-3.10.12"
+CONDA_BASE = "~/miniconda3"
+CONDA_ENV = "conda-env-3.13"
 
-    return "venv-3.12.12"
+
+def conda_env_for(model: str) -> str:
+    """Return the conda environment name for a model."""
+    return CONDA_ENV
 
 
 def dataset_filename(mode: str, db_name: str) -> str:
@@ -203,7 +201,7 @@ def env_setup(
     datasets_dir: str,
     log_dir: str,
     log_file: str,
-    venv: str = "venv-3.12.12",
+    conda_env: str = CONDA_ENV,
 ) -> str:
     """Generate environment setup lines with log directory creation and latest symlink."""
     return dedent(
@@ -212,7 +210,8 @@ def env_setup(
         echo "Job started at: $(date)"
 
         cd ~/repos/sqlia-dataset/
-        source {venv}/bin/activate
+        source {CONDA_BASE}/etc/profile.d/conda.sh
+        conda activate {conda_env}
 
         mkdir -p {log_dir}
         ln -sfn {log_file} {log_dir}/latest.log
@@ -302,7 +301,9 @@ def generate_generic_script(
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
     parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
@@ -360,7 +361,9 @@ def generate_specialised_script(
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
     parts.append(f'echo "Running specialised scenario {scenario_num}: {model_name}"')
     parts.append("")
     parts.append(f"# Train {model_name}")
@@ -408,7 +411,9 @@ def generate_wafamole_script(
     else:
         parts.append("#!/bin/bash")
     parts.append("")
-    parts.append(env_setup(testing, datasets_dir, log_dir, log_file, venv_for(model)))
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
 
     # Phase 1: Train E model
     model_name_e = f"{model}_E"

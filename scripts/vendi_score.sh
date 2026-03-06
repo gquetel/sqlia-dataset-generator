@@ -12,7 +12,8 @@ echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
 
 cd ~/repos/sqlia-dataset/
-source venv-3.12.12/bin/activate
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate conda-env-3.13
 
 DATASET_DIR=~/datasets/100k-training
 
