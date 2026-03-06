@@ -1,12 +1,12 @@
-"""Measure domain leakage in SQL injection feature extractors via Random Forest classification.
+"""Measure domain leakage in SQL injection feature extractors via Decision Tree classification.
 
-Trains a Random Forest to classify which dataset (A/B/C/D) a query originates from,
-using only its extracted features. High RF accuracy indicates the extractor retains
+Trains a Decision Tree to classify which dataset (A/B/C/D) a query originates from,
+using only its extracted features. High accuracy indicates the extractor retains
 domain-specific information (table/column names, vocabulary), which hurts transfer learning.
 
 Expected outcome: structural extractors (Li, GAUR, Loginov) produce domain-agnostic
-features → RF struggles. Semantic extractors (SecureBERT, Flan-T5, RoBERTa) encode
-vocabulary → RF succeeds.
+features → DT struggles. Semantic extractors (SecureBERT, Flan-T5, RoBERTa) encode
+vocabulary → DT succeeds.
 """
 
 import argparse
@@ -19,8 +19,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import torch
 from scipy import sparse
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 REPO_ROOT = SCRIPT_DIR.parent
@@ -75,7 +75,9 @@ def fit_extractor(extractor, df_train: pd.DataFrame):
         extractor.extract_features(df_train)
 
 
-def sample_split(df: pd.DataFrame, split: str, n: int, normal_only: bool) -> pd.DataFrame:
+def sample_split(
+    df: pd.DataFrame, split: str, n: int, normal_only: bool
+) -> pd.DataFrame:
     """Sample up to n rows from the given split, optionally filtering to normal only."""
     subset = df[df["split"] == split]
     if normal_only:
@@ -85,7 +87,7 @@ def sample_split(df: pd.DataFrame, split: str, n: int, normal_only: bool) -> pd.
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Measure domain leakage via Random Forest dataset classification"
+        description="Measure domain leakage via Decision Tree dataset classification"
     )
     parser.add_argument(
         "--extractor",
@@ -139,7 +141,9 @@ def main():
     if args.testing:
         args.train_samples = 50
         args.test_samples = 50
-        print(f"[testing] Reduced samples to {args.train_samples} train / {args.test_samples} test")
+        print(
+            f"[testing] Reduced samples to {args.train_samples} train / {args.test_samples} test"
+        )
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -205,12 +209,14 @@ def main():
         X_test = to_dense(extractor.extract_features(df_test_feat))
         print(f"  X_test shape: {X_test.shape}")
 
-        print("Training Random Forest ...")
-        rf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-        rf.fit(X_train, y_train)
+        print("Training Decision Tree ...")
+        dt = DecisionTreeClassifier(random_state=2)
+        dt.fit(X_train, y_train)
 
-        y_pred = rf.predict(X_test)
-        report = classification_report(y_test, y_pred, labels=domain_names, output_dict=True)
+        y_pred = dt.predict(X_test)
+        report = classification_report(
+            y_test, y_pred, labels=domain_names, output_dict=True
+        )
 
         accuracy = report["accuracy"]
         macro_f1 = report["macro avg"]["f1-score"]
@@ -239,6 +245,17 @@ def main():
         cm_path = output_dir / f"{extractor_name}_confusion_matrix.svg"
         fig.write_image(str(cm_path))
         print(f"  Saved {cm_path}")
+
+        dot_path = output_dir / f"{extractor_name}_decision_tree.dot"
+        export_graphviz(
+            dt,
+            out_file=str(dot_path),
+            class_names=domain_names,
+            filled=True,
+            rounded=True,
+            impurity=False,
+        )
+        print(f"  Saved {dot_path}")
 
         row = {"extractor": extractor_name, "accuracy": accuracy, "macro_f1": macro_f1}
         for domain in domain_names:

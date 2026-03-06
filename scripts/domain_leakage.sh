@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=vendi-score            # Name of your job
+#SBATCH --job-name=domain-leakage            # Name of your job
 #SBATCH --output=logs/domain-leakage/%x_%j.out      # Output file (%x for job name, %j for job ID)
 #SBATCH --error=logs/domain-leakage/%x_%j.err       # Error file
 #SBATCH --partition=A40                   # Partition to submit to
