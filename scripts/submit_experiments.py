@@ -146,7 +146,7 @@ def get_profile(model: str) -> dict:
 
 
 CONDA_BASE = "~/miniconda3"
-CONDA_ENV = "conda-env-3.13"
+CONDA_ENV = "conda-env-3.12"
 
 
 def conda_env_for(model: str) -> str:

@@ -15,7 +15,7 @@ echo "Job started at: $(date)"
 # Activate the environment
 cd ~/repos/sqlia-dataset/
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate conda-env-3.13
+conda activate conda-env-3.12
 cd experiments/
 
 DATASET_DIR=~/datasets/100k-training
