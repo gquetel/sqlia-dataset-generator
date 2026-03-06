@@ -19,7 +19,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import torch
 from scipy import sparse
-from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
 from vendi_score import vendi
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
@@ -91,8 +92,8 @@ def sample_normal_test(df: pd.DataFrame, n: int) -> pd.DataFrame:
 
 
 def vendi_score(X: np.ndarray) -> float:
-    K = rbf_kernel(X)
-    # Same similarity metric than the original paper.
+    X = normalize(X, norm="l2")
+    K = cosine_similarity(X)
     return float(vendi.score_K(K, q=1))
 
 
