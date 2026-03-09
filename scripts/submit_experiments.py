@@ -60,6 +60,8 @@ SLURM_PROFILES = {
 
 MODEL_PROFILES = {
     "ae_securebert": "gpu_standard",
+    "ae_securebert2": "gpu_standard",
+    "ae_modernbert": "gpu_standard",
     "ae_roberta": "gpu_v100",
     "ae_kakisim_c": "gpu_long",
     "ae_bilstm_w2v": "gpu_standard",  # 4H is sufficient

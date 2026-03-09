@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "securebert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec"
+    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -111,6 +111,54 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         model_type="ae",
         use_scaler=False,
         display_name="SecureBERT and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=512),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    # ---- ModernBERT-base ----
+    "ocsvm_modernbert": ModelConfig(
+        extractor_type="modernbert",
+        model_type="ocsvm",
+        use_scaler=False,
+        display_name="ModernBERT-base and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    "lof_modernbert": ModelConfig(
+        extractor_type="modernbert",
+        model_type="lof",
+        use_scaler=False,
+        display_name="ModernBERT-base and LOF",
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    "ae_modernbert": ModelConfig(
+        extractor_type="modernbert",
+        model_type="ae",
+        use_scaler=False,
+        display_name="ModernBERT-base and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=512),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    # ---- SecureBERT 2.0 (ModernBERT-based) ----
+    "ocsvm_securebert2": ModelConfig(
+        extractor_type="securebert2",
+        model_type="ocsvm",
+        use_scaler=False,
+        display_name="SecureBERT2 and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    "lof_securebert2": ModelConfig(
+        extractor_type="securebert2",
+        model_type="lof",
+        use_scaler=False,
+        display_name="SecureBERT2 and LOF",
+        extractor_kwargs=dict(batch_size=64),
+    ),
+    "ae_securebert2": ModelConfig(
+        extractor_type="securebert2",
+        model_type="ae",
+        use_scaler=False,
+        display_name="SecureBERT2 and AE",
         hyperparams=dict(lr=0.001, epochs=100, batch_size=512),
         extractor_kwargs=dict(batch_size=64),
     ),
@@ -312,6 +360,24 @@ def _make_extractor(
         )
         return ext
 
+    if config.extractor_type == "securebert2":
+        from extractors.securebert import SecureBERT2Extractor
+
+        return SecureBERT2Extractor(
+            device=device,
+            embeddings_path=embeddings_path,
+            **kwargs,
+        )
+
+    if config.extractor_type == "modernbert":
+        from extractors.modernbert import ModernBERTExtractor
+
+        return ModernBERTExtractor(
+            device=device,
+            embeddings_path=embeddings_path,
+            **kwargs,
+        )
+
     if config.extractor_type == "roberta":
         from extractors.roberta import RobertaExtractor
 
@@ -400,10 +466,13 @@ def _output_activation(config: ModelConfig) -> str:
     """Determine which AutoEncoder output activation to use from the config.
 
     Rule:
-    - use_scaler=True  → sigmoid (features normalised to [0, 1])
-    - use_scaler=False → relu (non-negative features)
-    - securebert       → tanh (embeddings in [-1, 1])
+    - use_scaler=True  -> sigmoid (for features normalised to [0, 1])
+    - use_scaler=False -> relu (for non-negative features)
+    - securebert       -> tanh (pooler_output is tanh-activated, so [-1, 1])
+    - securebert2      -> linear (raw CLS hidden state, unbounded, centre around 0)
     """
+    if config.extractor_type in ("securebert2", "modernbert"):
+        return "linear"
     if config.extractor_type in (
         "securebert",
         "roberta",

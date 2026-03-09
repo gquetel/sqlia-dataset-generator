@@ -11,6 +11,7 @@ _ACTIVATIONS = {
     "sigmoid": torch.sigmoid,
     "relu": F.relu,
     "tanh": torch.tanh,
+    "linear": lambda x: x,
 }
 
 

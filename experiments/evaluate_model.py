@@ -147,6 +147,8 @@ def main():
         choices=[
             "ae_li",
             "ae_securebert",
+            "ae_securebert2",
+            "ae_modernbert",
             "ae_kakisim_c",
             "ae_bilstm_w2v",
             "ae_loginov",

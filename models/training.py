@@ -375,6 +375,8 @@ AUTHORIZED_GROUPS = {
     "li": ["ocsvm_li", "lof_li", "ae_li"],
     "cv": ["ocsvm_cv", "lof_cv", "ae_cv"],
     "securebert": ["ocsvm_securebert", "lof_securebert", "ae_securebert"],
+    "securebert2": ["ocsvm_securebert2", "lof_securebert2", "ae_securebert2"],
+    "modernbert": ["ocsvm_modernbert", "lof_modernbert", "ae_modernbert"],
     "kakisim_c": ["ocsvm_kakisim_c", "ae_kakisim_c"],
     "bilstm_w2v": ["ocsvm_bilstm_w2v", "ae_bilstm_w2v"],
     "loginov": ["ocsvm_loginov", "ae_loginov"],
