@@ -45,7 +45,9 @@ def analyze_keywords(tokenizers: dict, keywords: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def print_sample_tokenizations(tokenizers: dict, df: pd.DataFrame, n: int = 10) -> None:
+def print_sample_tokenizations(
+    tokenizers: dict, df: pd.DataFrame, output_dir: Path, n: int = 10
+) -> None:
     normal = df[df["label"] == 0].sample(
         n=min(n, (df["label"] == 0).sum()), random_state=2
     )
@@ -53,14 +55,25 @@ def print_sample_tokenizations(tokenizers: dict, df: pd.DataFrame, n: int = 10) 
         n=min(n, (df["label"] == 1).sum()), random_state=2
     )
 
+    lines = []
     for label_str, subset in [("NORMAL", normal), ("ATTACK", attack)]:
-        print(f"\n{'='*60} {label_str} {'='*60}")
+        header = f"\n{'='*60} {label_str} {'='*60}"
+        print(header)
+        lines.append(header)
         for _, row in subset.iterrows():
-            query = row["full_query"]
-            print(f"\nQuery: {query}")
+            user_input = row["user_inputs"]
+            entry = f"\nInput: {user_input}"
+            print(entry)
+            lines.append(entry)
             for model_name, tok in tokenizers.items():
-                pieces = tok.tokenize(query)
-                print(f"  [{model_name}] ({len(pieces)} tokens): {' | '.join(pieces)}")
+                pieces = tok.tokenize(user_input)
+                line = f"  [{model_name}] ({len(pieces)} tokens): {' | '.join(pieces)}"
+                print(line)
+                lines.append(line)
+
+    out_path = output_dir / "sample_tokenizations.txt"
+    out_path.write_text("\n".join(lines))
+    print(f"\nSaved {out_path}")
 
 
 def main():
@@ -69,10 +82,11 @@ def main():
     )
     parser.add_argument(
         "--dataset",
-        type=str,
+        nargs=2,
+        action="append",
+        metavar=("LABEL", "PATH"),
         default=None,
-        metavar="PATH",
-        help="Path to a dataset CSV to sample and print tokenizations",
+        help="Dataset label and CSV path (repeatable, e.g. --dataset A data/A.csv)",
     )
     parser.add_argument(
         "--output-dir",
@@ -96,7 +110,9 @@ def main():
     print("\nAnalyzing SQL keyword fragmentation ...")
     kw_df = analyze_keywords(tokenizers, SQL_KEYWORDS)
     kw_path = output_dir / "keyword_fragmentation.csv"
-    kw_df.to_csv(kw_path, index=False)
+    kw_df[["keyword", "pieces_roberta-base", "pieces_securebert"]].to_csv(
+        kw_path, index=False
+    )
     print(kw_df.to_string(index=False))
     print(f"\nSaved {kw_path}")
 
@@ -106,12 +122,17 @@ def main():
         print(f"  {model_name}: {avg:.3f}")
 
     if args.dataset:
-        print(f"\nLoading dataset from {args.dataset} ...")
-        df = pd.read_csv(
-            args.dataset, usecols=["full_query", "label", "split"], low_memory=False
-        )
+        frames = []
+        for label, path in args.dataset:
+            print(f"\nLoading dataset {label} from {path} ...")
+            frame = pd.read_csv(
+                path, usecols=["user_inputs", "label", "split"], low_memory=False
+            )
+            frame["dataset"] = label
+            frames.append(frame)
+        df = pd.concat(frames, ignore_index=True)
         df = df[df["split"] == "test"]
-        print_sample_tokenizations(tokenizers, df)
+        print_sample_tokenizations(tokenizers, df, output_dir)
 
 
 if __name__ == "__main__":
