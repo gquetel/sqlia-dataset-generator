@@ -19,15 +19,15 @@ matplotlib==3.10.1
 
 # For plotly exports
 kaleido==1.2.0
-zstandard
+zstandard==0.25.0
 
 # Models
 accelerate==1.5.2
 evaluate==0.4.3
 torch==2.6.0
-transformers
-tokenizers
+transformers==5.3.0
+tokenizers==0.22.2
 plotly==6.3.1
-sentence-transformers
+sentence-transformers==5.2.3
 ## Word2Vec vectorizer
-gensim
+gensim==4.4.0

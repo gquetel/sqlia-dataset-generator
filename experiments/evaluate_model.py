@@ -160,6 +160,7 @@ def main():
             "ae_flan_t5",
             "ae_sentbert",
             "ae_llm2vec",
+            "ae_qwen3_emb",
             "ae_kakisim_w2v_max",
             "ocsvm_kakisim_w2v_max",
             "ae_kakisim_w2v_mean",

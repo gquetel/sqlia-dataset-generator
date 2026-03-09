@@ -385,6 +385,7 @@ AUTHORIZED_GROUPS = {
     "flan_t5": ["ae_flan_t5"],
     "sentbert": ["ae_sentbert"],
     "llm2vec": ["ae_llm2vec"],
+    "qwen3_emb": ["ocsvm_qwen3_emb", "lof_qwen3_emb", "ae_qwen3_emb"],
 }
 
 

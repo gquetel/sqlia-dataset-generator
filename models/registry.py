@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec"
+    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -326,6 +326,27 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
         extractor_kwargs=dict(batch_size=64),
     ),
+    # ---- Qwen3-Embedding-0.6B ----
+    "ocsvm_qwen3_emb": ModelConfig(
+        extractor_type="qwen3_emb",
+        model_type="ocsvm",
+        display_name="Qwen3-Emb-0.6B and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(batch_size=16),
+    ),
+    "lof_qwen3_emb": ModelConfig(
+        extractor_type="qwen3_emb",
+        model_type="lof",
+        display_name="Qwen3-Emb-0.6B and LOF",
+        extractor_kwargs=dict(batch_size=16),
+    ),
+    "ae_qwen3_emb": ModelConfig(
+        extractor_type="qwen3_emb",
+        model_type="ae",
+        display_name="Qwen3-Emb-0.6B and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=512),
+        extractor_kwargs=dict(batch_size=16),
+    ),
 }
 
 
@@ -459,6 +480,15 @@ def _make_extractor(
             **kwargs,
         )
 
+    if config.extractor_type == "qwen3_emb":
+        from extractors.qwen3_emb import Qwen3EmbExtractor
+
+        return Qwen3EmbExtractor(
+            device=device,
+            embeddings_path=embeddings_path,
+            **kwargs,
+        )
+
     raise ValueError(f"Unknown extractor type: {config.extractor_type}")
 
 
@@ -482,6 +512,7 @@ def _output_activation(config: ModelConfig) -> str:
         "flan_t5",
         "sentbert",
         "llm2vec",
+        "qwen3_emb",
     ):
         return "tanh"
     if config.use_scaler:
