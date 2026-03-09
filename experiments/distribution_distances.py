@@ -201,10 +201,12 @@ def plot_heatmaps(df: pd.DataFrame, output_dir: Path):
         pivot = pivot[sorted(pivot.columns)]
         pivot.columns = [c.removeprefix("ae_") for c in pivot.columns]
 
-        text = [[f"{v:.4f}" for v in row] for row in pivot.values]
+        max_val = pivot.values.max()
+        pct = pivot.values / max_val * 100 if max_val > 0 else pivot.values
+        text = [[f"{v:.1f}%" for v in row] for row in pct]
         fig.add_trace(
             go.Heatmap(
-                z=pivot.values,
+                z=pct,
                 x=list(pivot.columns),
                 y=list(pivot.index),
                 text=text,
