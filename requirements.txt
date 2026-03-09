@@ -4,36 +4,30 @@ numpy==2.2.5
 tqdm==4.67.1
 scikit-learn==1.6.1
 
-# Used for notebooks
-ipykernel==6.29.5
-jupyter==1.1.1
-matplotlib-venn==1.1.2
-
-# (Optional; used for training / evaluation)
-matplotlib==3.10.1
-accelerate==1.5.2
-evaluate==0.4.3
-torch==2.6.0
-transformers==4.44.2 # llm2vec requires <= 4.44.2
-plotly==6.3.1
-sentence-transformers
-
-# Another cursed package
-llm2vec==0.2.3
-peft==0.13.2 # We pin this other wise we get: 
-# AttributeError: module 'torch.distributed' has no attribute 'tensor
-
 ## Used for diversity evaluation:
 sqlglot==26.16.2
 sqlparse==0.5.3
 vendi-score==0.0.3
 
-## Word2Vec vectorizer
-gensim
+# Testing
+pytest==9.0.2  # Built-in subtests support
+
+# Used for notebooks
+ipykernel==6.29.5
+jupyter==1.1.1
+matplotlib==3.10.1
 
 # For plotly exports
 kaleido==1.2.0
 zstandard
 
-# Testing
-pytest==9.0.2  # Built-in subtests support
+# Models
+accelerate==1.5.2
+evaluate==0.4.3
+torch==2.6.0
+transformers
+tokenizers
+plotly==6.3.1
+sentence-transformers
+## Word2Vec vectorizer
+gensim

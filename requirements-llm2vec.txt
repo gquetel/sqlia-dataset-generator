@@ -1,0 +1,16 @@
+# Pinned outdated dependencies required by llm2vec. 
+pandas==2.2.3
+numpy==2.2.5
+tqdm==4.67.1
+scikit-learn==1.6.1
+
+# Used for notebooks
+ipykernel==6.29.5
+jupyter==1.1.1
+matplotlib-venn==1.1.2
+
+
+# Install with: pip install -r requirements-llm2vec.txt
+transformers==4.44.2
+llm2vec==0.2.3
+peft==0.13.2 # Pin to avoid: AttributeError: module 'torch.distributed' has no attribute 'tensor'
