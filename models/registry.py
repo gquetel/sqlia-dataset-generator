@@ -55,12 +55,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         display_name="CountVectorizer and OCSVM",
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
     ),
-    "lof_cv": ModelConfig(
-        extractor_type="countvect",
-        model_type="lof",
-        use_scaler=False,
-        display_name="CountVectorizer and LOF",
-    ),
     "ae_cv": ModelConfig(
         extractor_type="countvect",
         model_type="ae",
@@ -75,12 +69,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         model_type="ocsvm",
         display_name="RoBERTa-base and OCSVM",
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(batch_size=64),
-    ),
-    "lof_roberta": ModelConfig(
-        extractor_type="roberta",
-        model_type="lof",
-        display_name="RoBERTa-base and LOF",
         extractor_kwargs=dict(batch_size=64),
     ),
     "ae_roberta": ModelConfig(
@@ -123,13 +111,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
         extractor_kwargs=dict(batch_size=64),
     ),
-    "lof_modernbert": ModelConfig(
-        extractor_type="modernbert",
-        model_type="lof",
-        use_scaler=False,
-        display_name="ModernBERT-base and LOF",
-        extractor_kwargs=dict(batch_size=64),
-    ),
     "ae_modernbert": ModelConfig(
         extractor_type="modernbert",
         model_type="ae",
@@ -145,13 +126,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         use_scaler=False,
         display_name="SecureBERT2 and OCSVM",
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(batch_size=64),
-    ),
-    "lof_securebert2": ModelConfig(
-        extractor_type="securebert2",
-        model_type="lof",
-        use_scaler=False,
-        display_name="SecureBERT2 and LOF",
         extractor_kwargs=dict(batch_size=64),
     ),
     "ae_securebert2": ModelConfig(
@@ -332,12 +306,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         model_type="ocsvm",
         display_name="Qwen3-Emb-0.6B and OCSVM",
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(batch_size=16),
-    ),
-    "lof_qwen3_emb": ModelConfig(
-        extractor_type="qwen3_emb",
-        model_type="lof",
-        display_name="Qwen3-Emb-0.6B and LOF",
         extractor_kwargs=dict(batch_size=16),
     ),
     "ae_qwen3_emb": ModelConfig(
