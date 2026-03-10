@@ -6,7 +6,7 @@ from typing import List
 import numpy as np
 import torch
 import transformers
-from transformers import RobertaTokenizerFast
+from transformers import AutoTokenizer
 
 from extractors.hf_base import HuggingFaceExtractor
 
@@ -31,7 +31,7 @@ class CodeBERTExtractor(HuggingFaceExtractor):
         self.batch_size = batch_size
 
         torch.manual_seed(2)
-        self.tokenizer = RobertaTokenizerFast.from_pretrained(self.bert_model)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.bert_model)
         self.rb_model = transformers.RobertaModel.from_pretrained(self.bert_model)
         self.rb_model.to(self.device)
         self.rb_model.eval()
