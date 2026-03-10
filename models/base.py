@@ -324,7 +324,10 @@ class BaseAutoEncoderModel:
         if not meta_path.exists():
             raise FileNotFoundError(f"Model metadata not found: {meta_path}")
 
-        metadata = pd.read_pickle(meta_path, compression="zstd")
+        try:
+            metadata = pd.read_pickle(meta_path, compression="zstd")
+        except Exception:
+            metadata = pd.read_pickle(meta_path, compression=None)
 
         self.learning_rate = metadata.get("learning_rate", self.learning_rate)
         self.epochs = metadata.get("epochs", self.epochs)
