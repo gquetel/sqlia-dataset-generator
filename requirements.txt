@@ -31,3 +31,5 @@ plotly==6.3.1
 sentence-transformers==5.2.3
 ## Word2Vec vectorizer
 gensim==4.4.0
+# CodeBERT
+protobuf==7.34.0
