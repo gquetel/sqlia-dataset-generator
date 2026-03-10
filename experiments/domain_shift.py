@@ -21,10 +21,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import torch
 from joblib import Parallel, delayed
-from plotly.subplots import make_subplots
 from scipy import sparse
 from scipy.stats import binomtest, ks_2samp
 from sklearn.linear_model import LogisticRegression
@@ -81,7 +79,7 @@ PVAL_KEY: dict[str, str] = {
     "Binomial": "pval",
 }
 
-N_REPS = 5
+N_REPS = 100
 ALPHA = 0.05
 DEFAULT_SAMPLE_SIZES = [10, 20, 50, 100, 200, 500, 1000]
 
@@ -250,7 +248,9 @@ def test_ks_bonferroni(Z_train: np.ndarray, Z_test: np.ndarray) -> dict:
         Z_test = Z_test[:, None]
 
     K = Z_train.shape[1]
-    stats, pvals = zip(*(ks_2samp(Z_train[:, k], Z_test[:, k]) for k in range(K)))
+    stats, pvals = zip(
+        *(ks_2samp(Z_train[:, k], Z_test[:, k], method="asymp") for k in range(K))
+    )
     return {
         "KS": float(max(stats)),
         "KS_pval": float(min(1.0, min(pvals) * K)),
@@ -335,84 +335,6 @@ def compute_detection_accuracy(
     return {f"{k}_detacc": counts[k] / n_reps for k in pipeline_keys}
 
 
-# --- Plotting ---
-
-
-def load_scenario_data(input_dir: Path) -> pd.DataFrame:
-    # Match only per-pool files: {extractor}_{POOL}_distances_scenarios.csv
-    # (POOL is 2-4 uppercase letters, e.g. ABC, ABD)
-    csvs = sorted(input_dir.glob("*_[A-Z][A-Z][A-Z]*_distances_scenarios.csv"))
-    if not csvs:
-        return pd.DataFrame()
-    return pd.concat([pd.read_csv(f) for f in csvs], ignore_index=True)
-
-
-def plot_heatmaps(
-    df: pd.DataFrame,
-    output_dir: Path,
-    n_samples: int | None = None,
-    name: str = "distribution_distances",
-):
-    """Heatmap of detection accuracy at a given sample size (default: max available)."""
-    if n_samples is None:
-        n_samples = int(df["n_samples"].max())
-    df_plot = df[df["n_samples"] == n_samples]
-
-    metrics = [m for m in METRICS if m in df_plot.columns]
-    n_metrics = len(metrics)
-    if n_metrics == 0:
-        print("No detection accuracy columns found for plotting.")
-        return
-
-    fig = make_subplots(
-        rows=1,
-        cols=n_metrics,
-        subplot_titles=[m.replace("_detacc", "").replace("_", " ") for m in metrics],
-        horizontal_spacing=0.06,
-    )
-
-    for i, metric in enumerate(metrics, 1):
-        pivot = df_plot.pivot_table(
-            index="scenario", columns="extractor", values=metric, aggfunc="mean"
-        )
-        known = [s for s in SCENARIO_ORDER if s in pivot.index]
-        rest = sorted(s for s in pivot.index if s not in set(known))
-        pivot = pivot.reindex(known + rest)
-        pivot = pivot[sorted(pivot.columns)]
-        pivot.columns = [c.removeprefix("ae_") for c in pivot.columns]
-
-        pct = pivot.values * 100
-        text = [[f"{v:.0f}%" for v in row] for row in pct]
-        fig.add_trace(
-            go.Heatmap(
-                z=pct,
-                x=list(pivot.columns),
-                y=list(pivot.index),
-                text=text,
-                texttemplate="%{text}",
-                colorscale="Reds",
-                zmin=0,
-                zmax=100,
-                showscale=(i == n_metrics),
-                colorbar=dict(title="Det. accuracy (%)") if i == n_metrics else None,
-            ),
-            row=1,
-            col=i,
-        )
-
-    fig.update_layout(
-        title=f"Detection Accuracy — n_samples={n_samples} (α={ALPHA}, {N_REPS} reps)",
-        width=400 * n_metrics,
-        height=450,
-    )
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for ext in ("svg", "png"):
-        path = output_dir / f"{name}.{ext}"
-        fig.write_image(str(path))
-        print(f"Saved {path}")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Compute shift detection accuracy across SQL injection datasets"
@@ -467,8 +389,8 @@ def main():
     parser.add_argument(
         "--workers",
         type=int,
-        default=max(1, int(os.cpu_count() * 0.8)),
-        help="Parallel workers for repetitions (-1 = all cores, default: 80%% of cores)",
+        default=min(64, max(1, int(os.cpu_count() * 0.8))),
+        help="Parallel workers for repetitions (default: 80%% of cores, capped at 64 for OpenBLAS)",
     )
     parser.add_argument(
         "--testing",
@@ -623,32 +545,56 @@ def main():
                 )
                 print(f"  {scenario} n={n_samples:>5}: {summary}")
 
-            # No-shift baselines: same source pool, target = each in-distribution dataset.
-            # Expected detacc ≈ alpha since these domains were seen during training.
-            for member in train_ds:
-                base_label = f"{pool_key}→{member}"
-                for n_samples in args.sample_sizes:
-                    detacc = compute_detection_accuracy(
-                        X_train,
-                        features[member],
-                        ctx,
-                        n_samples,
-                        args.repetitions,
-                        args.alpha,
-                        args.workers,
-                    )
-                    row = {
-                        "extractor": extractor_name,
-                        "scenario": base_label,
-                        "n_samples": n_samples,
-                        **detacc,
-                    }
-                    pool_rows[pool_key].append(row)
+            # No-shift baseline: ABC vs ABC (same pool, independent subsamples).
+            # Expected detacc ≈ alpha — true H0 ground truth.
+            base_label = f"{pool_key}→{pool_key}"
+            for n_samples in args.sample_sizes:
+                detacc = compute_detection_accuracy(
+                    X_train,
+                    X_train,
+                    ctx,
+                    n_samples,
+                    args.repetitions,
+                    args.alpha,
+                    args.workers,
+                )
+                row = {
+                    "extractor": extractor_name,
+                    "scenario": base_label,
+                    "n_samples": n_samples,
+                    **detacc,
+                }
+                pool_rows[pool_key].append(row)
+                summary = "  ".join(
+                    f"{k.replace('_detacc', '')}={v:.2f}" for k, v in detacc.items()
+                )
+                print(f"  {base_label} n={n_samples:>5}: {summary}")
 
-                    summary = "  ".join(
-                        f"{k.replace('_detacc', '')}={v:.2f}" for k, v in detacc.items()
-                    )
-                    print(f"  {base_label} n={n_samples:>5}: {summary}")
+            # Mixed-shift baseline: ABC vs ABCD (D injected into deployment stream).
+            # Tests detection power when the shift is diluted by seen domains.
+            X_abcd = np.concatenate([X_train, features[test_ds]], axis=0)
+            mixed_label = f"{pool_key}→{pool_key}{test_ds}"
+            for n_samples in args.sample_sizes:
+                detacc = compute_detection_accuracy(
+                    X_train,
+                    X_abcd,
+                    ctx,
+                    n_samples,
+                    args.repetitions,
+                    args.alpha,
+                    args.workers,
+                )
+                row = {
+                    "extractor": extractor_name,
+                    "scenario": mixed_label,
+                    "n_samples": n_samples,
+                    **detacc,
+                }
+                pool_rows[pool_key].append(row)
+                summary = "  ".join(
+                    f"{k.replace('_detacc', '')}={v:.2f}" for k, v in detacc.items()
+                )
+                print(f"  {mixed_label} n={n_samples:>5}: {summary}")
 
         for pool_key, rows in pool_rows.items():
             csv_path = (
@@ -656,19 +602,6 @@ def main():
             )
             pd.DataFrame(rows).to_csv(csv_path, index=False)
             print(f"Saved {csv_path}")
-
-    df_all = load_scenario_data(output_dir)
-    if not df_all.empty:
-        print("\nPlotting heatmaps ...")
-        df_all["_pool"] = df_all["scenario"].str.split("→").str[0]
-        for pool_key, df_pool in df_all.groupby("_pool"):
-            plot_heatmaps(
-                df_pool.drop(columns=["_pool"]),
-                output_dir,
-                name=f"{pool_key}_distribution_distances",
-            )
-    else:
-        print("\nNo scenario data to plot.")
 
 
 if __name__ == "__main__":
