@@ -501,6 +501,87 @@ def generate_wafamole_script(
     return "\n".join(parts)
 
 
+def malignancy_cmd(
+    model: str,
+    train_label: str,
+    models_dir: str,
+    results_dir: str,
+    no_cache: bool = False,
+) -> str:
+    """Generate the malignancy experiment command for a single scenario."""
+    cmd = (
+        f"python3 experiments/malignancy.py \\\n"
+        f"    --model {model} \\\n"
+        f"    --model-dir={models_dir} \\\n"
+        f"    --dataset A $DATASETS_DIR/generic-OurAirports.csv \\\n"
+        f"    --dataset B $DATASETS_DIR/generic-sakila.csv \\\n"
+        f"    --dataset C $DATASETS_DIR/generic-AdventureWorks.csv \\\n"
+        f"    --dataset D $DATASETS_DIR/generic-OHR.csv \\\n"
+        f"    --scenario {train_label} \\\n"
+        f"    --output-dir={results_dir} \\\n"
+        f"    $TESTING_FLAG" + (" \\\n    --no-cache" if no_cache else "")
+    )
+    return cmd
+
+
+def generate_malignancy_script(
+    model: str,
+    scenario_num: int,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+    no_cache: bool = False,
+) -> str:
+    """Generate a script for one malignancy scenario: train model if absent, then run malignancy."""
+    scenario = GENERIC_SCENARIOS[scenario_num]
+    model_name = f"{model}_{scenario['train_label']}"
+    train_file = dataset_filename("generic", scenario["train_dataset"])
+    models_dir = f"./models/output/models/{model}_generic"
+    results_dir = f"./models/output/{model}_malignancy"
+
+    job_suffix = f"malignancy_s{scenario_num}"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
+    parts = []
+    if slurm:
+        parts.append(sbatch_header(model, job_suffix, log_path))
+    else:
+        parts.append("#!/bin/bash")
+    parts.append("")
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
+    parts.append(f'echo "Running malignancy scenario {scenario_num}: {model_name}"')
+    parts.append("")
+
+    # Train only if model not already saved
+    parts.append(f"if [ ! -f {models_dir}/{model_name}.pth ]; then")
+    parts.append(f'    echo "Training {model_name} ..."')
+    parts.append(
+        "    "
+        + train_cmd(
+            model, "generic", train_file, model_name, models_dir, no_cache=no_cache
+        ).replace("\n", "\n    ")
+    )
+    parts.append("else")
+    parts.append(f'    echo "Skipping training — {model_name} already exists"')
+    parts.append("fi")
+    parts.append("")
+
+    parts.append(f"# Malignancy experiment for {model_name}")
+    parts.append(
+        malignancy_cmd(
+            model, scenario["train_label"], models_dir, results_dir, no_cache=no_cache
+        )
+    )
+    parts.append("")
+    parts.append('echo "Job finished at: $(date)"')
+    return "\n".join(parts)
+
+
 def generate_domain_shift_script(
     model: str,
     testing: bool,
@@ -600,7 +681,7 @@ def main():
         "--mode",
         type=str,
         required=True,
-        choices=["generic", "specialised", "wafamole", "domain_shift"],
+        choices=["generic", "specialised", "wafamole", "domain_shift", "malignancy"],
         help="Experiment mode",
     )
     parser.add_argument(
@@ -657,7 +738,33 @@ def main():
 
     use_slurm = not args.local and not args.dry_run
 
-    if args.mode == "domain_shift":
+    if args.mode == "malignancy":
+        if args.scenario == "all":
+            scenario_nums = [1, 2, 3, 4]
+        else:
+            try:
+                n = int(args.scenario)
+                if n < 1 or n > 4:
+                    raise ValueError
+                scenario_nums = [n]
+            except ValueError:
+                parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
+        for n in scenario_nums:
+            script = generate_malignancy_script(
+                args.model,
+                n,
+                args.testing,
+                args.datasets_dir,
+                use_slurm,
+                args.no_cache,
+            )
+            write_and_submit(
+                script,
+                f"{args.model}_malignancy_scenario{n}.sh",
+                args.dry_run,
+                args.local,
+            )
+    elif args.mode == "domain_shift":
         script = generate_domain_shift_script(
             args.model,
             args.testing,

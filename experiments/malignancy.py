@@ -76,7 +76,13 @@ def load_dataset(path: str) -> pd.DataFrame:
     return pd.read_csv(path, dtype=CSV_DTYPES, low_memory=False)
 
 
-def load_ae_model(model_type: str, model_dir: str, train_datasets: list[str], device):
+def load_ae_model(
+    model_type: str,
+    model_dir: str,
+    train_datasets: list[str],
+    device,
+    no_cache: bool = False,
+):
     datasets_str = "".join(train_datasets)
     model_path = Path(model_dir) / f"{model_type}_{datasets_str}.pth"
     if not model_path.exists():
@@ -87,6 +93,7 @@ def load_ae_model(model_type: str, model_dir: str, train_datasets: list[str], de
         GENERIC=GENERIC,
         device=device,
         project_paths=project_paths,
+        no_cache=no_cache,
     )
     model.load_model(str(model_path))
     return model
@@ -193,6 +200,17 @@ def main():
         action="store_true",
         help="Sample datasets down to 2000 rows for quick iteration",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable HuggingFace embeddings disk cache",
+    )
+    parser.add_argument(
+        "--scenario",
+        default=None,
+        metavar="TRAIN_DATASETS",
+        help="Run only this scenario, identified by its train datasets string (e.g. ABC). Default: all.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -217,6 +235,7 @@ def main():
         s: (train_ds, test_ds)
         for s, (train_ds, test_ds) in SCENARIOS.items()
         if set(train_ds) | {test_ds} <= dataset_names
+        and (args.scenario is None or "".join(train_ds) == args.scenario)
     }
     if not active_scenarios:
         print("No complete scenarios available (need all 4 datasets A/B/C/D).")
@@ -233,7 +252,9 @@ def main():
         print(f"\n=== {scenario} ===")
 
         print(f"Loading model {args.model}_{datasets_str} ...")
-        model = load_ae_model(args.model, args.model_dir, train_ds, device)
+        model = load_ae_model(
+            args.model, args.model_dir, train_ds, device, no_cache=args.no_cache
+        )
 
         # Source train features for domain classifier (normals only — train split)
         df_source_train = pd.concat(
