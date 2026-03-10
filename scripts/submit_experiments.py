@@ -501,6 +501,46 @@ def generate_wafamole_script(
     return "\n".join(parts)
 
 
+def generate_domain_shift_script(
+    model: str,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+) -> str:
+    """Generate a domain-shift detection script for a single extractor."""
+    job_suffix = "domain_shift"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
+    parts = []
+    if slurm:
+        parts.append(sbatch_header(model, job_suffix, log_path))
+    else:
+        parts.append("#!/bin/bash")
+    parts.append("")
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
+    parts.append(f'echo "Running domain-shift detection for {model}"')
+    parts.append("")
+    cmd = (
+        f"python3 experiments/domain_shift.py \\\n"
+        f"    --dataset A $DATASETS_DIR/generic-OurAirports.csv \\\n"
+        f"    --dataset B $DATASETS_DIR/generic-sakila.csv \\\n"
+        f"    --dataset C $DATASETS_DIR/generic-AdventureWorks.csv \\\n"
+        f"    --dataset D $DATASETS_DIR/generic-OHR.csv \\\n"
+        f"    --extractor {model} \\\n"
+        f"    --workers ${{SLURM_CPUS_PER_TASK:-16}} \\\n"
+        f"    $TESTING_FLAG"
+    )
+    parts.append(cmd)
+    parts.append("")
+    parts.append('echo "Job finished at: $(date)"')
+    return "\n".join(parts)
+
+
 def write_and_submit(
     script_content: str,
     script_name: str,
@@ -560,7 +600,7 @@ def main():
         "--mode",
         type=str,
         required=True,
-        choices=["generic", "specialised", "wafamole"],
+        choices=["generic", "specialised", "wafamole", "domain_shift"],
         help="Experiment mode",
     )
     parser.add_argument(
@@ -617,7 +657,17 @@ def main():
 
     use_slurm = not args.local and not args.dry_run
 
-    if args.mode == "wafamole":
+    if args.mode == "domain_shift":
+        script = generate_domain_shift_script(
+            args.model,
+            args.testing,
+            args.datasets_dir,
+            use_slurm,
+        )
+        write_and_submit(
+            script, f"{args.model}_domain_shift.sh", args.dry_run, args.local
+        )
+    elif args.mode == "wafamole":
         script = generate_wafamole_script(
             args.model,
             args.testing,
