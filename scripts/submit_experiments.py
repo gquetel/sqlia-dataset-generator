@@ -32,7 +32,7 @@ SLURM_PROFILES = {
         "gres": "gpu:1",
         "cpus": 16,
         "mem": "32G",
-        "time": "4:00:00",
+        "time": "8:00:00",
         "exclude": [],
     },
     "gpu_long": {

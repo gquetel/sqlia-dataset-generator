@@ -1,15 +1,12 @@
-"""Compute distribution distance metrics between train and test feature spaces.
+"""Detect distribution shift between train and test feature spaces.
 
 For each extractor and each generic transfer-learning scenario (e.g. ABC→D),
-computes distances between the training pool distribution and the held-out test
-distribution in feature space.  Produces a heatmap per metric.
+runs two complementary shift detectors from Rabanser et al. (2019):
+  - MMD with permutation test (multivariate kernel two-sample test)
+  - Domain classifier accuracy with binomial test (logistic regression probe)
 
-Metrics computed:
-- KL divergence (estimated via KDE)
-- Chi-squared divergence (histogram-based)
-- Jensen-Shannon divergence (histogram-based, symmetric)
-- L2 distance (between mean embeddings)
-- Wasserstein distance (1D sliced approximation)
+Both produce a test statistic and a p-value under H0: "train and test distributions
+are identical." Low p-values indicate detectable domain shift.
 """
 
 import argparse
@@ -23,8 +20,8 @@ import plotly.graph_objects as go
 import torch
 from plotly.subplots import make_subplots
 from scipy import sparse
-from scipy.spatial.distance import jensenshannon
-from scipy.stats import wasserstein_distance
+from scipy.stats import binomtest
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import normalize
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
@@ -59,7 +56,7 @@ SCENARIOS = {
 
 SCENARIO_ORDER = ["ABC→D", "ABD→C", "ACD→B", "BCD→A"]
 
-METRICS = ["KL", "chi_squared", "jensen_shannon", "L2", "wasserstein"]
+METRICS = ["MMD", "MMD_pval", "domain_acc", "domain_pval"]
 
 
 def load_dataset(path: str) -> pd.DataFrame:
@@ -95,84 +92,87 @@ def sample_normal_test(df: pd.DataFrame, n: int) -> pd.DataFrame:
     return normal.sample(n=min(n, len(normal)), random_state=2)
 
 
-# --- Distance metrics ---
+# --- Shift detection (Rabanser et al., 2019) ---
 
-N_BINS = 50
-N_SLICES = 100
-EPS = 1e-10
+N_PERMUTATIONS = 1000
 
 
-def _histograms(X_train: np.ndarray, X_test: np.ndarray, n_bins: int = N_BINS):
-    """Project to 1D via PCA-1 and compute aligned histograms."""
-    combined = np.concatenate([X_train, X_test], axis=0)
-    mean = combined.mean(axis=0)
-    centered = combined - mean
-    _, _, Vt = np.linalg.svd(centered, full_matrices=False)
-    proj_dir = Vt[0]
-
-    p1 = X_train @ proj_dir
-    p2 = X_test @ proj_dir
-
-    lo = min(p1.min(), p2.min())
-    hi = max(p1.max(), p2.max())
-    bins = np.linspace(lo, hi, n_bins + 1)
-
-    h1, _ = np.histogram(p1, bins=bins, density=True)
-    h2, _ = np.histogram(p2, bins=bins, density=True)
-
-    # Normalize to probability distributions
-    h1 = h1 / (h1.sum() + EPS) + EPS
-    h2 = h2 / (h2.sum() + EPS) + EPS
-
-    return h1, h2
+def _kernel_matrix(X_all: np.ndarray) -> np.ndarray:
+    """RBF kernel matrix with median bandwidth heuristic."""
+    sq_dists = np.sum((X_all[:, None] - X_all[None, :]) ** 2, axis=-1)
+    sigma_sq = float(np.median(sq_dists[sq_dists > 0]))
+    return np.exp(-sq_dists / sigma_sq)
 
 
-def kl_divergence(X_train: np.ndarray, X_test: np.ndarray) -> float:
-    p, q = _histograms(X_train, X_test)
-    return float(np.sum(p * np.log(p / q)))
+def _mmd_sq_from_kernel(K: np.ndarray, n: int, m: int) -> float:
+    """Unbiased MMD² estimate from a precomputed kernel matrix."""
+    K_XX = K[:n, :n].copy()
+    K_YY = K[n:, n:].copy()
+    K_XY = K[:n, n:]
+    np.fill_diagonal(K_XX, 0)
+    np.fill_diagonal(K_YY, 0)
+    return K_XX.sum() / (n * (n - 1)) + K_YY.sum() / (m * (m - 1)) - 2 * K_XY.mean()
 
 
-def chi_squared_divergence(X_train: np.ndarray, X_test: np.ndarray) -> float:
-    p, q = _histograms(X_train, X_test)
-    return float(np.sum((p - q) ** 2 / q))
+def compute_mmd(
+    X_train: np.ndarray, X_test: np.ndarray, n_permutations: int = N_PERMUTATIONS
+) -> dict:
+    """MMD statistic and p-value via permutation test on the kernel matrix."""
+    n, m = len(X_train), len(X_test)
+    K = _kernel_matrix(np.concatenate([X_train, X_test], axis=0))
+    observed = _mmd_sq_from_kernel(K, n, m)
 
-
-def jensen_shannon_divergence(X_train: np.ndarray, X_test: np.ndarray) -> float:
-    p, q = _histograms(X_train, X_test)
-    return float(jensenshannon(p, q) ** 2)  # scipy returns sqrt(JSD)
-
-
-def l2_distance(X_train: np.ndarray, X_test: np.ndarray) -> float:
-    mean_train = X_train.mean(axis=0)
-    mean_test = X_test.mean(axis=0)
-    return float(np.linalg.norm(mean_train - mean_test))
-
-
-def sliced_wasserstein(
-    X_train: np.ndarray, X_test: np.ndarray, n_slices: int = N_SLICES
-) -> float:
-    """Sliced Wasserstein distance: average 1D Wasserstein over random projections."""
     rng = np.random.default_rng(seed=2)
-    d = X_train.shape[1]
-    directions = rng.standard_normal((n_slices, d))
-    directions = directions / np.linalg.norm(directions, axis=1, keepdims=True)
+    count = 0
+    for _ in range(n_permutations):
+        perm = rng.permutation(n + m)
+        K_perm = K[np.ix_(perm[:n], perm[:n])]
+        K_perm_YY = K[np.ix_(perm[n:], perm[n:])]
+        K_perm_XY = K[np.ix_(perm[:n], perm[n:])]
+        np.fill_diagonal(K_perm, 0)
+        np.fill_diagonal(K_perm_YY, 0)
+        mmd_sq_perm = (
+            K_perm.sum() / (n * (n - 1))
+            + K_perm_YY.sum() / (m * (m - 1))
+            - 2 * K_perm_XY.mean()
+        )
+        if mmd_sq_perm >= observed:
+            count += 1
 
-    distances = []
-    for direction in directions:
-        p1 = X_train @ direction
-        p2 = X_test @ direction
-        distances.append(wasserstein_distance(p1, p2))
-
-    return float(np.mean(distances))
+    return {
+        "MMD": float(np.sqrt(max(observed, 0))),
+        "MMD_pval": (count + 1) / (n_permutations + 1),
+    }
 
 
-METRIC_FNS = {
-    "KL": kl_divergence,
-    "chi_squared": chi_squared_divergence,
-    "jensen_shannon": jensen_shannon_divergence,
-    "L2": l2_distance,
-    "wasserstein": sliced_wasserstein,
-}
+def compute_domain_clf(X_train: np.ndarray, X_test: np.ndarray) -> dict:
+    """Domain classifier accuracy and binomial test p-value.
+
+    Trains a logistic regression to distinguish source (train-pool) from target
+    (held-out) embeddings on half the data, evaluates on the other half, then
+    tests whether accuracy is significantly above 0.5.
+    """
+    n, m = len(X_train), len(X_test)
+    X = np.concatenate([X_train, X_test], axis=0)
+    y = np.concatenate([np.zeros(n), np.ones(m)])
+
+    rng = np.random.default_rng(seed=2)
+    idx = rng.permutation(n + m)
+    half = (n + m) // 2
+    train_idx, test_idx = idx[:half], idx[half:]
+
+    clf = LogisticRegression(max_iter=1000, random_state=2)
+    clf.fit(X[train_idx], y[train_idx])
+    acc = float(clf.score(X[test_idx], y[test_idx]))
+
+    n_test = len(test_idx)
+    n_correct = round(acc * n_test)
+    p_value = float(binomtest(n_correct, n_test, 0.5, alternative="greater").pvalue)
+
+    return {"domain_acc": acc, "domain_pval": p_value}
+
+
+METRIC_FNS = [compute_mmd, compute_domain_clf]
 
 # --- Plotting ---
 
@@ -254,8 +254,8 @@ def main():
     parser.add_argument(
         "--samples",
         type=int,
-        default=1000,
-        help="Normal samples per dataset from test split (default: 1000)",
+        default=10000,
+        help="Normal samples per dataset from test split (default: 10000)",
     )
     parser.add_argument(
         "--output-dir",
@@ -345,11 +345,14 @@ def main():
                 "scenario": scenario,
             }
 
-            for metric_name, metric_fn in METRIC_FNS.items():
-                val = metric_fn(X_train, X_test)
-                row[metric_name] = val
+            for metric_fn in METRIC_FNS:
+                row.update(metric_fn(X_train, X_test))
 
-            print(f"  {scenario}: " + "  ".join(f"{m}={row[m]:.4f}" for m in METRICS))
+            print(
+                f"  {scenario}: "
+                f"MMD={row['MMD']:.4f} (p={row['MMD_pval']:.3f})  "
+                f"domain_acc={row['domain_acc']:.3f} (p={row['domain_pval']:.3f})"
+            )
             scenario_rows.append(row)
 
         scenario_path = output_dir / f"{extractor_name}_distances_scenarios.csv"
