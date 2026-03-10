@@ -13,6 +13,7 @@ at significance level alpha. This mirrors the paper's evaluation protocol.
 
 import argparse
 import logging
+import os
 import sys
 from collections import defaultdict
 from collections.abc import Callable
@@ -22,6 +23,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import torch
+from joblib import Parallel, delayed
 from plotly.subplots import make_subplots
 from scipy import sparse
 from scipy.stats import binomtest, ks_2samp
@@ -192,27 +194,43 @@ def _mmd_sq_from_kernel(K: np.ndarray, n: int, m: int) -> float:
 
 
 def test_mmd(Z_train: np.ndarray, Z_test: np.ndarray) -> dict:
-    """MMD statistic and p-value via permutation test on the kernel matrix."""
+    """MMD statistic and p-value via vectorized permutation test on the kernel matrix.
+
+    All N_PERMUTATIONS permutations are computed in batch using indicator matrices:
+      W_src[p, i] = 1 if index i is assigned to source in permutation p.
+    Then K_XX_sum[p] = (W_src @ K * W_src).sum(1) - diagonal correction.
+    """
     n, m = len(Z_train), len(Z_test)
+    N = n + m
     K = _kernel_matrix(np.concatenate([Z_train, Z_test], axis=0))
     observed = _mmd_sq_from_kernel(K, n, m)
 
     rng = np.random.default_rng(seed=2)
-    count = 0
-    for _ in range(N_PERMUTATIONS):
-        perm = rng.permutation(n + m)
-        K_perm = K[np.ix_(perm[:n], perm[:n])]
-        K_perm_YY = K[np.ix_(perm[n:], perm[n:])]
-        K_perm_XY = K[np.ix_(perm[:n], perm[n:])]
-        np.fill_diagonal(K_perm, 0)
-        np.fill_diagonal(K_perm_YY, 0)
-        mmd_sq_perm = (
-            K_perm.sum() / (n * (n - 1))
-            + K_perm_YY.sum() / (m * (m - 1))
-            - 2 * K_perm_XY.mean()
-        )
-        if mmd_sq_perm >= observed:
-            count += 1
+    perms = np.array([rng.permutation(N) for _ in range(N_PERMUTATIONS)])  # (P, N)
+
+    p_idx = np.arange(N_PERMUTATIONS)[:, None]
+    W_src = np.zeros((N_PERMUTATIONS, N))
+    W_tgt = np.zeros((N_PERMUTATIONS, N))
+    W_src[p_idx, perms[:, :n]] = 1.0
+    W_tgt[p_idx, perms[:, n:]] = 1.0
+
+    # WK_src[p, j] = sum_{i in src[p]} K[i, j]
+    WK_src = W_src @ K  # (P, N)
+    WK_tgt = W_tgt @ K  # (P, N)
+    K_diag = np.diag(K)  # (N,)
+
+    # Off-diagonal sums: K_XX_sum[p] = sum_{i≠j, i,j in src[p]} K[i,j]
+    K_XX_offdiag = (WK_src * W_src).sum(1) - (W_src * K_diag).sum(1)
+    K_YY_offdiag = (WK_tgt * W_tgt).sum(1) - (W_tgt * K_diag).sum(1)
+    # Cross sum: sum_{i in src[p], j in tgt[p]} K[i,j]
+    K_XY_sum = (WK_src * W_tgt).sum(1)
+
+    mmd_sq_perms = (
+        K_XX_offdiag / (n * (n - 1))
+        + K_YY_offdiag / (m * (m - 1))
+        - 2.0 * K_XY_sum / (n * m)
+    )
+    count = int((mmd_sq_perms >= observed).sum())
 
     return {
         "MMD": float(np.sqrt(max(observed, 0))),
@@ -264,6 +282,31 @@ TEST_FNS: dict[str, Callable] = {
 # --- Detection accuracy ---
 
 
+def _single_rep(
+    X_source: np.ndarray,
+    X_target: np.ndarray,
+    ctx: dict,
+    n_samples: int,
+    alpha: float,
+    seed: int,
+) -> dict[str, bool]:
+    """One repetition: subsample, run all pipelines, return per-pipeline rejection."""
+    rng = np.random.default_rng(seed=seed)
+    src_idx = rng.choice(
+        len(X_source), size=min(n_samples, len(X_source)), replace=False
+    )
+    tgt_idx = rng.choice(
+        len(X_target), size=min(n_samples, len(X_target)), replace=False
+    )
+    Z_src = X_source[src_idx]
+    Z_tgt = X_target[tgt_idx]
+    return {
+        f"{dr}_{test}": TEST_FNS[test](*DR_FNS[dr](Z_src, Z_tgt, ctx))[PVAL_KEY[test]]
+        < alpha
+        for dr, test in PIPELINES
+    }
+
+
 def compute_detection_accuracy(
     X_source: np.ndarray,
     X_target: np.ndarray,
@@ -271,32 +314,24 @@ def compute_detection_accuracy(
     n_samples: int,
     n_reps: int,
     alpha: float,
+    n_workers: int = 1,
 ) -> dict[str, float]:
     """Empirical detection power: fraction of repetitions where p-value < alpha.
 
-    For each repetition, subsamples n_samples from both source and target pools,
-    runs each DR+test pipeline, and records whether H0 is rejected.
+    Repetitions are run in parallel across n_workers processes. Only BBSDs_clf
+    is passed to workers (X_labeled / y_labeled are not needed and not serialized).
     """
-    rng = np.random.default_rng(seed=2)
-    counts: dict[str, int] = defaultdict(int)
+    # Strip heavy training arrays from ctx — workers only need the fitted classifier
+    worker_ctx = {k: v for k, v in ctx.items() if k not in ("X_labeled", "y_labeled")}
     pipeline_keys = [f"{dr}_{test}" for dr, test in PIPELINES]
 
-    for _ in range(n_reps):
-        src_idx = rng.choice(
-            len(X_source), size=min(n_samples, len(X_source)), replace=False
+    rep_results = Parallel(n_jobs=n_workers, prefer="threads")(
+        delayed(_single_rep)(
+            X_source, X_target, worker_ctx, n_samples, alpha, seed=2 + i
         )
-        tgt_idx = rng.choice(
-            len(X_target), size=min(n_samples, len(X_target)), replace=False
-        )
-        Z_src = X_source[src_idx]
-        Z_tgt = X_target[tgt_idx]
-
-        for dr_name, test_name in PIPELINES:
-            Z_train_r, Z_test_r = DR_FNS[dr_name](Z_src, Z_tgt, ctx)
-            result = TEST_FNS[test_name](Z_train_r, Z_test_r)
-            if result[PVAL_KEY[test_name]] < alpha:
-                counts[f"{dr_name}_{test_name}"] += 1
-
+        for i in range(n_reps)
+    )
+    counts = {k: sum(r[k] for r in rep_results) for k in pipeline_keys}
     return {f"{k}_detacc": counts[k] / n_reps for k in pipeline_keys}
 
 
@@ -304,13 +339,20 @@ def compute_detection_accuracy(
 
 
 def load_scenario_data(input_dir: Path) -> pd.DataFrame:
-    csvs = sorted(input_dir.glob("*_distances_scenarios.csv"))
+    # Match only per-pool files: {extractor}_{POOL}_distances_scenarios.csv
+    # (POOL is 2-4 uppercase letters, e.g. ABC, ABD)
+    csvs = sorted(input_dir.glob("*_[A-Z][A-Z][A-Z]*_distances_scenarios.csv"))
     if not csvs:
         return pd.DataFrame()
     return pd.concat([pd.read_csv(f) for f in csvs], ignore_index=True)
 
 
-def plot_heatmaps(df: pd.DataFrame, output_dir: Path, n_samples: int | None = None):
+def plot_heatmaps(
+    df: pd.DataFrame,
+    output_dir: Path,
+    n_samples: int | None = None,
+    name: str = "distribution_distances",
+):
     """Heatmap of detection accuracy at a given sample size (default: max available)."""
     if n_samples is None:
         n_samples = int(df["n_samples"].max())
@@ -330,7 +372,9 @@ def plot_heatmaps(df: pd.DataFrame, output_dir: Path, n_samples: int | None = No
     )
 
     for i, metric in enumerate(metrics, 1):
-        pivot = df_plot.pivot(index="scenario", columns="extractor", values=metric)
+        pivot = df_plot.pivot_table(
+            index="scenario", columns="extractor", values=metric, aggfunc="mean"
+        )
         known = [s for s in SCENARIO_ORDER if s in pivot.index]
         rest = sorted(s for s in pivot.index if s not in set(known))
         pivot = pivot.reindex(known + rest)
@@ -364,7 +408,7 @@ def plot_heatmaps(df: pd.DataFrame, output_dir: Path, n_samples: int | None = No
 
     output_dir.mkdir(parents=True, exist_ok=True)
     for ext in ("svg", "png"):
-        path = output_dir / f"distribution_distances.{ext}"
+        path = output_dir / f"{name}.{ext}"
         fig.write_image(str(path))
         print(f"Saved {path}")
 
@@ -419,6 +463,12 @@ def main():
         type=str,
         default="output/experiments/distribution_distances",
         help="Output directory for CSV results and heatmaps",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, int(os.cpu_count() * 0.8)),
+        help="Parallel workers for repetitions (-1 = all cores, default: 80%% of cores)",
     )
     parser.add_argument(
         "--testing",
@@ -485,7 +535,7 @@ def main():
 
     for extractor_name in args.extractor:
         print(f"\n=== Extractor: {extractor_name} ===")
-        scenario_rows = []
+        pool_rows: dict[str, list] = defaultdict(list)
         extractor = build_extractor(
             extractor_name,
             device=device,
@@ -531,6 +581,7 @@ def main():
             )
 
         for scenario, (train_ds, test_ds) in active_scenarios.items():
+            pool_key = "".join(train_ds)
             X_train = np.concatenate([features[n] for n in train_ds], axis=0)
             X_test = features[test_ds]
 
@@ -551,7 +602,13 @@ def main():
 
             for n_samples in args.sample_sizes:
                 detacc = compute_detection_accuracy(
-                    X_train, X_test, ctx, n_samples, args.repetitions, args.alpha
+                    X_train,
+                    X_test,
+                    ctx,
+                    n_samples,
+                    args.repetitions,
+                    args.alpha,
+                    args.workers,
                 )
                 row = {
                     "extractor": extractor_name,
@@ -559,7 +616,7 @@ def main():
                     "n_samples": n_samples,
                     **detacc,
                 }
-                scenario_rows.append(row)
+                pool_rows[pool_key].append(row)
 
                 summary = "  ".join(
                     f"{k.replace('_detacc', '')}={v:.2f}" for k, v in detacc.items()
@@ -569,7 +626,7 @@ def main():
             # No-shift baselines: same source pool, target = each in-distribution dataset.
             # Expected detacc ≈ alpha since these domains were seen during training.
             for member in train_ds:
-                base_label = f"{''.join(train_ds)}→{member}"
+                base_label = f"{pool_key}→{member}"
                 for n_samples in args.sample_sizes:
                     detacc = compute_detection_accuracy(
                         X_train,
@@ -578,6 +635,7 @@ def main():
                         n_samples,
                         args.repetitions,
                         args.alpha,
+                        args.workers,
                     )
                     row = {
                         "extractor": extractor_name,
@@ -585,22 +643,30 @@ def main():
                         "n_samples": n_samples,
                         **detacc,
                     }
-                    scenario_rows.append(row)
+                    pool_rows[pool_key].append(row)
 
                     summary = "  ".join(
                         f"{k.replace('_detacc', '')}={v:.2f}" for k, v in detacc.items()
                     )
                     print(f"  {base_label} n={n_samples:>5}: {summary}")
 
-        scenario_path = output_dir / f"{extractor_name}_distances_scenarios.csv"
-        if scenario_rows:
-            pd.DataFrame(scenario_rows).to_csv(scenario_path, index=False)
-            print(f"Saved {scenario_path}")
+        for pool_key, rows in pool_rows.items():
+            csv_path = (
+                output_dir / f"{extractor_name}_{pool_key}_distances_scenarios.csv"
+            )
+            pd.DataFrame(rows).to_csv(csv_path, index=False)
+            print(f"Saved {csv_path}")
 
-    df_scenarios = load_scenario_data(output_dir)
-    if not df_scenarios.empty:
+    df_all = load_scenario_data(output_dir)
+    if not df_all.empty:
         print("\nPlotting heatmaps ...")
-        plot_heatmaps(df_scenarios, output_dir)
+        df_all["_pool"] = df_all["scenario"].str.split("→").str[0]
+        for pool_key, df_pool in df_all.groupby("_pool"):
+            plot_heatmaps(
+                df_pool.drop(columns=["_pool"]),
+                output_dir,
+                name=f"{pool_key}_distribution_distances",
+            )
     else:
         print("\nNo scenario data to plot.")
 
