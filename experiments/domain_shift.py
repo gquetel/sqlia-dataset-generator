@@ -15,6 +15,7 @@ import argparse
 import logging
 import os
 import sys
+import time
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
@@ -24,7 +25,7 @@ import pandas as pd
 import torch
 from joblib import Parallel, delayed
 from scipy import sparse
-from scipy.stats import binomtest, ks_2samp
+from scipy.stats import binomtest, kstwobign
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import normalize
 
@@ -175,8 +176,15 @@ N_PERMUTATIONS = 1000
 
 
 def _kernel_matrix(X_all: np.ndarray) -> np.ndarray:
-    """RBF kernel matrix with median bandwidth heuristic."""
-    sq_dists = np.sum((X_all[:, None] - X_all[None, :]) ** 2, axis=-1)
+    """RBF kernel matrix with median bandwidth heuristic.
+
+    Uses ||x-y||^2 = ||x||^2 + ||y||^2 - 2<x,y> to avoid the O(N^2*K) intermediate
+    array produced by naive broadcasting (X[:,None] - X[None,:]), which costs
+    N*N*K*8 bytes — e.g. 24 GB for N=2000, K=768.
+    """
+    sq_norms = np.einsum("ij,ij->i", X_all, X_all)  # (N,)
+    sq_dists = sq_norms[:, None] + sq_norms[None, :] - 2.0 * (X_all @ X_all.T)  # (N,N)
+    np.clip(sq_dists, 0, None, out=sq_dists)  # numerical safety
     sigma_sq = float(np.median(sq_dists[sq_dists > 0]))
     return np.exp(-sq_dists / sigma_sq)
 
@@ -239,21 +247,37 @@ def test_mmd(Z_train: np.ndarray, Z_test: np.ndarray) -> dict:
 def test_ks_bonferroni(Z_train: np.ndarray, Z_test: np.ndarray) -> dict:
     """Per-dimension KS test with Bonferroni correction for multiple testing.
 
-    Runs a two-sample KS test on each of the K dimensions independently and
-    combines p-values via Bonferroni: corrected p-value = min(1, min_p * K).
-    The reported statistic is the maximum KS statistic across all dimensions.
+    Vectorized: sorts all K dimensions at once via np.argsort, computes empirical
+    CDFs via cumsum, then evaluates asymptotic p-values in bulk with kstwobign.sf.
+    Equivalent to calling scipy.ks_2samp(method="asymp") per dimension but ~100x faster
+    for high-dimensional features by avoiding K Python-level function calls.
     """
     if Z_train.ndim == 1:
         Z_train = Z_train[:, None]
         Z_test = Z_test[:, None]
 
-    K = Z_train.shape[1]
-    stats, pvals = zip(
-        *(ks_2samp(Z_train[:, k], Z_test[:, k], method="asymp") for k in range(K))
-    )
+    n, K = Z_train.shape
+    m = Z_test.shape[0]
+
+    # combined shape: (n+m, K); sort indices per dimension
+    combined = np.concatenate([Z_train, Z_test], axis=0)
+    sort_idx = np.argsort(combined, axis=0, kind="stable")  # (n+m, K)
+
+    # 1 where the point comes from test, 0 from train
+    is_test = np.zeros(n + m, dtype=np.float64)
+    is_test[n:] = 1.0
+    sorted_is_test = is_test[sort_idx]  # (n+m, K)
+
+    cdf_train = np.cumsum(1.0 - sorted_is_test, axis=0) / n  # (n+m, K)
+    cdf_test = np.cumsum(sorted_is_test, axis=0) / m  # (n+m, K)
+    ks_stats = np.max(np.abs(cdf_train - cdf_test), axis=0)  # (K,)
+
+    en = np.sqrt(n * m / (n + m))
+    pvals = kstwobign.sf(en * ks_stats)  # asymptotic p-values, shape (K,)
+
     return {
-        "KS": float(max(stats)),
-        "KS_pval": float(min(1.0, min(pvals) * K)),
+        "KS": float(np.max(ks_stats)),
+        "KS_pval": float(min(1.0, float(np.min(pvals)) * K)),
     }
 
 
@@ -307,6 +331,32 @@ def _single_rep(
     }
 
 
+def _timed_single_rep(
+    X_source: np.ndarray,
+    X_target: np.ndarray,
+    ctx: dict,
+    n_samples: int,
+    seed: int,
+) -> dict[str, float]:
+    """Run all pipelines sequentially and return per-pipeline wall-clock times (seconds)."""
+    rng = np.random.default_rng(seed=seed)
+    src_idx = rng.choice(
+        len(X_source), size=min(n_samples, len(X_source)), replace=False
+    )
+    tgt_idx = rng.choice(
+        len(X_target), size=min(n_samples, len(X_target)), replace=False
+    )
+    Z_src = X_source[src_idx]
+    Z_tgt = X_target[tgt_idx]
+    timings = {}
+    for dr, test in PIPELINES:
+        key = f"{dr}_{test}"
+        t0 = time.perf_counter()
+        TEST_FNS[test](*DR_FNS[dr](Z_src, Z_tgt, ctx))
+        timings[key] = time.perf_counter() - t0
+    return timings
+
+
 def compute_detection_accuracy(
     X_source: np.ndarray,
     X_target: np.ndarray,
@@ -315,6 +365,7 @@ def compute_detection_accuracy(
     n_reps: int,
     alpha: float,
     n_workers: int = 1,
+    debug: bool = False,
 ) -> dict[str, float]:
     """Empirical detection power: fraction of repetitions where p-value < alpha.
 
@@ -324,6 +375,13 @@ def compute_detection_accuracy(
     # Strip heavy training arrays from ctx — workers only need the fitted classifier
     worker_ctx = {k: v for k, v in ctx.items() if k not in ("X_labeled", "y_labeled")}
     pipeline_keys = [f"{dr}_{test}" for dr, test in PIPELINES]
+
+    if debug:
+        timings = _timed_single_rep(X_source, X_target, worker_ctx, n_samples, seed=2)
+        timing_str = "  ".join(f"{k}={v*1000:.1f}ms" for k, v in timings.items())
+        logger.info(
+            "  [debug] per-pipeline timing (1 rep, n=%d): %s", n_samples, timing_str
+        )
 
     rep_results = Parallel(n_jobs=n_workers, prefer="threads")(
         delayed(_single_rep)(
@@ -396,6 +454,11 @@ def main():
         "--testing",
         action="store_true",
         help="Reduce sample sizes and repetitions for quick iteration",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Log per-pipeline timing for one rep before each parallel batch to identify bottlenecks",
     )
     args = parser.parse_args()
 
@@ -473,7 +536,9 @@ def main():
             print(f"Extracting features for dataset {name} ...")
             X_raw = extractor.extract_features(df)
             X = to_dense(X_raw)
+            del X_raw
             features[name] = normalize(X, norm="l2")
+            del X
             print(f"  {name}: feature matrix {features[name].shape}")
 
         # Pre-extract BBSDs labeled features per dataset:
@@ -489,6 +554,7 @@ def main():
             )
             X_raw = extractor.extract_features(normal_sample)
             bbsds_normal_features[name] = normalize(to_dense(X_raw), norm="l2")
+            del X_raw
 
             attack_test = df[(df["split"] == "test") & (df["label"] == 1)]
             attack_test = attack_test.sample(
@@ -496,6 +562,7 @@ def main():
             )
             X_raw = extractor.extract_features(attack_test)
             bbsds_attack_features[name] = normalize(to_dense(X_raw), norm="l2")
+            del X_raw
 
             print(
                 f"  BBSDs {name}: {len(bbsds_normal_features[name])} normals, "
@@ -531,6 +598,7 @@ def main():
                     args.repetitions,
                     args.alpha,
                     args.workers,
+                    debug=args.debug,
                 )
                 row = {
                     "extractor": extractor_name,
@@ -557,6 +625,7 @@ def main():
                     args.repetitions,
                     args.alpha,
                     args.workers,
+                    debug=args.debug,
                 )
                 row = {
                     "extractor": extractor_name,
@@ -583,6 +652,7 @@ def main():
                     args.repetitions,
                     args.alpha,
                     args.workers,
+                    debug=args.debug,
                 )
                 row = {
                     "extractor": extractor_name,
@@ -602,6 +672,10 @@ def main():
             )
             pd.DataFrame(rows).to_csv(csv_path, index=False)
             print(f"Saved {csv_path}")
+
+        del extractor, features, bbsds_normal_features, bbsds_attack_features
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
