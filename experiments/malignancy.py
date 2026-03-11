@@ -318,7 +318,8 @@ def main():
         print("No results to save.")
         return
 
-    csv_path = output_dir / f"{args.model}_malignancy.csv"
+    scenario_suffix = f"_{args.scenario}" if args.scenario else ""
+    csv_path = output_dir / f"{args.model}_malignancy{scenario_suffix}.csv"
     df_out = pd.DataFrame(all_rows)[
         [
             "model",
