@@ -61,7 +61,7 @@ SCENARIOS = {
 }
 
 # Percentages of top target-like samples to evaluate (paper §3.4)
-TOP_K_PCTS = [0.01, 0.1, 1, 5, 10, 25]
+TOP_K_PCTS = [0.01, 0.1, 1, 2, 5, 10]
 
 GENERIC = DotDict(
     {
@@ -124,7 +124,7 @@ def evaluate_malignancy(
     domain_clf: LogisticRegression,
     df_target_test: pd.DataFrame,
 ) -> list[dict]:
-    """Return per-k AUC rows; empty list if target test has only one class."""
+    """Return per-k AUC and FPR rows; empty list if target test has only one class."""
     X_test, labels = get_features(model, df_target_test)
 
     if len(np.unique(labels)) < 2:
@@ -135,33 +135,45 @@ def evaluate_malignancy(
 
     X_tensor = torch.FloatTensor(X_test).to(model.device)
     ae_scores = decision_score_ae(model, X_tensor)
+    threshold = model.threshold
 
-    baseline_auc = roc_auc_score(labels, ae_scores)
-    n_total = len(labels)
+    # Split by class so we rank normals and attacks independently
+    mask_normal = labels == 0
+    mask_attack = labels == 1
+    p_normal = p_target[mask_normal]
+    p_attack = p_target[mask_attack]
+    scores_normal = ae_scores[mask_normal]
+    scores_attack = ae_scores[mask_attack]
 
     rows = []
     for k in TOP_K_PCTS:
-        n_take = max(1, int(n_total * k / 100))
-        top_idx = np.argsort(p_target)[-n_take:]
-        filtered_labels = labels[top_idx]
-        filtered_scores = ae_scores[top_idx]
+        n_take_normal = max(1, int(mask_normal.sum() * k / 100))
+        n_take_attack = max(1, int(mask_attack.sum() * k / 100))
 
-        n_attacks = int(filtered_labels.sum())
-        if len(np.unique(filtered_labels)) < 2:
-            filtered_auc = float("nan")
-            delta = float("nan")
-        else:
-            filtered_auc = roc_auc_score(filtered_labels, filtered_scores)
-            delta = filtered_auc - baseline_auc
+        top_normal_idx = np.argsort(p_normal)[-n_take_normal:]
+        top_attack_idx = np.argsort(p_attack)[-n_take_attack:]
+
+        topk_scores_normal = scores_normal[top_normal_idx]
+        topk_scores = np.concatenate(
+            [topk_scores_normal, scores_attack[top_attack_idx]]
+        )
+        topk_labels = np.concatenate([np.zeros(n_take_normal), np.ones(n_take_attack)])
+
+        n_filtered = n_take_normal + n_take_attack
+        topk_roc_auc = (
+            roc_auc_score(topk_labels, topk_scores)
+            if len(np.unique(topk_labels)) >= 2
+            else float("nan")
+        )
+        topk_fpr = (topk_scores_normal >= threshold).sum() / n_take_normal
 
         rows.append(
             {
                 "k_pct": k,
-                "n_filtered": n_take,
-                "n_attacks_filtered": n_attacks,
-                "baseline_roc_auc": baseline_auc,
-                "filtered_roc_auc": filtered_auc,
-                "delta_roc_auc": delta,
+                "n_filtered": n_filtered,
+                "n_attacks_filtered": n_take_attack,
+                "topk_roc_auc": topk_roc_auc,
+                "topk_fpr": topk_fpr,
             }
         )
     return rows
@@ -288,15 +300,14 @@ def main():
             row["model"] = args.model
             row["scenario"] = scenario
             all_rows.append(row)
-            status = (
-                "NaN"
-                if np.isnan(row["filtered_roc_auc"])
-                else f"{row['filtered_roc_auc']:.4f} (delta={row['delta_roc_auc']:+.4f})"
+            auc_str = (
+                "NaN" if np.isnan(row["topk_roc_auc"]) else f"{row['topk_roc_auc']:.4f}"
             )
             print(
                 f"  k={row['k_pct']:5}%  n={row['n_filtered']:>6}"
                 f"  attacks={row['n_attacks_filtered']:>5}"
-                f"  baseline={row['baseline_roc_auc']:.4f}  filtered={status}"
+                f"  topk_roc_auc={auc_str}"
+                f"  topk_fpr={row['topk_fpr']:.4f}"
             )
 
         del model
@@ -315,9 +326,8 @@ def main():
             "k_pct",
             "n_filtered",
             "n_attacks_filtered",
-            "baseline_roc_auc",
-            "filtered_roc_auc",
-            "delta_roc_auc",
+            "topk_roc_auc",
+            "topk_fpr",
         ]
     ]
     df_out.to_csv(csv_path, index=False)
