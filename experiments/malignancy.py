@@ -63,6 +63,10 @@ SCENARIOS = {
 # Percentages of top target-like samples to evaluate (paper §3.4)
 TOP_K_PCTS = [0.01, 0.1, 1, 2, 5, 10]
 
+# Cap samples per side (source / target) when training the domain classifier.
+# Avoids OOM on large embedding models (e.g. ae_modernbert, 768-dim).
+MAX_DOMAIN_CLF_SAMPLES = 10_000
+
 GENERIC = DotDict(
     {
         "RANDOM_SEED": 2,
@@ -114,7 +118,7 @@ def train_domain_classifier(
 ) -> LogisticRegression:
     X = np.concatenate([X_source, X_target], axis=0)
     y = np.concatenate([np.zeros(len(X_source)), np.ones(len(X_target))])
-    clf = LogisticRegression(max_iter=1000, random_state=2)
+    clf = LogisticRegression(max_iter=2000, solver="saga", random_state=2)
     clf.fit(X, y)
     return clf
 
@@ -273,12 +277,20 @@ def main():
             [datasets[n][datasets[n]["split"] == "train"] for n in train_ds],
             ignore_index=True,
         )
+        if len(df_source_train) > MAX_DOMAIN_CLF_SAMPLES:
+            df_source_train = df_source_train.sample(
+                n=MAX_DOMAIN_CLF_SAMPLES, random_state=2
+            )
         print(f"Extracting source train features ({len(df_source_train)} rows) ...")
         X_source, _ = get_features(model, df_source_train)
         print(f"  Source: {X_source.shape}")
 
         # Target train features for domain classifier (D train, normals only)
         df_target_train = datasets[test_ds][datasets[test_ds]["split"] == "train"]
+        if len(df_target_train) > MAX_DOMAIN_CLF_SAMPLES:
+            df_target_train = df_target_train.sample(
+                n=MAX_DOMAIN_CLF_SAMPLES, random_state=2
+            )
         print(f"Extracting target train features ({len(df_target_train)} rows) ...")
         X_target_train, _ = get_features(model, df_target_train)
         print(f"  Target train: {X_target_train.shape}")

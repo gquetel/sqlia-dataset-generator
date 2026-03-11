@@ -49,6 +49,6 @@ class CodeBERTExtractor(HuggingFaceExtractor):
                     max_length=512,
                 )
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                outputs = self.rb_model(**inputs, output_hidden_states=True)
+                outputs = self.rb_model(**inputs)
                 embeddings.extend(outputs.pooler_output.cpu().numpy())
         return embeddings
