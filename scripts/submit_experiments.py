@@ -537,7 +537,7 @@ def generate_malignancy_script(
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename("generic", scenario["train_dataset"])
     models_dir = f"./models/output/models/{model}_generic"
-    results_dir = f"./models/output/{model}_malignancy"
+    results_dir = "./output/experiments/malignancy"
 
     job_suffix = f"malignancy_s{scenario_num}"
     log_dir = log_dir_for(model, job_suffix)
