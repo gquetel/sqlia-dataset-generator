@@ -556,6 +556,8 @@ if __name__ == "__main__":
 
     if args.save_model_path:
         save_model_path = args.save_model_path
+        if args.testing:
+            save_model_path = save_model_path + "_testing"
 
     if args.no_feature_cache:
         use_feature_cache = False
