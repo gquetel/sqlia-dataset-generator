@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "kakisim_w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
+    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "loginov", "gaur", "codebert", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -162,56 +162,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
         extractor_kwargs=dict(vector_size=256),
     ),
-    "ae_w2v": ModelConfig(
-        extractor_type="w2v",
-        model_type="ae",
-        use_scaler=False,
-        display_name="W2V-MeanPool and AE",
-        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
-        extractor_kwargs=dict(vector_size=256),
-    ),
-    # ---- Kakisim-E W2V ----
-    "ae_kakisim_w2v_max": ModelConfig(
-        extractor_type="kakisim_w2v",
-        model_type="ae",
-        use_scaler=False,
-        display_name="Kakisim-E W2V MaxPool and AE",
-        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
-        extractor_kwargs=dict(vector_size=256, pooling="max"),
-    ),
-    "ocsvm_kakisim_w2v_max": ModelConfig(
-        extractor_type="kakisim_w2v",
-        model_type="ocsvm",
-        use_scaler=False,
-        display_name="Kakisim-E W2V MaxPool and OCSVM",
-        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(vector_size=256, pooling="max"),
-    ),
-    "ae_kakisim_w2v_mean": ModelConfig(
-        extractor_type="kakisim_w2v",
-        model_type="ae",
-        use_scaler=False,
-        display_name="Kakisim-E W2V MeanPool and AE",
-        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
-        extractor_kwargs=dict(vector_size=256, pooling="mean"),
-    ),
-    "ocsvm_kakisim_w2v_mean": ModelConfig(
-        extractor_type="kakisim_w2v",
-        model_type="ocsvm",
-        use_scaler=False,
-        display_name="Kakisim-E W2V MeanPool and OCSVM",
-        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(vector_size=256, pooling="mean"),
-    ),
     # ---- BiLSTM W2V ----
-    "ae_bilstm_w2v": ModelConfig(
-        extractor_type="bilstm_w2v",
-        model_type="ae",
-        use_scaler=False,
-        display_name="BiLSTM-W2V and AE",
-        hyperparams=dict(lr=0.001, epochs=100, batch_size=4096),
-        extractor_kwargs=dict(w2v_vector_size=256, lstm_hidden_size=128),
-    ),
     "ocsvm_bilstm_w2v": ModelConfig(
         extractor_type="bilstm_w2v",
         model_type="ocsvm",
@@ -388,13 +339,6 @@ def _make_extractor(
         ext.cache_dir = cache_dir
         return ext
 
-    if config.extractor_type == "kakisim_w2v":
-        from extractors.kakisim_w2v import KakisimW2VExtractor
-
-        ext = KakisimW2VExtractor(**kwargs)
-        ext.cache_dir = cache_dir
-        return ext
-
     if config.extractor_type == "bilstm_w2v":
         from extractors.bilstm_w2v import BiLSTMW2VExtractor
 
@@ -475,7 +419,6 @@ def _output_activation(config: ModelConfig) -> str:
         "securebert",
         "roberta",
         "bilstm_w2v",
-        "kakisim_w2v",
         "codebert",
         "flan_t5",
         "sentbert",

@@ -45,7 +45,7 @@ SLURM_PROFILES = {
     "gpu_A40": {
         "partition": "A40",
         "gres": "gpu:1",
-        "cpus": 12,  # Fewer CPUs to reach smaller machines
+        "cpus": 16,  # Fewer CPUs to reach smaller machines
         "mem": "32G",
         "time": "12:00:00",
     },
@@ -59,17 +59,11 @@ SLURM_PROFILES = {
 }
 
 MODEL_PROFILES = {
-    "ae_securebert": "gpu_standard",
-    "ae_securebert2": "gpu_standard",
-    "ae_modernbert": "gpu_standard",
-    "ae_roberta": "gpu_v100",
-    "ae_kakisim_c": "gpu_long",
-    "ae_bilstm_w2v": "gpu_standard",  # 4H is sufficient
-    "ae_w2v": "gpu_v100",
-    "ae_kakisim_w2v_max": "gpu_v100",
-    "ocsvm_kakisim_w2v_max": "cpu",
-    "ae_kakisim_w2v_mean": "gpu_standard",
-    "ocsvm_kakisim_w2v_mean": "cpu",
+    "ae_securebert": "gpu_v100",
+    "ae_securebert2": "gpu_v100",
+    "ae_modernbert": "gpu_standard",  # For diversity
+    "ae_roberta": "gpu_A40",  # For diversity
+    "ae_kakisim_c": "gpu_v100",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ae_gaur": "cpu",

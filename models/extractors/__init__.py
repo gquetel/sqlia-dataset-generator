@@ -7,7 +7,6 @@ from extractors.roberta import RobertaExtractor
 from extractors.kakisim import KakisimExtractor
 from extractors.loginov import LoginovExtractor
 from extractors.w2v import W2VMeanPoolExtractor
-from extractors.kakisim_w2v import KakisimW2VExtractor
 
 __all__ = [
     "LiExtractor",
@@ -17,5 +16,4 @@ __all__ = [
     "KakisimExtractor",
     "LoginovExtractor",
     "W2VMeanPoolExtractor",
-    "KakisimW2VExtractor",
 ]

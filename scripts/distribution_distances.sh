@@ -22,7 +22,7 @@ srun python3 experiments/distribution_distances.py \
   --dataset B $DATASET_DIR/generic-sakila.csv \
   --dataset C $DATASET_DIR/generic-AdventureWorks.csv \
   --dataset D $DATASET_DIR/generic-OHR.csv \
-  --extractor ae_li ae_loginov ae_securebert ae_kakisim_c ae_w2v ae_cv ae_roberta ae_bilstm_w2v ae_codebert \
+  --extractor ae_li ae_loginov ae_securebert ae_kakisim_c ae_cv ae_roberta ae_codebert \
   --samples 1000 \
 
 echo "Job finished at: $(date)"
