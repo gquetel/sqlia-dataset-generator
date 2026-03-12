@@ -144,10 +144,13 @@ def get_profile(model: str) -> dict:
 
 CONDA_BASE = "~/miniconda3"
 CONDA_ENV = "conda-env-3.12"
+CONDA_ENV_LLM2VEC = "conda-env-3.12-llm2vec"
 
 
 def conda_env_for(model: str) -> str:
     """Return the conda environment name for a model."""
+    if "llm2vec" in model:
+        return CONDA_ENV_LLM2VEC
     return CONDA_ENV
 
 
