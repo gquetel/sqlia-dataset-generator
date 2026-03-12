@@ -221,6 +221,7 @@ def env_setup(
 
         DATASETS_DIR={datasets_dir}
         TESTING_FLAG="{'--testing' if testing else ''}"
+        MODEL_NAME_SUFFIX="{'_testing' if testing else ''}"
     """
     )
 
@@ -231,17 +232,21 @@ def train_cmd(
     train_dataset: str,
     model_name: str,
     models_dir: str,
+    training_test_label: str,
     no_cache: bool = False,
+    skip_eval: bool = False,
 ) -> str:
     """Generate a training command."""
-    subfolder = f"{model}_{mode}/{train_dataset.replace('.csv', '')}-{model}"
+    subfolder = f"{model}_{mode}/{model_name}_on_{training_test_label}"
     cmd = (
         f"python3 models/training.py \\\n"
         f"    --dataset=$DATASETS_DIR/{train_dataset} \\\n"
         f"    --models {model} \\\n"
         f"    --subfolder={subfolder} \\\n"
         f"    --save-model-path={models_dir}/{model_name} \\\n"
-        f"    $TESTING_FLAG" + (" \\\n    --no-feature-cache" if no_cache else "")
+        f"    $TESTING_FLAG"
+        + (" \\\n    --no-feature-cache" if no_cache else "")
+        + (" \\\n    --skip-eval" if skip_eval else "")
     )
     return cmd
 
@@ -258,7 +263,7 @@ def eval_cmd(
     td_args = " ".join(f"$DATASETS_DIR/{path}:{label}" for path, label in test_datasets)
     cmd = (
         f"python3 experiments/evaluate_model.py \\\n"
-        f"    --model-path={models_dir}/{model_name}.pth \\\n"
+        f"    --model-path={models_dir}/{model_name}${{MODEL_NAME_SUFFIX}}.pth \\\n"
         f"    --model-type={model} \\\n"
         f"    --test-datasets {td_args} \\\n"
         f"    --output-dir={results_dir}/ \\\n"
@@ -283,6 +288,8 @@ def generate_generic_script(
     train_file = dataset_filename("generic", scenario["train_dataset"])
     models_dir = f"./models/output/models/{model}_generic"
     results_dir = f"./models/output/{model}_generic"
+    # The held-out (test) dataset for this generic scenario
+    training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
 
     job_suffix = f"generic_s{scenario_num}"
     log_dir = log_dir_for(model, job_suffix)
@@ -291,7 +298,7 @@ def generate_generic_script(
     log_path = f"{log_dir}/{log_file}"
 
     if no_matrix:
-        test_labels = [l for l in "ABCD" if l not in scenario["train_label"]]
+        test_labels = [training_test_label]
     else:
         test_labels = scenario["test_labels"]
     test_datasets = [
@@ -312,7 +319,14 @@ def generate_generic_script(
     parts.append(f"# Train {model_name}")
     parts.append(
         train_cmd(
-            model, "generic", train_file, model_name, models_dir, no_cache=no_cache
+            model,
+            "generic",
+            train_file,
+            model_name,
+            models_dir,
+            training_test_label=training_test_label,
+            no_cache=no_cache,
+            skip_eval=True,
         )
     )
     parts.append("")
@@ -342,6 +356,8 @@ def generate_specialised_script(
     train_file = dataset_filename("specialised", scenario["train_dataset"])
     models_dir = f"./models/output/models/{model}_specialised"
     results_dir = f"./models/output/{model}_specialised"
+    # For specialised, the test set during training is the same dataset as training
+    training_test_label = scenario["train_label"]
 
     job_suffix = f"specialised_s{scenario_num}"
     log_dir = log_dir_for(model, job_suffix)
@@ -372,7 +388,14 @@ def generate_specialised_script(
     parts.append(f"# Train {model_name}")
     parts.append(
         train_cmd(
-            model, "specialised", train_file, model_name, models_dir, no_cache=no_cache
+            model,
+            "specialised",
+            train_file,
+            model_name,
+            models_dir,
+            training_test_label=training_test_label,
+            no_cache=no_cache,
+            skip_eval=True,
         )
     )
     parts.append("")
@@ -428,7 +451,9 @@ def generate_wafamole_script(
             wafamole_file,
             model_name_e,
             spec_models_dir,
+            training_test_label="E",
             no_cache=no_cache,
+            skip_eval=True,
         )
     )
     parts.append("")
@@ -560,10 +585,17 @@ def generate_malignancy_script(
     # Train only if model not already saved
     parts.append(f"if [ ! -f {models_dir}/{model_name}.pth ]; then")
     parts.append(f'    echo "Training {model_name} ..."')
+    training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
     parts.append(
         "    "
         + train_cmd(
-            model, "generic", train_file, model_name, models_dir, no_cache=no_cache
+            model,
+            "generic",
+            train_file,
+            model_name,
+            models_dir,
+            training_test_label=training_test_label,
+            no_cache=no_cache,
         ).replace("\n", "\n    ")
     )
     parts.append("else")

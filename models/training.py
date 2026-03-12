@@ -58,6 +58,7 @@ project_paths = ProjectPaths(GENERIC.BASE_PATH)
 logger = logging.getLogger(__name__)
 training_results = []
 save_model_path = None  # Set via --save-model-path argument
+skip_eval = False  # Set via --skip-eval argument
 
 n_jobs = min(
     64, int(os.cpu_count() * 0.8)
@@ -147,6 +148,13 @@ def init_args() -> argparse.Namespace:
         action="store_true",
         dest="no_feature_cache",
         help="Disable the feature matrix disk cache (enabled by default).",
+    )
+    parser.add_argument(
+        "--skip-eval",
+        action="store_true",
+        dest="skip_eval",
+        help="Skip test-set evaluation after training (only compute val threshold). "
+        "Use when evaluate_model.py is run separately.",
     )
 
     return parser.parse_args()
@@ -301,16 +309,6 @@ def compute_metrics_generic(
 
     if use_feature_cache:
         cache_dir = project_paths.features_cache_path
-        l_test, s_test = get_scores_with_cache(
-            df=df_test,
-            model=model,
-            preprocess_fn=preprocess_fn,
-            score_fn=get_decision_scores_fn,
-            cache_dir=cache_dir,
-            split="test",
-            use_scaler=use_scaler,
-            batch_size=batch,
-        )
         _, s_val = get_scores_with_cache(
             df=df_val,
             model=model,
@@ -321,15 +319,18 @@ def compute_metrics_generic(
             use_scaler=use_scaler,
             batch_size=4096,
         )
+        if not skip_eval:
+            l_test, s_test = get_scores_with_cache(
+                df=df_test,
+                model=model,
+                preprocess_fn=preprocess_fn,
+                score_fn=get_decision_scores_fn,
+                cache_dir=cache_dir,
+                split="test",
+                use_scaler=use_scaler,
+                batch_size=batch,
+            )
     else:
-        l_test, s_test = get_scores_generic(
-            df=df_test,
-            batch_size=batch,
-            model=model,
-            preprocess_fn=preprocess_fn,
-            score_fn=get_decision_scores_fn,
-            use_scaler=use_scaler,
-        )
         _, s_val = get_scores_generic(
             df=df_val,
             batch_size=4096,
@@ -338,6 +339,15 @@ def compute_metrics_generic(
             preprocess_fn=preprocess_fn,
             score_fn=get_decision_scores_fn,
         )
+        if not skip_eval:
+            l_test, s_test = get_scores_generic(
+                df=df_test,
+                batch_size=batch,
+                model=model,
+                preprocess_fn=preprocess_fn,
+                score_fn=get_decision_scores_fn,
+                use_scaler=use_scaler,
+            )
 
     threshold = get_threshold_for_max_rate(s_val=s_val)
     num_above_threshold = np.sum(s_val > threshold)
@@ -346,6 +356,9 @@ def compute_metrics_generic(
         f"Chosen threshold {threshold}, leads to {num_above_threshold} "
         f"samples ({proportion:.1%}) above threshold"
     )
+
+    if skip_eval:
+        return np.array([]), np.array([]), threshold
 
     if insider_as_fn:
         insider_mask = df_test["attack_technique"].eq("insider")
@@ -496,7 +509,11 @@ def train_models(
             config_name, df_train, df_test, df_val
         )
         models_output[config_name] = (labels, scores)
-        save_results(args=args)
+        if not skip_eval:
+            save_results(args=args)
+
+    if skip_eval:
+        return
 
     labels_list = [l for l, _ in models_output.values()]
     scores_list = [s for _, s in models_output.values()]
@@ -561,6 +578,9 @@ if __name__ == "__main__":
 
     if args.no_feature_cache:
         use_feature_cache = False
+
+    if args.skip_eval:
+        skip_eval = True
 
     if args.on_user_inputs:
         preprocess_for_user_inputs_training(df=df)
