@@ -31,9 +31,9 @@ SLURM_PROFILES = {
         "partition": "V100",
         "gres": "gpu:1",
         "cpus": 16,
-        "mem": "32G",
+        "mem": "64G",
         "time": "8:00:00",
-        "exclude": [],
+        "exclude": ["node43"],
     },
     "gpu_long": {
         "partition": "A100",

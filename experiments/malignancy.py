@@ -64,8 +64,12 @@ SCENARIOS = {
 TOP_K_PCTS = [0.01, 0.1, 1, 2, 5, 10]
 
 # Cap samples per side (source / target) when training the domain classifier.
-# Avoids OOM on large embedding models (e.g. ae_modernbert, 768-dim).
-MAX_DOMAIN_CLF_SAMPLES = 10_000
+N_DOMAIN_CLF_SAMPLES = 10_000
+
+# Chunk size for batched scoring of the target test set.
+# Keeps GPU memory bounded regardless of test set size.
+EVAL_CHUNK_SIZE = 50_000
+
 
 GENERIC = DotDict(
     {
@@ -118,7 +122,7 @@ def train_domain_classifier(
 ) -> LogisticRegression:
     X = np.concatenate([X_source, X_target], axis=0)
     y = np.concatenate([np.zeros(len(X_source)), np.ones(len(X_target))])
-    clf = LogisticRegression(max_iter=2000, solver="saga", random_state=2)
+    clf = LogisticRegression(solver="lbfgs", random_state=2)
     clf.fit(X, y)
     return clf
 
@@ -128,17 +132,26 @@ def evaluate_malignancy(
     domain_clf: LogisticRegression,
     df_target_test: pd.DataFrame,
 ) -> list[dict]:
-    """Return per-k AUC and FPR rows; empty list if target test has only one class."""
-    X_test, labels = get_features(model, df_target_test)
+    """Return per-k AUC and FPR rows; empty list if target test has only one class.
+
+    Processes the test set in chunks of EVAL_CHUNK_SIZE to keep GPU memory bounded.
+    """
+    all_labels, all_p_target, all_ae_scores = [], [], []
+    for start in range(0, len(df_target_test), EVAL_CHUNK_SIZE):
+        chunk = df_target_test.iloc[start : start + EVAL_CHUNK_SIZE]
+        X_chunk, chunk_labels = get_features(model, chunk)
+        all_labels.append(chunk_labels)
+        all_p_target.append(domain_clf.predict_proba(X_chunk)[:, 1])
+        X_tensor = torch.FloatTensor(X_chunk).to(model.device)
+        all_ae_scores.append(decision_score_ae(model, X_tensor))
+
+    labels = np.concatenate(all_labels)
+    p_target = np.concatenate(all_p_target)
+    ae_scores = np.concatenate(all_ae_scores)
 
     if len(np.unique(labels)) < 2:
         logger.warning("Target test set has only one class — AUC undefined, skipping.")
         return []
-
-    p_target = domain_clf.predict_proba(X_test)[:, 1]
-
-    X_tensor = torch.FloatTensor(X_test).to(model.device)
-    ae_scores = decision_score_ae(model, X_tensor)
     threshold = model.threshold
 
     # Split by class so we rank normals and attacks independently
@@ -154,8 +167,8 @@ def evaluate_malignancy(
         n_take_normal = max(1, int(mask_normal.sum() * k / 100))
         n_take_attack = max(1, int(mask_attack.sum() * k / 100))
 
-        top_normal_idx = np.argsort(p_normal)[-n_take_normal:]
-        top_attack_idx = np.argsort(p_attack)[-n_take_attack:]
+        top_normal_idx = np.argpartition(p_normal, -n_take_normal)[-n_take_normal:]
+        top_attack_idx = np.argpartition(p_attack, -n_take_attack)[-n_take_attack:]
 
         topk_scores_normal = scores_normal[top_normal_idx]
         topk_scores = np.concatenate(
@@ -277,9 +290,9 @@ def main():
             [datasets[n][datasets[n]["split"] == "train"] for n in train_ds],
             ignore_index=True,
         )
-        if len(df_source_train) > MAX_DOMAIN_CLF_SAMPLES:
+        if len(df_source_train) > N_DOMAIN_CLF_SAMPLES:
             df_source_train = df_source_train.sample(
-                n=MAX_DOMAIN_CLF_SAMPLES, random_state=2
+                n=N_DOMAIN_CLF_SAMPLES, random_state=2
             )
         print(f"Extracting source train features ({len(df_source_train)} rows) ...")
         X_source, _ = get_features(model, df_source_train)
@@ -287,9 +300,9 @@ def main():
 
         # Target train features for domain classifier (D train, normals only)
         df_target_train = datasets[test_ds][datasets[test_ds]["split"] == "train"]
-        if len(df_target_train) > MAX_DOMAIN_CLF_SAMPLES:
+        if len(df_target_train) > N_DOMAIN_CLF_SAMPLES:
             df_target_train = df_target_train.sample(
-                n=MAX_DOMAIN_CLF_SAMPLES, random_state=2
+                n=N_DOMAIN_CLF_SAMPLES, random_state=2
             )
         print(f"Extracting target train features ({len(df_target_train)} rows) ...")
         X_target_train, _ = get_features(model, df_target_train)
@@ -299,7 +312,7 @@ def main():
         print("Training domain classifier ...")
         domain_clf = train_domain_classifier(X_source, X_target_train)
 
-        # Evaluate malignancy on D test (all labels)
+        # Evaluate malignancy on full target test set (all labels)
         df_target_test = datasets[test_ds][datasets[test_ds]["split"] == "test"]
         n_attacks = int((df_target_test["label"] == 1).sum())
         print(
