@@ -535,10 +535,6 @@ def malignancy_cmd(
         f"python3 experiments/malignancy.py \\\n"
         f"    --model {model} \\\n"
         f"    --model-dir={models_dir} \\\n"
-        f"    --dataset A $DATASETS_DIR/generic-OurAirports.csv \\\n"
-        f"    --dataset B $DATASETS_DIR/generic-sakila.csv \\\n"
-        f"    --dataset C $DATASETS_DIR/generic-AdventureWorks.csv \\\n"
-        f"    --dataset D $DATASETS_DIR/generic-OHR.csv \\\n"
         f"    --scenario {train_label} \\\n"
         f"    --output-dir={results_dir} \\\n"
         f"    $TESTING_FLAG" + (" \\\n    --no-cache" if no_cache else "")

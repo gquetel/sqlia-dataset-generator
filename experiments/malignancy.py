@@ -5,7 +5,7 @@ distribution shift hurts detector performance, following Rabanser et al. (2019) 
 
 Pipeline:
   1. Load a pre-trained AE model (trained on source datasets, e.g. ABC).
-  2. Train a domain classifier (LogisticRegression) on source train features
+  2. Train a domain classifier (RandomForest) on source train features
      (class 0) vs target train features (class 1).
   3. Score every target test sample by P(belongs to target domain).
   4. For each k in TOP_K_PCTS, take the top-k% most target-like test samples
@@ -22,8 +22,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
+from sklearn.model_selection import train_test_split
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 REPO_ROOT = SCRIPT_DIR.parent
@@ -60,11 +61,19 @@ SCENARIOS = {
     "BCD→A": (["B", "C", "D"], "A"),
 }
 
+DATASETS_DIR = Path("~/datasets/100k-training").expanduser()
+DATASET_PATHS = {
+    "A": DATASETS_DIR / "specialised-OurAirports.csv",
+    "B": DATASETS_DIR / "specialised-sakila.csv",
+    "C": DATASETS_DIR / "specialised-AdventureWorks.csv",
+    "D": DATASETS_DIR / "specialised-OHR.csv",
+}
+
 # Percentages of top target-like samples to evaluate (paper §3.4)
 TOP_K_PCTS = [0.01, 0.1, 1, 2, 5, 10]
 
 # Cap samples per side (source / target) when training the domain classifier.
-N_DOMAIN_CLF_SAMPLES = 10_000
+N_DOMAIN_CLF_SAMPLES = 15_000
 
 # Chunk size for batched scoring of the target test set.
 # Keeps GPU memory bounded regardless of test set size.
@@ -119,17 +128,23 @@ def get_features(model, df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
 
 def train_domain_classifier(
     X_source: np.ndarray, X_target: np.ndarray
-) -> LogisticRegression:
+) -> RandomForestClassifier:
     X = np.concatenate([X_source, X_target], axis=0)
     y = np.concatenate([np.zeros(len(X_source)), np.ones(len(X_target))])
-    clf = LogisticRegression(solver="lbfgs", random_state=2)
-    clf.fit(X, y)
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=2, stratify=y)
+    clf = RandomForestClassifier(n_estimators=100, random_state=2, n_jobs=-1)
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_val)
+    print(f"  Binary classifier — val accuracy: {accuracy_score(y_val, y_pred):.4f}")
+    cm = confusion_matrix(y_val, y_pred)
+    print(f"  Confusion matrix (rows=true, cols=pred) [source, target]:\n{cm}")
     return clf
+
 
 
 def evaluate_malignancy(
     model,
-    domain_clf: LogisticRegression,
+    domain_clf: RandomForestClassifier,
     df_target_test: pd.DataFrame,
 ) -> list[dict]:
     """Return per-k AUC and FPR rows; empty list if target test has only one class.
@@ -212,14 +227,6 @@ def main():
         help="Directory containing trained .pth files (e.g. models/output/models/ae_li_generic/)",
     )
     parser.add_argument(
-        "--dataset",
-        nargs=2,
-        action="append",
-        metavar=("NAME", "PATH"),
-        required=True,
-        help="Dataset short name (e.g. A) and CSV path (repeatable)",
-    )
-    parser.add_argument(
         "--output-dir",
         default="output/experiments/malignancy",
         help="Output directory for CSV results (default: output/experiments/malignancy)",
@@ -248,9 +255,9 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     datasets: dict[str, pd.DataFrame] = {}
-    for name, path in args.dataset:
+    for name, path in DATASET_PATHS.items():
         print(f"Loading {name} from {path} ...")
-        datasets[name] = load_dataset(path)
+        datasets[name] = load_dataset(str(path))
 
     if args.testing:
         for name in datasets:
@@ -259,7 +266,7 @@ def main():
             )
         print("[testing] Datasets sampled to 2000 rows each")
 
-    dataset_names = {name for name, _ in args.dataset}
+    dataset_names = set(DATASET_PATHS.keys())
     active_scenarios = {
         s: (train_ds, test_ds)
         for s, (train_ds, test_ds) in SCENARIOS.items()
@@ -285,31 +292,23 @@ def main():
             args.model, args.model_dir, train_ds, device, no_cache=args.no_cache
         )
 
-        # Source train features for domain classifier (normals only — train split)
-        df_source_train = pd.concat(
-            [datasets[n][datasets[n]["split"] == "train"] for n in train_ds],
-            ignore_index=True,
-        )
-        if len(df_source_train) > N_DOMAIN_CLF_SAMPLES:
-            df_source_train = df_source_train.sample(
-                n=N_DOMAIN_CLF_SAMPLES, random_state=2
-            )
-        print(f"Extracting source train features ({len(df_source_train)} rows) ...")
-        X_source, _ = get_features(model, df_source_train)
-        print(f"  Source: {X_source.shape}")
+        # Extract per-dataset train features (up to N_DOMAIN_CLF_SAMPLES each)
+        all_ds_names = sorted(train_ds + [test_ds])
+        ds_to_label = {name: i for i, name in enumerate(all_ds_names)}
+        X_per_ds: dict[str, np.ndarray] = {}
+        for ds_name in all_ds_names:
+            df_ds = datasets[ds_name][datasets[ds_name]["split"] == "train"]
+            if len(df_ds) > N_DOMAIN_CLF_SAMPLES:
+                df_ds = df_ds.sample(n=N_DOMAIN_CLF_SAMPLES, random_state=2)
+            print(f"Extracting features for {ds_name} ({len(df_ds)} rows) ...")
+            X_ds, _ = get_features(model, df_ds)
+            X_per_ds[ds_name] = X_ds
+            print(f"  {ds_name} (class {ds_to_label[ds_name]}): {X_ds.shape}")
 
-        # Target train features for domain classifier (D train, normals only)
-        df_target_train = datasets[test_ds][datasets[test_ds]["split"] == "train"]
-        if len(df_target_train) > N_DOMAIN_CLF_SAMPLES:
-            df_target_train = df_target_train.sample(
-                n=N_DOMAIN_CLF_SAMPLES, random_state=2
-            )
-        print(f"Extracting target train features ({len(df_target_train)} rows) ...")
-        X_target_train, _ = get_features(model, df_target_train)
-        print(f"  Target train: {X_target_train.shape}")
+        X_source = np.concatenate([X_per_ds[n] for n in train_ds], axis=0)
+        X_target_train = X_per_ds[test_ds]
 
-        # Train domain classifier
-        print("Training domain classifier ...")
+        print("\nTraining domain classifier ...")
         domain_clf = train_domain_classifier(X_source, X_target_train)
 
         # Evaluate malignancy on full target test set (all labels)
