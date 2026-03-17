@@ -69,6 +69,7 @@ MODEL_PROFILES = {
     "ae_gaur": "cpu",
     "ae_gaur_chatgpt": "cpu",
     "ae_codebert": "gpu_v100",
+    "ae_unixcoder": "gpu_v100",
     "ae_flan_t5": "gpu_v100",
     "ae_sentbert": "gpu_v100",
     "ae_llm2vec": "gpu_long",  # Requires 32Gb+ GPU, and 64+ memory

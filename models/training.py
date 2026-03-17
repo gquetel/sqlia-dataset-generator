@@ -395,6 +395,7 @@ AUTHORIZED_GROUPS = {
     "loginov": ["ocsvm_loginov", "ae_loginov"],
     "gaur": ["ocsvm_gaur", "ae_gaur", "ocsvm_gaur_chatgpt", "ae_gaur_chatgpt"],
     "codebert": ["ae_codebert"],
+    "unixcoder": ["ae_unixcoder"],
     "flan_t5": ["ae_flan_t5"],
     "sentbert": ["ae_sentbert"],
     "llm2vec": ["ae_llm2vec"],

@@ -155,6 +155,7 @@ def main():
             "ae_gaur",
             "ae_gaur_chatgpt",
             "ae_codebert",
+            "ae_unixcoder",
             "ae_flan_t5",
             "ae_sentbert",
             "ae_llm2vec",
