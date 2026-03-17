@@ -1,34 +1,27 @@
 #!/usr/bin/env python3
-"""Correlate domain shift detection accuracy with AUROC generalization scores.
+"""Correlate malignancy metrics (topk_roc_auc, topk_fpr) with AUROC generalization scores.
 
-For each shift metric (NoRed_MMD, NoRed_KS, BBSDs_MMD, BBSDs_KS, DomainClf_Binomial),
-computes Pearson and Spearman correlation with AUROC across all (extractor, scenario) pairs.
-
-Expected inputs:
-  --shift-dir : contains {extractor}_{pool_key}_distances_scenarios.csv files
-  --results-dir: contains {model}_generic/{model}_{train}_on_{test}/results.csv files
+For each malignancy metric, computes Pearson and Spearman correlation with AUROC
+across all (model, scenario) pairs.
 
 Aggregation modes:
-  --aggregate auc   : normalized AUC over the n_samples axis (trapezoidal integration)
-  --aggregate max   : maximum detection accuracy across all n_samples
-  --aggregate at_n  : value at n_samples = --at-n (default: 1000)
+  --aggregate auc  : normalized AUC over the k_pct axis (trapezoidal integration)
+  --aggregate at10 : value at k_pct = 10
+
+Expected inputs:
+  --malignancy-dir : contains {model}_malignancy.csv files
+  --results-dir    : contains {model}_generic/{model}_{train}_on_{test}/results.csv files
 
 Usage:
-    python3 experiments/shift_auroc_correlation.py \\
-        --shift-dir output/experiments/distribution_distances \\
+    python3 experiments/malignancy_auroc_correlation.py \\
+        --malignancy-dir /home/gquetel/experiences-results/2026-03-11/malignancy \\
         --results-dir /home/gquetel/experiences-results/2026-02-16-results \\
-        --output-dir output/experiments/shift_correlation \\
+        --output-dir output/experiments/malignancy_correlation \\
         --aggregate auc
 
-    # at_n with custom n
-    python3 experiments/shift_auroc_correlation.py \\
-        --shift-dir output/experiments/distribution_distances \\
-        --results-dir /home/gquetel/experiences-results/2026-02-16-results \\
-        --aggregate at_n --at-n 500
-
     # Testing mode (no files written)
-    python3 experiments/shift_auroc_correlation.py \\
-        --shift-dir output/experiments/distribution_distances \\
+    python3 experiments/malignancy_auroc_correlation.py \\
+        --malignancy-dir /home/gquetel/experiences-results/2026-03-11/malignancy \\
         --results-dir /home/gquetel/experiences-results/2026-02-16-results \\
         --testing
 """
@@ -42,60 +35,35 @@ import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 
-# Pure cross-domain scenarios (train on ABC, test on D)
 GENERIC_SCENARIOS = {"ABC→D", "ABD→C", "ACD→B", "BCD→A"}
 
-# Mixed-shift scenarios (train on ABC, deployment stream = ABCD)
-# Maps mixed label → equivalent pure AUROC scenario key
-MIXED_SCENARIOS: dict[str, str] = {
-    "ABC→ABCD": "ABC→D",
-    "ABD→ABDC": "ABD→C",
-    "ACD→ACDB": "ACD→B",
-    "BCD→BCDA": "BCD→A",
-}
-
-SHIFT_METRICS = [
-    "NoRed_MMD_detacc",
-    "NoRed_KS_detacc",
-    "BBSDs_MMD_detacc",
-    "BBSDs_KS_detacc",
-    "DomainClf_Binomial_detacc",
-]
+MALIGNANCY_METRICS = ["topk_roc_auc", "topk_fpr"]
 
 
-def _aggregate_auc(group: pd.DataFrame, metric: str) -> float:
-    """Normalized AUC over n_samples axis via trapezoidal integration.
-
-    Normalizes by (max_n - min_n) so the result stays in [0, 1].
-    """
-    g = group.sort_values("n_samples")
-    x = g["n_samples"].values.astype(float)
+def _aggregate_auc_over_k(group: pd.DataFrame, metric: str) -> float:
+    """Normalized AUC over k_pct axis via trapezoidal integration."""
+    g = group.sort_values("k_pct")
+    x = g["k_pct"].values.astype(float)
     y = g[metric].values.astype(float)
     span = x[-1] - x[0]
     return float(np.trapz(y, x) / span) if span > 0 else float(y[0])
 
 
-def _aggregate_max(group: pd.DataFrame, metric: str) -> float:
-    return float(group[metric].max())
-
-
-def _aggregate_at_n(group: pd.DataFrame, metric: str, n: int) -> float:
-    """Value at specific n_samples, or nearest available."""
-    idx = (group["n_samples"] - n).abs().idxmin()
+def _aggregate_at_k(group: pd.DataFrame, metric: str, k: float) -> float:
+    """Value at specific k_pct, or nearest available."""
+    idx = (group["k_pct"] - k).abs().idxmin()
     return float(group.loc[idx, metric])
 
 
-def _load_shift_data(
-    shift_dir: Path, aggregate: str, at_n: int, mode: str
-) -> pd.DataFrame:
-    """Load and aggregate shift detection CSVs.
+def _load_malignancy_data(malignancy_dir: Path, aggregate: str) -> pd.DataFrame:
+    """Load and aggregate malignancy CSVs.
 
-    mode="generic": keeps ABC→D-style rows, scenario column is the AUROC join key.
-    mode="mixed":   keeps ABC→ABCD-style rows, remaps scenario to ABC→D for joining.
+    Files expected: {model}_malignancy.csv (or {model}_malignancy_{scenario}.csv)
+    Returns one row per (extractor, scenario) with aggregated metric values.
     """
-    csvs = list(shift_dir.glob("*.csv"))
+    csvs = list(malignancy_dir.glob("*_malignancy*.csv"))
     if not csvs:
-        print(f"[warn] No CSV files found in {shift_dir}")
+        print(f"[warn] No malignancy CSV files found in {malignancy_dir}")
         return pd.DataFrame()
 
     dfs = []
@@ -110,32 +78,22 @@ def _load_shift_data(
 
     raw = pd.concat(dfs, ignore_index=True)
 
-    if mode == "generic":
-        raw = raw[raw["scenario"].isin(GENERIC_SCENARIOS)].copy()
-        if raw.empty:
-            print("[warn] No generic scenario rows found in shift data")
-            return pd.DataFrame()
-    else:  # mixed
-        raw = raw[raw["scenario"].isin(MIXED_SCENARIOS)].copy()
-        if raw.empty:
-            print("[warn] No mixed-shift scenario rows found in shift data")
-            return pd.DataFrame()
-        # Remap to the AUROC join key (e.g. ABC→ABCD → ABC→D)
-        raw["scenario"] = raw["scenario"].map(MIXED_SCENARIOS)
+    raw = raw[raw["scenario"].isin(GENERIC_SCENARIOS)].copy()
+    if raw.empty:
+        print("[warn] No generic scenario rows found in malignancy data")
+        return pd.DataFrame()
 
     rows = []
-    for (extractor, scenario), grp in raw.groupby(["extractor", "scenario"]):
-        row = {"extractor": extractor, "scenario": scenario}
-        for metric in SHIFT_METRICS:
+    for (model, scenario), grp in raw.groupby(["model", "scenario"]):
+        row = {"extractor": model, "scenario": scenario}
+        for metric in MALIGNANCY_METRICS:
             if metric not in grp.columns:
                 row[metric] = float("nan")
                 continue
             if aggregate == "auc":
-                row[metric] = _aggregate_auc(grp, metric)
-            elif aggregate == "max":
-                row[metric] = _aggregate_max(grp, metric)
-            else:  # at_N
-                row[metric] = _aggregate_at_n(grp, metric, at_n)
+                row[metric] = _aggregate_auc_over_k(grp, metric)
+            else:  # at10
+                row[metric] = _aggregate_at_k(grp, metric, 10.0)
         rows.append(row)
 
     return pd.DataFrame(rows)
@@ -152,7 +110,6 @@ def _load_auroc_data(results_dir: Path) -> pd.DataFrame:
         for run_dir in generic_dir.iterdir():
             if not run_dir.is_dir():
                 continue
-            # run_dir.name expected: {extractor}_{train}_on_{test}
             name = run_dir.name
             prefix = f"{extractor}_"
             if not name.startswith(prefix):
@@ -184,9 +141,9 @@ def _load_auroc_data(results_dir: Path) -> pd.DataFrame:
 
 
 def _compute_correlations(merged: pd.DataFrame) -> pd.DataFrame:
-    """Compute Pearson and Spearman correlations for each shift metric vs rocauc."""
+    """Compute Pearson and Spearman correlations for each malignancy metric vs rocauc."""
     rows = []
-    for metric in SHIFT_METRICS:
+    for metric in MALIGNANCY_METRICS:
         sub = merged[["rocauc", metric]].dropna()
         n = len(sub)
         if n < 3:
@@ -211,28 +168,18 @@ def _per_extractor_correlations(merged: pd.DataFrame) -> None:
     """Print per-extractor correlations for diagnostic purposes."""
     for extractor, grp in merged.groupby("extractor"):
         print(f"\n  [{extractor}] n={len(grp)} scenarios")
-        for metric in SHIFT_METRICS:
+        for metric in MALIGNANCY_METRICS:
             sub = grp[["rocauc", metric]].dropna()
             if len(sub) < 3:
                 continue
             pr, _ = pearsonr(sub[metric], sub["rocauc"])
             sr, _ = spearmanr(sub[metric], sub["rocauc"])
-            short = metric.replace("_detacc", "")
-            print(f"    {short}: Pearson r={pr:.3f}, Spearman ρ={sr:.3f}")
+            print(f"    {metric}: Pearson r={pr:.3f}, Spearman ρ={sr:.3f}")
 
 
-def _scatter_plots(
-    merged: pd.DataFrame, output_dir: Path, aggregate: str, at_n: int
-) -> None:
-    """One scatter plot per shift metric: x=detacc (aggregated), y=rocauc."""
-    if aggregate == "auc":
-        agg_label = "AUC over n_samples"
-    elif aggregate == "max":
-        agg_label = "max over n_samples"
-    else:
-        agg_label = f"@ n={at_n}"
-
-    for metric in SHIFT_METRICS:
+def _scatter_plots(merged: pd.DataFrame, output_dir: Path) -> None:
+    """One scatter plot per malignancy metric: x=metric, y=rocauc."""
+    for metric in MALIGNANCY_METRICS:
         sub = merged[["extractor", "scenario", "rocauc", metric]].dropna()
         if sub.empty:
             continue
@@ -242,6 +189,19 @@ def _scatter_plots(
 
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.scatter(sub[metric], sub["rocauc"], alpha=0.7, s=60)
+
+        x_vals = sub[metric].values
+        y_vals = sub["rocauc"].values
+        m, b = np.polyfit(x_vals, y_vals, 1)
+        x_line = np.linspace(x_vals.min(), x_vals.max(), 200)
+        ax.plot(
+            x_line,
+            m * x_line + b,
+            color="black",
+            linewidth=1.5,
+            linestyle="--",
+            label="OLS fit",
+        )
 
         for _, row in sub.iterrows():
             ax.annotate(
@@ -254,10 +214,9 @@ def _scatter_plots(
                 textcoords="offset points",
             )
 
-        ax.set_xlabel(f"{metric} ({agg_label})", fontsize=11)
+        ax.set_xlabel(metric, fontsize=11)
         ax.set_ylabel("AUROC", fontsize=11)
-        title = metric.replace("_detacc", "")
-        ax.set_title(f"Shift vs AUROC: {title}")
+        ax.set_title(f"Malignancy vs AUROC: {metric}")
         ax.text(
             0.05,
             0.95,
@@ -277,15 +236,15 @@ def _scatter_plots(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Correlate domain shift detection accuracy with AUROC generalization",
+        description="Correlate malignancy metrics with AUROC generalization",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     parser.add_argument(
-        "--shift-dir",
+        "--malignancy-dir",
         type=Path,
-        default=Path("output/experiments/distribution_distances"),
-        help="Directory containing shift CSV files (default: output/experiments/distribution_distances)",
+        default=Path("output/experiments/malignancy"),
+        help="Directory containing {model}_malignancy.csv files (default: output/experiments/malignancy)",
     )
     parser.add_argument(
         "--results-dir",
@@ -296,34 +255,21 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output/experiments/shift_correlation"),
-        help="Output directory for correlations CSV and scatter plots (default: output/experiments/shift_correlation)",
+        default=Path("output/experiments/malignancy_correlation"),
+        help="Output directory for correlations CSV and scatter plots (default: output/experiments/malignancy_correlation)",
     )
     parser.add_argument(
         "--aggregate",
-        choices=["auc", "max", "at_n"],
-        default="at_n",
-        help="Aggregation over n_samples: 'auc' (trapezoidal AUC), 'max', or 'at_n' (default: at_n)",
-    )
-    parser.add_argument(
-        "--at-n",
-        type=int,
-        default=1000,
-        metavar="N",
-        help="Sample count for --aggregate at_n (default: 1000)",
-    )
-    parser.add_argument(
-        "--mode",
-        choices=["generic", "mixed"],
-        default="mixed",
-        help="Which shift scenarios to correlate: 'generic' (ABC→D) or 'mixed' (ABC→ABCD, default: mixed)",
+        choices=["auc", "at10"],
+        default="auc",
+        help="Aggregation over k_pct: 'auc' (trapezoidal AUC over k axis) or 'at10' (k=10%%). Default: auc",
     )
     parser.add_argument(
         "--models",
         nargs="+",
         metavar="MODEL",
         default=None,
-        help="Restrict to specific extractor names (e.g. ae_li ae_securebert ae_roberta). Default: all.",
+        help="Restrict to specific model names (e.g. ae_li ae_securebert). Default: all.",
     )
     parser.add_argument(
         "--testing",
@@ -332,17 +278,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # --- Load shift data ---
-    print(f"Loading shift data from {args.shift_dir} ...")
-    shift_df = _load_shift_data(args.shift_dir, args.aggregate, args.at_n, args.mode)
-    if shift_df.empty:
-        print("ERROR: no shift data found")
+    # --- Load malignancy data ---
+    print(f"Loading malignancy data from {args.malignancy_dir} ...")
+    malignancy_df = _load_malignancy_data(args.malignancy_dir, args.aggregate)
+    if malignancy_df.empty:
+        print("ERROR: no malignancy data found")
         return 1
-    print(f"  {len(shift_df)} (extractor, scenario) pairs after aggregation")
+    print(f"  {len(malignancy_df)} (model, scenario) pairs after aggregation")
 
     if args.models:
-        shift_df = shift_df[shift_df["extractor"].isin(args.models)]
-        print(f"  {len(shift_df)} pairs after filtering to {args.models}")
+        malignancy_df = malignancy_df[malignancy_df["extractor"].isin(args.models)]
+        print(f"  {len(malignancy_df)} pairs after filtering to {args.models}")
 
     # --- Load AUROC data ---
     print(f"Loading AUROC data from {args.results_dir} ...")
@@ -357,28 +303,30 @@ def main() -> int:
         print(f"  {len(auroc_df)} pairs after filtering to {args.models}")
 
     # --- Merge ---
-    merged = shift_df.merge(auroc_df, on=["extractor", "scenario"], how="inner")
+    merged = malignancy_df.merge(auroc_df, on=["extractor", "scenario"], how="inner")
     n_merged = len(merged)
-    print(f"Merged: {n_merged} matching (extractor, scenario) pairs")
+    print(f"Merged: {n_merged} matching (model, scenario) pairs")
 
     if merged.empty:
         print(
-            "ERROR: no matching pairs — check that extractor names match between shift CSVs and results dirs"
+            "ERROR: no matching pairs — check that model names match between malignancy CSVs and results dirs"
         )
-        print(f"  Shift extractors : {sorted(shift_df['extractor'].unique())}")
-        print(f"  AUROC extractors : {sorted(auroc_df['extractor'].unique())}")
+        print(f"  Malignancy models : {sorted(malignancy_df['extractor'].unique())}")
+        print(f"  AUROC extractors  : {sorted(auroc_df['extractor'].unique())}")
         return 1
 
-    n_shift_only = len(shift_df) - n_merged
+    n_malignancy_only = len(malignancy_df) - n_merged
     n_auroc_only = len(auroc_df) - n_merged
-    if n_shift_only > 0:
-        print(f"  [warn] {n_shift_only} shift rows had no matching AUROC entry")
+    if n_malignancy_only > 0:
+        print(
+            f"  [warn] {n_malignancy_only} malignancy rows had no matching AUROC entry"
+        )
     if n_auroc_only > 0:
-        print(f"  [warn] {n_auroc_only} AUROC rows had no matching shift entry")
+        print(f"  [warn] {n_auroc_only} AUROC rows had no matching malignancy entry")
 
     # --- Correlations ---
     corr_df = _compute_correlations(merged)
-    print("\nCorrelation Results (all extractor×scenario pairs):")
+    print("\nCorrelation Results (all model×scenario pairs):")
     print(corr_df.to_string(index=False))
 
     print("\nPer-extractor breakdown:")
@@ -400,7 +348,7 @@ def main() -> int:
     print(f"Saved {merged_path}")
 
     print("\nGenerating scatter plots ...")
-    _scatter_plots(merged, args.output_dir, args.aggregate, args.at_n)
+    _scatter_plots(merged, args.output_dir)
 
     return 0
 
