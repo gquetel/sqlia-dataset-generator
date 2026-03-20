@@ -156,6 +156,12 @@ def init_args() -> argparse.Namespace:
         help="Skip test-set evaluation after training (only compute val threshold). "
         "Use when evaluate_model.py is run separately.",
     )
+    parser.add_argument(
+        "--with-shap",
+        action="store_true",
+        dest="with_shap",
+        help="Run SHAP analysis after training (only valid for generic/specialised datasets).",
+    )
 
     return parser.parse_args()
 
@@ -429,6 +435,8 @@ def _train_single_model(
     df_train: pd.DataFrame,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
+    testing: bool = False,
+    with_shap: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Build, train, evaluate, and optionally save one model."""
     global save_model_path
@@ -475,6 +483,19 @@ def _train_single_model(
     if save_model_path and config.model_type == "ae":
         model.save_model(save_model_path, threshold=threshold)
 
+    if with_shap:
+        from shap_analysis import SHAP_COMPATIBLE_MODELS, run_shap_analysis
+
+        if config_name in SHAP_COMPATIBLE_MODELS:
+            run_shap_analysis(
+                model=model,
+                config_name=config_name,
+                df_train=df_train,
+                df_test=df_test,
+                output_dir=project_paths.output_path,
+                testing=testing,
+            )
+
     return labels, scores, threshold
 
 
@@ -507,7 +528,12 @@ def train_models(
     models_output = {}
     for config_name in selected_models:
         labels, scores, threshold = _train_single_model(
-            config_name, df_train, df_test, df_val
+            config_name,
+            df_train,
+            df_test,
+            df_val,
+            testing=args.testing,
+            with_shap=args.with_shap,
         )
         models_output[config_name] = (labels, scores)
         if not skip_eval:

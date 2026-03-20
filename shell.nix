@@ -184,6 +184,7 @@ let
         # Used for training / evaluation
         ps.matplotlib
         ps.scikit-learn
+        ps.shap
 
         # Notebooks
         ps.ipykernel
