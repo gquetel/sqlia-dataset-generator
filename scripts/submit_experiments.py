@@ -53,7 +53,7 @@ SLURM_PROFILES = {
         "partition": "CPU",
         "gres": None,
         "cpus": 32,
-        "mem": "32G",
+        "mem": "64G",
         "time": "12:00:00",
     },
 }
@@ -608,6 +608,95 @@ def generate_malignancy_script(
     return "\n".join(parts)
 
 
+def shap_cmd(
+    model: str,
+    model_path: str,
+    dataset_file: str,
+    output_dir: str,
+) -> str:
+    """Generate the SHAP analysis command for a single scenario."""
+    return (
+        f"python3 models/shap_analysis.py \\\n"
+        f"    --model-type={model} \\\n"
+        f"    --model-path={model_path}${{MODEL_NAME_SUFFIX}} \\\n"
+        f"    --dataset=$DATASETS_DIR/{dataset_file} \\\n"
+        f"    --output-dir={output_dir} \\\n"
+        f"    $TESTING_FLAG"
+    )
+
+
+def generate_shap_script(
+    model: str,
+    mode: str,
+    scenario_num: int,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+    no_cache: bool = False,
+) -> str:
+    """Generate a SHAP script: train model if absent, then run SHAP analysis."""
+    if mode == "generic":
+        scenario = GENERIC_SCENARIOS[scenario_num]
+        models_dir = f"./models/output/models/{model}_generic"
+        training_test_label = next(
+            l for l in "ABCD" if l not in scenario["train_label"]
+        )
+    else:
+        scenario = SPECIALISED_SCENARIOS[scenario_num]
+        models_dir = f"./models/output/models/{model}_specialised"
+        training_test_label = scenario["train_label"]
+
+    model_name = f"{model}_{scenario['train_label']}"
+    train_file = dataset_filename(mode, scenario["train_dataset"])
+    output_dir = "./output/experiments/shap"
+
+    job_suffix = f"shap_{mode}_s{scenario_num}"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
+    parts = []
+    if slurm:
+        parts.append(sbatch_header(model, job_suffix, log_path))
+    else:
+        parts.append("#!/bin/bash")
+    parts.append("")
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
+    parts.append(f'echo "Running SHAP {mode} scenario {scenario_num}: {model_name}"')
+    parts.append("")
+
+    parts.append(
+        f"if [ ! -f {models_dir}/{model_name}${{MODEL_NAME_SUFFIX}}.pth ]; then"
+    )
+    parts.append(f'    echo "Training {model_name} ..."')
+    parts.append(
+        "    "
+        + train_cmd(
+            model,
+            mode,
+            train_file,
+            model_name,
+            models_dir,
+            training_test_label=training_test_label,
+            no_cache=no_cache,
+            skip_eval=True,
+        ).replace("\n", "\n    ")
+    )
+    parts.append("else")
+    parts.append(f'    echo "Skipping training — {model_name} already exists"')
+    parts.append("fi")
+    parts.append("")
+
+    parts.append(f"# SHAP analysis for {model_name}")
+    parts.append(shap_cmd(model, f"{models_dir}/{model_name}", train_file, output_dir))
+    parts.append("")
+    parts.append('echo "Job finished at: $(date)"')
+    return "\n".join(parts)
+
+
 def generate_domain_shift_script(
     model: str,
     testing: bool,
@@ -707,7 +796,14 @@ def main():
         "--mode",
         type=str,
         required=True,
-        choices=["generic", "specialised", "wafamole", "domain_shift", "malignancy"],
+        choices=[
+            "generic",
+            "specialised",
+            "wafamole",
+            "domain_shift",
+            "malignancy",
+            "shap",
+        ],
         help="Experiment mode",
     )
     parser.add_argument(
@@ -810,6 +906,39 @@ def main():
             args.no_cache,
         )
         write_and_submit(script, f"{args.model}_wafamole.sh", args.dry_run, args.local)
+    elif args.mode == "shap":
+        SHAP_COMPATIBLE_MODELS = {"ae_li", "ae_gaur", "ae_loginov"}
+        if args.model not in SHAP_COMPATIBLE_MODELS:
+            parser.error(
+                f"--mode shap only supports: {', '.join(sorted(SHAP_COMPATIBLE_MODELS))}"
+            )
+        if args.scenario == "all":
+            scenario_nums = [1, 2, 3, 4]
+        else:
+            try:
+                n = int(args.scenario)
+                if n < 1 or n > 4:
+                    raise ValueError
+                scenario_nums = [n]
+            except ValueError:
+                parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
+        for n in scenario_nums:
+            for shap_mode in ("generic", "specialised"):
+                script = generate_shap_script(
+                    args.model,
+                    shap_mode,
+                    n,
+                    args.testing,
+                    args.datasets_dir,
+                    use_slurm,
+                    args.no_cache,
+                )
+                write_and_submit(
+                    script,
+                    f"{args.model}_shap_{shap_mode}_scenario{n}.sh",
+                    args.dry_run,
+                    args.local,
+                )
     else:
         # Determine scenarios to run
         if args.scenario == "all":
