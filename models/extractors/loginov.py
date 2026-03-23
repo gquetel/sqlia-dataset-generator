@@ -51,15 +51,15 @@ def extract_loginov_features(query: str, valid_schars: frozenset) -> dict:
     f6, f7, f8, f9 = _classify_tokens(s2_tokens)
 
     return {
-        "f1": f1,
-        "f2": f2,
-        "f3": f3,
-        "f4": f4,
-        "f5": f5,
-        "f6": f6,
-        "f7": f7,
-        "f8": f8,
-        "f9": f9,
+        "n_anomalous_schars": f1,
+        "s1_n_keywords": f2,
+        "s1_n_alpha": f3,
+        "s1_n_numeric": f4,
+        "s1_n_mixed": f5,
+        "s2_n_keywords": f6,
+        "s2_n_alpha": f7,
+        "s2_n_numeric": f8,
+        "s2_n_mixed": f9,
     }
 
 

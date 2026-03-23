@@ -57,6 +57,19 @@ def run_shap_analysis(model, config_name, background, X_explain, output_dir):
     plt.close()
     logger.info(f"SHAP bar plot saved to {output_dir}/shap_bar_{config_name}.png")
 
+    plt.figure()
+    shap.plots.beeswarm(explanation, show=False)
+    plt.tight_layout()
+    plt.savefig(
+        os.path.join(output_dir, f"shap_beeswarm_{config_name}.png"),
+        dpi=150,
+        bbox_inches="tight",
+    )
+    plt.close()
+    logger.info(
+        f"SHAP beeswarm plot saved to {output_dir}/shap_beeswarm_{config_name}.png"
+    )
+
 
 def _load_model(model_type: str, model_path: str, device):
     from constants import DotDict, ProjectPaths
