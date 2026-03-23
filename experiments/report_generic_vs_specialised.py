@@ -51,7 +51,7 @@ Usage:
     # Custom output directory and format(s)
     python experiments/report_generic_vs_specialised.py \\
         --results-dir ~/experiences-results/2026-02-23 \\
-        --output-dir output/experiments \\
+        --output-dir output/results \\
         --format png pdf
 
     # Include WAFAMOLE (E) as external test-only dataset
@@ -677,9 +677,9 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output/experiments"),
+        default=Path("output/results"),
         help=(
-            "Root output directory (default: output/experiments). "
+            "Root output directory (default: output/results). "
             "Figures go to {output_dir}/generic-vs-specialised/ and {output_dir}/tl-matrix/."
         ),
     )

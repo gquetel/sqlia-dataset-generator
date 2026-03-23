@@ -131,7 +131,9 @@ def train_domain_classifier(
 ) -> RandomForestClassifier:
     X = np.concatenate([X_source, X_target], axis=0)
     y = np.concatenate([np.zeros(len(X_source)), np.ones(len(X_target))])
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=2, stratify=y)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, random_state=2, stratify=y
+    )
     clf = RandomForestClassifier(n_estimators=100, random_state=2, n_jobs=-1)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_val)
@@ -139,7 +141,6 @@ def train_domain_classifier(
     cm = confusion_matrix(y_val, y_pred)
     print(f"  Confusion matrix (rows=true, cols=pred) [source, target]:\n{cm}")
     return clf
-
 
 
 def evaluate_malignancy(
@@ -224,7 +225,7 @@ def main():
     parser.add_argument(
         "--model-dir",
         required=True,
-        help="Directory containing trained .pth files (e.g. models/output/models/ae_li_generic/)",
+        help="Directory containing trained .pth files (e.g. output/models/models/ae_li_generic/)",
     )
     parser.add_argument(
         "--output-dir",

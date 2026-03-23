@@ -29,7 +29,7 @@ class ProjectPaths:
 
     @property
     def output_path(self) -> str:
-        path = f"{self.base_path}/output/"
+        path = f"{self.base_path}/../output/results/"
 
         if self.subfolder:
             path += f"{self.subfolder}/"
@@ -46,12 +46,6 @@ class ProjectPaths:
     @property
     def logs_path(self) -> str:
         path = f"{self.base_path}../logs/"
-        Path(path).mkdir(exist_ok=True, parents=True)
-        return path
-
-    @property
-    def models_path(self) -> str:
-        path = f"{self.base_path}/output/models/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 

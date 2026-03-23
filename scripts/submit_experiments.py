@@ -284,8 +284,8 @@ def generate_generic_script(
     scenario = GENERIC_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename("generic", scenario["train_dataset"])
-    models_dir = f"./models/output/models/{model}_generic"
-    results_dir = f"./models/output/{model}_generic"
+    models_dir = f"./output/checkpoints/{model}_generic"
+    results_dir = f"./output/results/{model}_generic"
     # The held-out (test) dataset for this generic scenario
     training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
 
@@ -352,8 +352,8 @@ def generate_specialised_script(
     scenario = SPECIALISED_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename("specialised", scenario["train_dataset"])
-    models_dir = f"./models/output/models/{model}_specialised"
-    results_dir = f"./models/output/{model}_specialised"
+    models_dir = f"./output/checkpoints/{model}_specialised"
+    results_dir = f"./output/results/{model}_specialised"
     # For specialised, the test set during training is the same dataset as training
     training_test_label = scenario["train_label"]
 
@@ -417,10 +417,10 @@ def generate_wafamole_script(
     no_cache: bool = False,
 ) -> str:
     """Generate a script for wafamole experiments (3 phases)."""
-    spec_models_dir = f"./models/output/models/{model}_specialised"
-    gen_models_dir = f"./models/output/models/{model}_generic"
-    spec_results_dir = f"./models/output/{model}_specialised"
-    gen_results_dir = f"./models/output/{model}_generic"
+    spec_models_dir = f"./output/checkpoints/{model}_specialised"
+    gen_models_dir = f"./output/checkpoints/{model}_generic"
+    spec_results_dir = f"./output/results/{model}_specialised"
+    gen_results_dir = f"./output/results/{model}_generic"
     wafamole_file = dataset_filename("specialised", "wafamole")
 
     job_suffix = "wafamole"
@@ -555,8 +555,8 @@ def generate_malignancy_script(
     scenario = GENERIC_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename("generic", scenario["train_dataset"])
-    models_dir = f"./models/output/models/{model}_generic"
-    results_dir = "./output/experiments/malignancy"
+    models_dir = f"./output/checkpoints/{model}_generic"
+    results_dir = "./output/results/malignancy"
 
     job_suffix = f"malignancy_s{scenario_num}"
     log_dir = log_dir_for(model, job_suffix)
@@ -637,18 +637,18 @@ def generate_shap_script(
     """Generate a SHAP script: train model if absent, then run SHAP analysis."""
     if mode == "generic":
         scenario = GENERIC_SCENARIOS[scenario_num]
-        models_dir = f"./models/output/models/{model}_generic"
+        models_dir = f"./output/checkpoints/{model}_generic"
         training_test_label = next(
             l for l in "ABCD" if l not in scenario["train_label"]
         )
     else:
         scenario = SPECIALISED_SCENARIOS[scenario_num]
-        models_dir = f"./models/output/models/{model}_specialised"
+        models_dir = f"./output/checkpoints/{model}_specialised"
         training_test_label = scenario["train_label"]
 
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename(mode, scenario["train_dataset"])
-    output_dir = "./output/experiments/shap"
+    output_dir = "./output/results/shap"
 
     job_suffix = f"shap_{mode}_s{scenario_num}"
     log_dir = log_dir_for(model, job_suffix)
