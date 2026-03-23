@@ -31,7 +31,7 @@ class GaurExtractor(BaseExtractor):
     def extract_features(self, df: pd.DataFrame):
         df = self._ensure_traces(df)
         X, _ = self._preprocessor.preprocess_for_preds(df)
-        return X.select_dtypes(include="number").to_numpy(dtype=float)
+        return X.select_dtypes(include="number")
 
     def preprocess_for_preds(self, df: pd.DataFrame):
         """Override base to avoid collecting traces twice."""
