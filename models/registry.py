@@ -219,6 +219,41 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
         extractor_kwargs=dict(use_hybrid=True, mode="chatgpt"),
     ),
+    # ---- GAUR ablation (Li + GAUR feature subsets) ----
+    "ae_li_gaur_lex": ModelConfig(
+        extractor_type="gaur_ablation",
+        model_type="ae",
+        use_scaler=True,
+        display_name="Li + GAUR Lex + AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(
+            gaur_features=["avg_c_sqlkywds", "max_c_sqlkywds", "min_c_sqlkywds"]
+        ),
+    ),
+    "ae_li_gaur_synt": ModelConfig(
+        extractor_type="gaur_ablation",
+        model_type="ae",
+        use_scaler=True,
+        display_name="Li + GAUR Synt + AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(
+            gaur_features=[
+                "n_terminal",
+                "n_nonterminal",
+                "is_syntax_error",
+                "depth",
+                "n_parser_invoc",
+            ]
+        ),
+    ),
+    "ae_li_gaur_sem": ModelConfig(
+        extractor_type="gaur_ablation",
+        model_type="ae",
+        use_scaler=True,
+        display_name="Li + GAUR Sem + AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(gaur_features=None),
+    ),
     # ---- UniXcoder ----
     "ae_unixcoder": ModelConfig(
         extractor_type="unixcoder",
@@ -361,6 +396,13 @@ def _make_extractor(
         from extractors.gaur import GaurExtractor
 
         ext = GaurExtractor(**kwargs)
+        ext.cache_dir = cache_dir
+        return ext
+
+    if config.extractor_type == "gaur_ablation":
+        from extractors.gaur_ablation import GaurAblationExtractor
+
+        ext = GaurAblationExtractor(**kwargs)
         ext.cache_dir = cache_dir
         return ext
 

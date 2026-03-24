@@ -87,6 +87,9 @@ KNOWN_LABELS: dict[str, str] = {
     "ae_gaur": "GAUR + AE",
     "ae_kakisim_c": "Kakisim-C + AE",
     "ae_loginov": "Loginov + AE",
+    "ae_li_gaur_lex": "Li + GAUR Lex + AE",
+    "ae_li_gaur_synt": "Li + GAUR Synt + AE",
+    "ae_li_gaur_sem": "Li + GAUR Sem + AE",
 }
 
 COLORS = {"generic": "#636EFA", "specialised": "#EF553B"}
