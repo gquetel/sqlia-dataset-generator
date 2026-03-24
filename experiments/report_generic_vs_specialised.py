@@ -90,6 +90,7 @@ KNOWN_LABELS: dict[str, str] = {
 }
 
 COLORS = {"generic": "#636EFA", "specialised": "#EF553B"}
+CONCEPT_DRIFT_COLORS = {"origin": "#636EFA", "shifted": "#EF553B"}
 
 METRIC_LABELS: dict[str, str] = {
     "accuracy": "Accuracy (%)",
@@ -152,6 +153,17 @@ def _parse_pct(val) -> float:
     return float(val)
 
 
+def _normalize_pct_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert percent-string columns to float in-place."""
+    for col in _PCT_COLS:
+        if col in df.columns and df[col].dtype == object:
+            df[col] = df[col].str.rstrip("%").astype(float)
+    for col in [c for c in df.columns if c.startswith("recall") and c != "recall"]:
+        if df[col].dtype == object:
+            df[col] = df[col].str.rstrip("%").astype(float)
+    return df
+
+
 def load_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
     """Load generic/specialised results for the 4 leave-one-out configurations.
 
@@ -178,16 +190,7 @@ def load_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame()
 
-    combined = pd.concat(rows, ignore_index=True)
-    for col in _PCT_COLS:
-        if col in combined.columns and combined[col].dtype == object:
-            combined[col] = combined[col].str.rstrip("%").astype(float)
-    for col in [
-        c for c in combined.columns if c.startswith("recall") and c != "recall"
-    ]:
-        if combined[col].dtype == object:
-            combined[col] = combined[col].str.rstrip("%").astype(float)
-    return combined
+    return _normalize_pct_columns(pd.concat(rows, ignore_index=True))
 
 
 def discover_models(results_dir: Path) -> list[str]:
@@ -231,42 +234,16 @@ def load_tl_matrix(
     return {"auroc": auroc, "auprc": auprc, "f1": f1}
 
 
-def plot_main_metrics(results_df: pd.DataFrame, title: str):
-    """Bar chart comparing main metrics (F1, AUROC, AUPRC, balanced accuracy)."""
-    if results_df.empty:
-        print(f"  [skip] no data: {title}")
-        return None
-
-    fig = make_subplots(
-        rows=1,
-        cols=len(MAIN_METRICS),
-        subplot_titles=[METRIC_LABELS[m] for m in MAIN_METRICS],
-        vertical_spacing=0.15,
-    )
-    for idx, metric in enumerate(MAIN_METRICS):
-        col = idx + 1
-        for model_type in ("generic", "specialised"):
-            subset = results_df[results_df["type"] == model_type]
-            fig.add_trace(
-                go.Bar(
-                    x=subset["dataset"],
-                    y=subset[metric],
-                    name=model_type.capitalize(),
-                    marker_color=COLORS[model_type],
-                    showlegend=(idx == 0),
-                    legendgroup=model_type,
-                ),
-                row=1,
-                col=col,
-            )
-    fig.update_layout(title=title, barmode="group", height=300, width=1300)
-    return fig
-
-
 def plot_roc_curves(
-    results_df: pd.DataFrame, results_dir: Path, model_prefix: str, title: str
+    results_df: pd.DataFrame,
+    title: str,
+    scenarios: list[tuple[str, str, callable]],
 ):
-    """ROC curve grid (one subplot per dataset, dynamically sized)."""
+    """ROC curve grid (one subplot per dataset, dynamically sized).
+
+    scenarios: list of (label, color, roc_dir_fn) where
+               roc_dir_fn(letter, complement) -> Path to the roc_curves directory.
+    """
     if results_df.empty:
         print(f"  [skip] no data: {title}")
         return None
@@ -282,40 +259,27 @@ def plot_roc_curves(
         letter = DATASET_LETTERS[dataset]
         complement = leave_one_out_complement(letter)
 
-        for model_type in ("generic", "specialised"):
-            if model_type == "generic":
-                run = f"{model_prefix}_{complement}_on_{letter}"
-                roc_filename = f"{model_prefix}_{complement}.csv"
-            else:
-                run = f"{model_prefix}_{letter}_on_{letter}"
-                roc_filename = f"{model_prefix}_{letter}.csv"
-
-            roc_dir = results_dir / f"{model_prefix}_{model_type}" / run / "roc_curves"
-            roc_path = roc_dir / roc_filename
-
-            # Fallback: first CSV in roc_curves/ (handles non-standard naming)
-            if not roc_path.exists() and roc_dir.exists():
-                candidates = list(roc_dir.glob("*.csv"))
-                if candidates:
-                    roc_path = candidates[0]
-
-            if roc_path.exists():
-                roc_df = pd.read_csv(roc_path)
-                fig.add_trace(
-                    go.Scatter(
-                        x=roc_df["fpr"],
-                        y=roc_df["tpr"],
-                        mode="lines",
-                        name=model_type.capitalize(),
-                        line=dict(color=COLORS[model_type]),
-                        showlegend=(idx == 0),
-                        legendgroup=model_type,
-                    ),
-                    row=row,
-                    col=col,
-                )
-            else:
+        for label, color, roc_dir_fn in scenarios:
+            roc_dir = roc_dir_fn(letter, complement)
+            # Use first CSV found (handles any naming convention)
+            roc_files = list(roc_dir.glob("*.csv")) if roc_dir.exists() else []
+            if not roc_files:
                 print(f"  [warn] missing ROC data in: {roc_dir}")
+                continue
+            roc_df = pd.read_csv(roc_files[0])
+            fig.add_trace(
+                go.Scatter(
+                    x=roc_df["fpr"],
+                    y=roc_df["tpr"],
+                    mode="lines",
+                    name=label.capitalize(),
+                    line=dict(color=color),
+                    showlegend=(idx == 0),
+                    legendgroup=label,
+                ),
+                row=row,
+                col=col,
+            )
 
         fig.add_trace(
             go.Scatter(
@@ -387,16 +351,25 @@ def plot_combined_metric(
     all_results: dict[str, pd.DataFrame],
     models: list[dict],
     metric: str,
+    split_col: str,
+    categories: list[str],
+    subplot_titles: list[str],
     title: str | None = None,
 ):
-    """Heatmap comparing one metric across all models (generic vs specialised)."""
+    """Heatmap comparing one metric across all models for two categories side-by-side.
+
+    split_col: column that partitions rows (e.g. "type" or "split").
+    categories: the two values of split_col to show (one panel each).
+    subplot_titles: display names for the two panels.
+    """
     rows = []
     for m in models:
-        df = all_results[m["prefix"]]
-        if not df.empty and metric in df.columns:
-            tmp = df[["dataset", "type", metric]].copy()
-            tmp["approach"] = m["label"]
-            rows.append(tmp)
+        df = all_results.get(m["prefix"])
+        if df is None or df.empty or metric not in df.columns:
+            continue
+        tmp = df[["dataset", split_col, metric]].copy()
+        tmp["approach"] = m["label"]
+        rows.append(tmp)
 
     if not rows:
         print(f"  [skip] no data for metric '{metric}'")
@@ -405,22 +378,21 @@ def plot_combined_metric(
     combined = pd.concat(rows, ignore_index=True)
     label = METRIC_LABELS.get(metric, metric)
     if title is None:
-        title = f"{label}: Generic vs Specialised across Feature Extractors"
+        title = f"{label} across Feature Extractors"
 
-    approach_order = [m["label"] for m in models]
+    approach_order = [
+        m["label"] for m in models if all_results.get(m["prefix"]) is not None
+    ]
     is_pct = combined[metric].max() > 1
     fmt = ".1f" if is_pct else ".4f"
     zmin, zmax = 0, (100 if is_pct else 1)
 
     fig = make_subplots(
-        rows=1,
-        cols=2,
-        subplot_titles=["Generic", "Specialised"],
-        horizontal_spacing=0.15,
+        rows=1, cols=2, subplot_titles=subplot_titles, horizontal_spacing=0.15
     )
     ds_order = sorted(combined["dataset"].unique())
-    for col_idx, model_type in enumerate(("generic", "specialised"), 1):
-        subset = combined[combined["type"] == model_type]
+    for col_idx, category in enumerate(categories, 1):
+        subset = combined[combined[split_col] == category]
         z, text = [], []
         for ds in ds_order:
             row_z, row_t = [], []
@@ -449,72 +421,6 @@ def plot_combined_metric(
             col=col_idx,
         )
     fig.update_layout(title=title, height=350, width=700)
-    return fig
-
-
-def _tl_heatmap(matrix: pd.DataFrame, title: str) -> go.Figure:
-    """Heatmap for one TL matrix (one metric, one scenario).
-
-    Out-of-domain cells (test set not seen during training) are rendered in bold
-    to highlight generalisation performance.
-    """
-    flat = matrix.values.astype(float)
-    has_data = ~pd.isna(flat)
-    is_pct = flat[has_data].max() > 1 if has_data.any() else False
-    zmin = 50.0 if is_pct else 0.5
-    zmax = 100.0 if is_pct else 1.0
-    fmt = ".1f" if is_pct else ".3f"
-    low_threshold = 70.0 if is_pct else 0.7
-
-    annotations = []
-    for train in matrix.index:
-        for test in matrix.columns:
-            val = matrix.loc[train, test]
-            if pd.isna(val):
-                annotations.append(
-                    dict(
-                        x=test,
-                        y=train,
-                        text="N/A",
-                        font=dict(color="gray", size=12),
-                        showarrow=False,
-                    )
-                )
-            else:
-                is_generalization = test not in train
-                annotations.append(
-                    dict(
-                        x=test,
-                        y=train,
-                        text=f"{val:{fmt}}",
-                        font=dict(
-                            color="white" if val < low_threshold else "black",
-                            size=14,
-                            weight="bold" if is_generalization else "normal",
-                        ),
-                        showarrow=False,
-                    )
-                )
-
-    fig = go.Figure(
-        data=go.Heatmap(
-            z=flat,
-            x=matrix.columns.tolist(),
-            y=matrix.index.tolist(),
-            colorscale="RdYlGn",
-            zmin=zmin,
-            zmax=zmax,
-            showscale=True,
-        )
-    )
-    fig.update_layout(
-        title=title,
-        xaxis_title="Test Dataset",
-        yaxis_title="Training Set",
-        annotations=annotations,
-        width=500,
-        height=400,
-    )
     return fig
 
 
@@ -638,6 +544,41 @@ def plot_tl_matrices(
     return figs
 
 
+def load_concept_drift_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
+    """Load origin/shifted results for all 4 datasets from a concept-drift run.
+
+    Paths: {results_dir}/{prefix}_concept_drift/{prefix}_{letter}_on_{split}/results.csv
+    """
+    rows = []
+    for dataset, letter in DATASET_LETTERS.items():
+        if dataset == "wafamole":
+            continue
+        for split in ("origin", "shifted"):
+            cd_dir = results_dir / f"{model_prefix}_concept_drift"
+            # Match ae_gaur_A_on_origin or ae_gaur_A_testing_on_origin etc.
+            candidates = list(cd_dir.glob(f"{model_prefix}_{letter}*_on_{split}"))
+            path = candidates[0] / "results.csv" if candidates else None
+            if path is not None and path.exists():
+                df = pd.read_csv(path)
+                df["dataset"] = dataset
+                df["split"] = split
+                rows.append(df)
+
+    if not rows:
+        return pd.DataFrame()
+
+    return _normalize_pct_columns(pd.concat(rows, ignore_index=True))
+
+
+def discover_concept_drift_models(results_dir: Path) -> list[str]:
+    """Return model prefixes that have a *_concept_drift directory in results_dir."""
+    return [
+        p.name.removesuffix("_concept_drift")
+        for p in sorted(results_dir.glob("*_concept_drift"))
+        if p.is_dir()
+    ]
+
+
 def export_figure(fig: go.Figure, stem: Path, formats: list[str]) -> None:
     for fmt in formats:
         out = stem.with_suffix(f".{fmt}")
@@ -721,37 +662,57 @@ def main() -> int:
     else:
         prefixes = discover_models(results_dir)
         if not prefixes:
-            print(f"ERROR: no *_generic/*_specialised pairs found in {results_dir}")
-            return 1
-        print(f"Discovered models: {prefixes}")
+            if not discover_concept_drift_models(results_dir):
+                print(f"ERROR: no *_generic/*_specialised pairs found in {results_dir}")
+                return 1
+        else:
+            print(f"Discovered models: {prefixes}")
 
     models = [{"prefix": p, "label": model_label(p)} for p in prefixes]
 
     # Load generic/specialised results upfront
-    print("\nLoading results…")
     all_results: dict[str, pd.DataFrame] = {}
-    for m in models:
-        df = load_results(results_dir, m["prefix"])
-        all_results[m["prefix"]] = df
-        print(f"  {m['prefix']}: {len(df)} rows")
+    if models:
+        print("\nLoading results…")
+        for m in models:
+            df = load_results(results_dir, m["prefix"])
+            all_results[m["prefix"]] = df
+            print(f"  {m['prefix']}: {len(df)} rows")
 
     gvs_dir = args.output_dir / "generic-vs-specialised"
     tl_dir = args.output_dir / "tl-matrix"
-    gvs_dir.mkdir(parents=True, exist_ok=True)
-    tl_dir.mkdir(parents=True, exist_ok=True)
+    if models:
+        gvs_dir.mkdir(parents=True, exist_ok=True)
+        tl_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── Generic vs Specialised ──────────────────────────────────────────────────
+    #  Generic vs Specialised
     for m in models:
         prefix, label = m["prefix"], m["label"]
         df = all_results[prefix]
         print(f"\n── {label} ──")
 
         per_model_figs = {
-            f"metrics_{prefix}": plot_main_metrics(
-                df, f"Generic vs Specialised ({label})"
-            ),
             f"roc_{prefix}": plot_roc_curves(
-                df, results_dir, prefix, f"ROC Curves: Generic vs Specialised ({label})"
+                df,
+                f"ROC Curves: Generic vs Specialised ({label})",
+                scenarios=[
+                    (
+                        "generic",
+                        COLORS["generic"],
+                        lambda l, c, p=prefix: results_dir
+                        / f"{p}_generic"
+                        / f"{p}_{c}_on_{l}"
+                        / "roc_curves",
+                    ),
+                    (
+                        "specialised",
+                        COLORS["specialised"],
+                        lambda l, c, p=prefix: results_dir
+                        / f"{p}_specialised"
+                        / f"{p}_{l}_on_{l}"
+                        / "roc_curves",
+                    ),
+                ],
             ),
             f"recall_technique_{prefix}": plot_recall_per_technique(
                 df, f"Recall per Attack Technique: Generic vs Specialised ({label})"
@@ -766,14 +727,20 @@ def main() -> int:
 
     print("\n── Combined balanced accuracy ──")
     fig_combined = plot_combined_metric(
-        all_results, models, "balanced_accuracy_per_technique"
+        all_results,
+        models,
+        "balanced_accuracy_per_technique",
+        split_col="type",
+        categories=["generic", "specialised"],
+        subplot_titles=["Generic", "Specialised"],
+        title=f"Balanced Accuracy: Generic vs Specialised across Feature Extractors",
     )
     if fig_combined is not None:
         export_figure(
             fig_combined, gvs_dir / "balanced_accuracy_combined_heatmap", args.format
         )
 
-    # ── Transfer Learning Matrices ──────────────────────────────────────────────
+    # Transfer Learning Matrices
     print("\n── Transfer Learning Matrices ──")
     for m in models:
         print(f"\n── TL: {m['label']} ──")
@@ -781,9 +748,83 @@ def main() -> int:
         for name, fig in tl_figs.items():
             export_figure(fig, tl_dir / name, args.format)
 
+    # Concept Drift (auto-detected)
+    cd_prefixes = discover_concept_drift_models(results_dir)
+    if cd_prefixes:
+        print("\n── Concept Drift ──")
+        print(f"  Found concept-drift models: {cd_prefixes}")
+        cd_dir = args.output_dir / "concept-drift"
+        cd_dir.mkdir(parents=True, exist_ok=True)
+
+        all_cd_results: dict[str, pd.DataFrame] = {}
+        for prefix in cd_prefixes:
+            df = load_concept_drift_results(results_dir, prefix)
+            all_cd_results[prefix] = df
+            print(f"  {prefix}: {len(df)} rows")
+
+        cd_models = [{"prefix": p, "label": model_label(p)} for p in cd_prefixes]
+        for m in cd_models:
+            df = all_cd_results[m["prefix"]]
+            label = m["label"]
+            for name, fig in {
+                f"roc_{m['prefix']}": plot_roc_curves(
+                    df,
+                    f"ROC Curves: Origin vs Shifted ({label})",
+                    scenarios=[
+                        (
+                            "origin",
+                            CONCEPT_DRIFT_COLORS["origin"],
+                            lambda l, c, p=m["prefix"]: next(
+                                (
+                                    d / "roc_curves"
+                                    for d in (results_dir / f"{p}_concept_drift").glob(
+                                        f"{p}_{l}*_on_origin"
+                                    )
+                                ),
+                                results_dir / "__nonexistent__",
+                            ),
+                        ),
+                        (
+                            "shifted",
+                            CONCEPT_DRIFT_COLORS["shifted"],
+                            lambda l, c, p=m["prefix"]: next(
+                                (
+                                    d / "roc_curves"
+                                    for d in (results_dir / f"{p}_concept_drift").glob(
+                                        f"{p}_{l}*_on_shifted"
+                                    )
+                                ),
+                                results_dir / "__nonexistent__",
+                            ),
+                        ),
+                    ],
+                ),
+            }.items():
+                if fig is not None:
+                    export_figure(fig, cd_dir / name, args.format)
+
+        print("\n── Combined concept-drift balanced accuracy ──")
+        fig_cd_combined = plot_combined_metric(
+            all_cd_results,
+            cd_models,
+            "balanced_accuracy_per_technique",
+            split_col="split",
+            categories=["origin", "shifted"],
+            subplot_titles=["Origin (seen templates)", "Shifted (unseen templates)"],
+            title="Balanced Accuracy: Origin vs Shifted across Feature Extractors",
+        )
+        if fig_cd_combined is not None:
+            export_figure(
+                fig_cd_combined,
+                cd_dir / "balanced_accuracy_combined_heatmap",
+                args.format,
+            )
+        print(f"  Concept drift          : {cd_dir.resolve()}")
+
     print(f"\nDone.")
-    print(f"  Generic vs specialised : {gvs_dir.resolve()}")
-    print(f"  TL matrices            : {tl_dir.resolve()}")
+    if models:
+        print(f"  Generic vs specialised : {gvs_dir.resolve()}")
+        print(f"  TL matrices            : {tl_dir.resolve()}")
     return 0
 
 
