@@ -579,6 +579,45 @@ def discover_concept_drift_models(results_dir: Path) -> list[str]:
     ]
 
 
+def export_auroc_delta_csv(
+    all_results: dict[str, pd.DataFrame],
+    models: list[dict],
+    output_dir: Path,
+) -> None:
+    """Export a CSV with AUROC generic, specialised, and delta for each model×dataset."""
+    rows = []
+    for m in models:
+        df = all_results.get(m["prefix"])
+        if df is None or df.empty or "rocauc" not in df.columns:
+            continue
+        generic = df[df["type"] == "generic"][["dataset", "rocauc"]].set_index(
+            "dataset"
+        )["rocauc"]
+        specialised = df[df["type"] == "specialised"][["dataset", "rocauc"]].set_index(
+            "dataset"
+        )["rocauc"]
+        for dataset in DATASETS:
+            g = generic.get(dataset, float("nan"))
+            s = specialised.get(dataset, float("nan"))
+            rows.append(
+                {
+                    "model": m["prefix"],
+                    "dataset": dataset,
+                    "auroc_generic": g,
+                    "auroc_specialised": s,
+                    "delta": g - s,
+                }
+            )
+
+    if not rows:
+        print("  [skip] no AUROC data for CSV export")
+        return
+
+    out = output_dir / "auroc_generic_vs_specialised.csv"
+    pd.DataFrame(rows).to_csv(out, index=False, float_format="%.4f")
+    print(f"  Exported {out.name}")
+
+
 def export_figure(fig: go.Figure, stem: Path, formats: list[str]) -> None:
     for fmt in formats:
         out = stem.with_suffix(f".{fmt}")
@@ -684,6 +723,8 @@ def main() -> int:
     if models:
         gvs_dir.mkdir(parents=True, exist_ok=True)
         tl_dir.mkdir(parents=True, exist_ok=True)
+        print("\n── AUROC delta CSV ──")
+        export_auroc_delta_csv(all_results, models, gvs_dir)
 
     #  Generic vs Specialised
     for m in models:
