@@ -134,6 +134,16 @@ SPECIALISED_SCENARIOS = {
 }
 
 
+# Concept-drift mode: train on origin templates, test on origin vs shifted
+CONCEPT_DRIFT_SCENARIOS = {
+    1: {"train_label": "A", "train_dataset": "OurAirports"},
+    2: {"train_label": "B", "train_dataset": "sakila"},
+    3: {"train_label": "C", "train_dataset": "AdventureWorks"},
+    4: {"train_label": "D", "train_dataset": "OHR"},
+}
+
+CONCEPT_DRIFT_DATASETS_DIR = os.path.expanduser("~/datasets/concept-drift/")
+
 GAUR_MODELS = {m for m in MODEL_PROFILES if "gaur" in m}
 
 
@@ -697,6 +707,70 @@ def generate_shap_script(
     return "\n".join(parts)
 
 
+def generate_concept_drift_script(
+    model: str,
+    scenario_num: int,
+    testing: bool,
+    slurm: bool,
+    no_cache: bool = False,
+) -> str:
+    """Generate a script for concept-drift (origin vs shifted templates)."""
+    scenario = CONCEPT_DRIFT_SCENARIOS[scenario_num]
+    model_name = f"{model}_{scenario['train_label']}"
+    train_file = dataset_filename("origin", scenario["train_dataset"])
+    models_dir = f"./output/checkpoints/{model}_concept_drift"
+    results_dir = f"./output/results/{model}_concept_drift"
+    datasets_dir = CONCEPT_DRIFT_DATASETS_DIR
+
+    job_suffix = f"concept_drift_s{scenario_num}"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
+    test_datasets = [
+        (dataset_filename("origin", scenario["train_dataset"]), "origin"),
+        (dataset_filename("shifted", scenario["train_dataset"]), "shifted"),
+    ]
+
+    parts = []
+    if slurm:
+        parts.append(sbatch_header(model, job_suffix, log_path))
+    else:
+        parts.append("#!/bin/bash")
+    parts.append("")
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
+    parts.append(f'echo "Running concept-drift scenario {scenario_num}: {model_name}"')
+    parts.append("")
+    parts.append(f"# Train {model_name} on origin templates")
+    parts.append(
+        train_cmd(
+            model,
+            "concept_drift",
+            train_file,
+            model_name,
+            models_dir,
+            training_test_label="origin",
+            no_cache=no_cache,
+            skip_eval=True,
+        )
+    )
+    parts.append("")
+    parts.append(
+        f"# Evaluate {model_name} on origin (seen) and shifted (unseen) templates"
+    )
+    parts.append(
+        eval_cmd(
+            model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache
+        )
+    )
+    parts.append("")
+    parts.append('echo "Job finished at: $(date)"')
+    return "\n".join(parts)
+
+
 def generate_domain_shift_script(
     model: str,
     testing: bool,
@@ -803,6 +877,7 @@ def main():
             "domain_shift",
             "malignancy",
             "shap",
+            "concept_drift",
         ],
         help="Experiment mode",
     )
@@ -883,6 +958,27 @@ def main():
             write_and_submit(
                 script,
                 f"{args.model}_malignancy_scenario{n}.sh",
+                args.dry_run,
+                args.local,
+            )
+    elif args.mode == "concept_drift":
+        if args.scenario == "all":
+            scenario_nums = [1, 2, 3, 4]
+        else:
+            try:
+                n = int(args.scenario)
+                if n < 1 or n > 4:
+                    raise ValueError
+                scenario_nums = [n]
+            except ValueError:
+                parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
+        for n in scenario_nums:
+            script = generate_concept_drift_script(
+                args.model, n, args.testing, use_slurm, args.no_cache
+            )
+            write_and_submit(
+                script,
+                f"{args.model}_concept_drift_scenario{n}.sh",
                 args.dry_run,
                 args.local,
             )
