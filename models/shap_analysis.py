@@ -123,8 +123,8 @@ def main():
     parser.add_argument("--testing", action="store_true")
     args = parser.parse_args()
 
-    n_background = 30 if args.testing else 300
-    n_explain = 100 if args.testing else 5000
+    n_background = 20 if args.testing else 200
+    n_explain = 100 if args.testing else 1000
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = _load_model(args.model_type, args.model_path, device)

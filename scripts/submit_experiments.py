@@ -45,7 +45,7 @@ SLURM_PROFILES = {
     "gpu_A40": {
         "partition": "A40",
         "gres": "gpu:1",
-        "cpus": 16,  # Fewer CPUs to reach smaller machines
+        "cpus": 16,
         "mem": "32G",
         "time": "12:00:00",
     },
