@@ -586,29 +586,33 @@ def export_auroc_delta_csv(
     all_results: dict[str, pd.DataFrame],
     models: list[dict],
     output_dir: Path,
+    split_col: str = "type",
+    cat_a: str = "specialised",
+    cat_b: str = "generic",
+    filename: str = "auroc_generic_vs_specialised.csv",
 ) -> None:
-    """Export a CSV with AUROC generic, specialised, and delta for each model×dataset."""
+    """Export a CSV with AUROC for two categories and their delta (cat_a - cat_b) per model×dataset."""
     rows = []
     for m in models:
         df = all_results.get(m["prefix"])
         if df is None or df.empty or "rocauc" not in df.columns:
             continue
-        generic = df[df["type"] == "generic"][["dataset", "rocauc"]].set_index(
-            "dataset"
-        )["rocauc"]
-        specialised = df[df["type"] == "specialised"][["dataset", "rocauc"]].set_index(
-            "dataset"
-        )["rocauc"]
-        for dataset in DATASETS:
-            g = generic.get(dataset, float("nan"))
-            s = specialised.get(dataset, float("nan"))
+        a_vals = df[df[split_col] == cat_a][["dataset", "rocauc"]].set_index("dataset")[
+            "rocauc"
+        ]
+        b_vals = df[df[split_col] == cat_b][["dataset", "rocauc"]].set_index("dataset")[
+            "rocauc"
+        ]
+        for dataset in df["dataset"].unique():
+            a = a_vals.get(dataset, float("nan"))
+            b = b_vals.get(dataset, float("nan"))
             rows.append(
                 {
                     "model": m["prefix"],
                     "dataset": dataset,
-                    "auroc_generic": g,
-                    "auroc_specialised": s,
-                    "delta": g - s,
+                    f"auroc_{cat_a}": a,
+                    f"auroc_{cat_b}": b,
+                    "delta": b - a,
                 }
             )
 
@@ -616,8 +620,17 @@ def export_auroc_delta_csv(
         print("  [skip] no AUROC data for CSV export")
         return
 
-    out = output_dir / "auroc_generic_vs_specialised.csv"
-    pd.DataFrame(rows).to_csv(out, index=False, float_format="%.4f")
+    result_df = pd.DataFrame(rows)
+    mean_rows = (
+        result_df.groupby("model")[[f"auroc_{cat_a}", f"auroc_{cat_b}", "delta"]]
+        .mean()
+        .reset_index()
+        .assign(dataset="mean")
+    )
+    result_df = pd.concat([result_df, mean_rows], ignore_index=True)
+
+    out = output_dir / filename
+    result_df.to_csv(out, index=False, float_format="%.4f")
     print(f"  Exported {out.name}")
 
 
@@ -726,14 +739,14 @@ def main() -> int:
     if models:
         gvs_dir.mkdir(parents=True, exist_ok=True)
         tl_dir.mkdir(parents=True, exist_ok=True)
-        print("\n── AUROC delta CSV ──")
+        print("\n=== AUROC delta CSV ===")
         export_auroc_delta_csv(all_results, models, gvs_dir)
 
     #  Generic vs Specialised
     for m in models:
         prefix, label = m["prefix"], m["label"]
         df = all_results[prefix]
-        print(f"\n── {label} ──")
+        print(f"\n=== {label} ===")
 
         per_model_figs = {
             f"roc_{prefix}": plot_roc_curves(
@@ -769,25 +782,10 @@ def main() -> int:
             if fig is not None:
                 export_figure(fig, gvs_dir / name, args.format)
 
-    print("\n── Combined balanced accuracy ──")
-    fig_combined = plot_combined_metric(
-        all_results,
-        models,
-        "balanced_accuracy_per_technique",
-        split_col="type",
-        categories=["generic", "specialised"],
-        subplot_titles=["Generic", "Specialised"],
-        title=f"Balanced Accuracy: Generic vs Specialised across Feature Extractors",
-    )
-    if fig_combined is not None:
-        export_figure(
-            fig_combined, gvs_dir / "balanced_accuracy_combined_heatmap", args.format
-        )
-
     # Transfer Learning Matrices
-    print("\n── Transfer Learning Matrices ──")
+    print("\n=== Transfer Learning Matrices ===")
     for m in models:
-        print(f"\n── TL: {m['label']} ──")
+        print(f"\n=== TL: {m['label']} ===")
         tl_figs = plot_tl_matrices(results_dir, m["prefix"], m["label"])
         for name, fig in tl_figs.items():
             export_figure(fig, tl_dir / name, args.format)
@@ -795,7 +793,7 @@ def main() -> int:
     # Concept Drift (auto-detected)
     cd_prefixes = discover_concept_drift_models(results_dir)
     if cd_prefixes:
-        print("\n── Concept Drift ──")
+        print("\n=== Concept Drift ===")
         print(f"  Found concept-drift models: {cd_prefixes}")
         cd_dir = args.output_dir / "concept-drift"
         cd_dir.mkdir(parents=True, exist_ok=True)
@@ -847,22 +845,17 @@ def main() -> int:
                 if fig is not None:
                     export_figure(fig, cd_dir / name, args.format)
 
-        print("\n── Combined concept-drift balanced accuracy ──")
-        fig_cd_combined = plot_combined_metric(
+        print("\n=== Concept Drift AUROC delta CSV ===")
+        export_auroc_delta_csv(
             all_cd_results,
             cd_models,
-            "balanced_accuracy_per_technique",
+            cd_dir,
             split_col="split",
-            categories=["origin", "shifted"],
-            subplot_titles=["Origin (seen templates)", "Shifted (unseen templates)"],
-            title="Balanced Accuracy: Origin vs Shifted across Feature Extractors",
+            cat_a="origin",
+            cat_b="shifted",
+            filename="auroc_concept_drift_delta.csv",
         )
-        if fig_cd_combined is not None:
-            export_figure(
-                fig_cd_combined,
-                cd_dir / "balanced_accuracy_combined_heatmap",
-                args.format,
-            )
+
         print(f"  Concept drift          : {cd_dir.resolve()}")
 
     print(f"\nDone.")
