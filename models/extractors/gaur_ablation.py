@@ -45,7 +45,8 @@ class GaurAblationExtractor(GaurExtractor):
         if self._gaur_features is not None:
             cols = [c for c in self._gaur_features if c in X_gaur.columns]
         else:
-            # Semantic: everything not in the lex/synt sets
+            # Semantic: everything not in the lex/synt sets since they change
+            # according to the mode.
             cols = [c for c in X_gaur.columns if c not in _GAUR_NON_SEM]
 
         X_gaur_subset = X_gaur[cols].to_numpy(dtype=float)

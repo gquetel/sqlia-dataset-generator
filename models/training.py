@@ -84,6 +84,17 @@ def init_logging(args):
     root.addHandler(lf)
     root.addHandler(lstdo)
 
+    # gaur_sqld uses logging.getLogger(__name__) throughout, so all its messages
+    # are under the gaur_sqld.* namespace. Isolate them with a dedicated handler
+    # so they can be prefixed and suppressed independently from our own logs.
+    gaur_logger = logging.getLogger("gaur_sqld")
+    gaur_logger.propagate = False
+    gaur_handler = logging.StreamHandler(sys.stdout)
+    gaur_handler.setFormatter(logging.Formatter("[gaur_sqld] %(message)s"))
+    gaur_handler.setLevel(logging.DEBUG if args.debug else logging.WARNING)
+    gaur_logger.setLevel(logging.DEBUG if args.debug else logging.WARNING)
+    gaur_logger.addHandler(gaur_handler)
+
 
 def init_device() -> torch.device:
     USE_CUDA = torch.cuda.is_available()
@@ -297,6 +308,7 @@ def get_scores_generic(
         for start_idx in tqdm(range(0, len(df), batch_size), desc="Scoring batches"):
             end_idx = min(start_idx + batch_size, len(df))
             batch_df = df.iloc[start_idx:end_idx]
+            # For good tqdm bars, we need the preprocess_function to be silent.
             X, labels = preprocess_fn(model, batch_df, use_scaler=use_scaler)
             scores = score_fn(model, X)
             all_labels.extend(labels)

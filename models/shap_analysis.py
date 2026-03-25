@@ -101,6 +101,7 @@ def main():
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
+    # shap INFO level is simply too verbose.
     logging.getLogger("shap").setLevel(logging.WARNING)
 
     parser = argparse.ArgumentParser(

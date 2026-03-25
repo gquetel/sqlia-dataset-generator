@@ -248,6 +248,15 @@ def main():
         level=log_level,
         format="%(message)s",
     )
+    # In debug mode, we prefix the gaur_sqld logger by [gaur_sqld].
+    # Otherwise, we set the level to WARNING.
+    gaur_logger = logging.getLogger("gaur_sqld")
+    gaur_logger.propagate = False
+    gaur_handler = logging.StreamHandler(sys.stdout)
+    gaur_handler.setFormatter(logging.Formatter("[gaur_sqld] %(message)s"))
+    gaur_handler.setLevel(log_level)
+    gaur_logger.setLevel(log_level if args.debug else logging.WARNING)
+    gaur_logger.addHandler(gaur_handler)
     set_global_seed(args.seed)
 
     device = init_device()
@@ -263,14 +272,13 @@ def main():
     for test_path, test_label in test_items:
         if test_label:
             cur_output_dir = Path(args.output_dir) / f"{model_name}_on_{test_label}"
-            logger.info(f"=== Evaluating on {test_label} ({test_path}) ===")
+            logger.info(f"=== Evaluating on {test_label} ===")
         else:
             cur_output_dir = Path(args.output_dir)
         cur_output_dir.mkdir(parents=True, exist_ok=True)
 
         # Load test data
         df_test = load_test_data(test_path, 500 if args.testing else None)
-        logger.info(f"Test set: {len(df_test)} samples")
 
         # Score
         labels, scores = get_scores_generic(

@@ -6,7 +6,7 @@ from base import BaseExtractor
 
 
 class GaurExtractor(BaseExtractor):
-    """Wraps GAUR's OCSVM_Gaur preprocessing pipeline.
+    """Wraps GAUR's  preprocessing pipeline.
 
     Traces are collected lazily at extraction time via get_traces_from_df.
     The extractor is fully stateless — no vocabulary or weights to persist.
@@ -23,6 +23,7 @@ class GaurExtractor(BaseExtractor):
         self.use_hybrid = use_hybrid
         self.cache_dir = cache_dir
         self.mode = mode
+        # We use OCSVM_GAUR but this is the same preprocessing for another decision model.
         self._preprocessor = OCSVM_Gaur(use_hybrid=use_hybrid, mode=mode)
 
     def prepare_for_training(self, df: pd.DataFrame):
@@ -49,6 +50,8 @@ class GaurExtractor(BaseExtractor):
             trace_type = self.mode if self.mode in valid_trace_types else "expert"
             gaur_config.update_location_mysqlfiles(trace_type)
 
-            df_traces = get_traces_from_df(df, use_cache=self.cache_dir is not None)
+            df_traces = get_traces_from_df(
+                df, use_cache=self.cache_dir is not None, disable_tqdm=True
+            )
             df = pd.concat([df_traces, df], axis=1, join="inner")
         return df
