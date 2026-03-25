@@ -39,7 +39,7 @@ class ProjectPaths:
 
     @property
     def embeddings_path(self) -> str:
-        path = f"{self.base_path}/cache/embeddings/"
+        path = f"{self.base_path}/../cache/embeddings/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 
@@ -51,7 +51,7 @@ class ProjectPaths:
 
     @property
     def features_cache_path(self) -> str:
-        path = f"{self.base_path}/cache/features/"
+        path = f"{self.base_path}/../cache/features/"
         Path(path).mkdir(exist_ok=True, parents=True)
         return path
 

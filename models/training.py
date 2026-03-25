@@ -187,7 +187,13 @@ def _model_state_tag(model) -> str:
     if v is None:
         # Include extractor type in cache key to avoid collisions between different extractors
         if extractor:
-            return f"nofeat-{type(extractor).__name__}"
+            tag = type(extractor).__name__
+            # For ablation extractors, include the gaur_features config so lex/synt/sem
+            # variants don't collide on the same cache file.
+            gaur_features = getattr(extractor, "_gaur_features", None)
+            if gaur_features is not None:
+                tag += "-" + hashlib.md5(str(gaur_features).encode()).hexdigest()[:6]
+            return f"nofeat-{tag}"
         return "nofeat"
 
     if hasattr(v, "_cv_t") and hasattr(v._cv_t, "vocabulary_"):
@@ -210,9 +216,11 @@ def _cached_preprocess_preds(
     use_scaler: bool = False,
 ):
     """Wrap a preprocessing function with file-based caching."""
-    # Kakisim models cache internally in preprocess_for_preds; skip outer wrapping.
+    # Kakisim models cache the full feature matrix internally; skip outer wrapping.
     extractor = getattr(model, "extractor", None)
-    if extractor and getattr(extractor, "cache_dir", None) is not None:
+    from extractors.kakisim import KakisimExtractor
+
+    if extractor and isinstance(extractor, KakisimExtractor):
         return preprocess_fn(model, df, use_scaler=use_scaler)
 
     df_hash = hash_df(df)

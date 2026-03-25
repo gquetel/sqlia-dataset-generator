@@ -1,9 +1,15 @@
 #!/bin/bash
-# Run all ablation experiments sequentially 
+# Run all ablation experiments sequentially
+# Usage: ./scripts/run_ablation_experiments.sh [--testing]
 set -e
 
+TESTING_FLAG=""
+if [[ "${1}" == "--testing" ]]; then
+    TESTING_FLAG="--testing"
+fi
+
 # MODELS=(ae_li ae_gaur ae_li_gaur_lex ae_li_gaur_synt ae_li_gaur_sem)
-MODELS=(ae_li_gaur_lex ae_li_gaur_synt ae_li_gaur_sem)
+MODELS=(ae_li_gaur_synt ae_li_gaur_sem)
 MODES=(generic specialised)
 
 for model in "${MODELS[@]}"; do
@@ -15,7 +21,8 @@ for model in "${MODELS[@]}"; do
             --model "$model" \
             --mode "$mode" \
             --no-matrix \
-            --local
+            --local \
+            $TESTING_FLAG
     done
 done
 
