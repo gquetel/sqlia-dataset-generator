@@ -100,6 +100,7 @@ def load_model(
         GENERIC=GENERIC,
         device=device,
         project_paths=project_paths,
+        cache_dir=project_paths.features_cache_path,
         no_cache=no_cache,
     )
     model.load_model(model_path)

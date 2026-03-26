@@ -359,7 +359,7 @@ def compute_metrics_generic(
     else:
         _, s_val = get_scores_generic(
             df=df_val,
-            batch_size=4096,
+            batch_size=batch,
             model=model,
             use_scaler=use_scaler,
             preprocess_fn=preprocess_fn,
