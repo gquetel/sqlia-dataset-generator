@@ -10,4 +10,6 @@ kaleido==1.2.0
 
 # We need specific transformers versions. I got them from: https://github.com/salesforce/CodeT5/pull/191/changes/ce7b5723c03268284bde4f9982d5adc0b72c073f
 transformers==4.36.2
+typing_extensions==4.15.0
+mpmath==1.3.0
 accelerate==0.21.0
