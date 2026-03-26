@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "loginov", "gaur", "codebert", "unixcoder", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
+    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "loginov", "gaur", "codebert", "codet5", "unixcoder", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -294,6 +294,14 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
         extractor_kwargs=dict(batch_size=64),
     ),
+    # ---- CodeT5 ----
+    "ae_codet5": ModelConfig(
+        extractor_type="codet5",
+        model_type="ae",
+        display_name="CodeT5+ 110M Emb and AE",
+        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
+        extractor_kwargs=dict(batch_size=64),
+    ),
     # ---- Flan-T5 Small ----
     "ae_flan_t5": ModelConfig(
         extractor_type="flan_t5",
@@ -448,6 +456,15 @@ def _make_extractor(
             **kwargs,
         )
 
+    if config.extractor_type == "codet5":
+        from extractors.codet5 import CodeT5Extractor
+
+        return CodeT5Extractor(
+            device=device,
+            embeddings_path=embeddings_path,
+            **kwargs,
+        )
+
     if config.extractor_type == "flan_t5":
         from extractors.flan_t5 import FlanT5Extractor
 
@@ -503,6 +520,7 @@ def _output_activation(config: ModelConfig) -> str:
         "roberta",
         "bilstm_w2v",
         "codebert",
+        "codet5",
         "unixcoder",
         "flan_t5",
         "sentbert",

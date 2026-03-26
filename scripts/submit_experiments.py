@@ -75,6 +75,7 @@ MODEL_PROFILES = {
     "ae_li_gaur_synt": "cpu",
     "ae_li_gaur_sem": "cpu",
     "ae_codebert": "gpu_v100",
+    "ae_codet5": "gpu_long",
     "ae_unixcoder": "gpu_v100",
     "ae_flan_t5": "gpu_v100",
     "ae_sentbert": "gpu_v100",
@@ -163,12 +164,15 @@ def get_profile(model: str) -> dict:
 CONDA_BASE = "~/miniconda3"
 CONDA_ENV = "conda-env-3.12"
 CONDA_ENV_LLM2VEC = "conda-env-3.12-llm2vec"
+CONDA_ENV_CODET5 = "conda-env-3.12codet5"
 
 
 def conda_env_for(model: str) -> str:
     """Return the conda environment name for a model."""
     if "llm2vec" in model:
         return CONDA_ENV_LLM2VEC
+    if "codet5" in model:
+        return CONDA_ENV_CODET5
     return CONDA_ENV
 
 

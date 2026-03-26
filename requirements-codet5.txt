@@ -1,0 +1,13 @@
+# Pinned dependencies required by Salesforce/codet5p-110m-embedding.
+pandas==2.2.3
+numpy==2.2.5
+tqdm==4.67.1
+scikit-learn==1.6.1
+sqlparse==0.5.3
+matplotlib==3.10.1
+zstandard==0.25.0
+kaleido==1.2.0
+
+# We need specific transformers versions. I got them from: https://github.com/salesforce/CodeT5/pull/191/changes/ce7b5723c03268284bde4f9982d5adc0b72c073f
+transformers==4.36.2
+accelerate==0.21.0
