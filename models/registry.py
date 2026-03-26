@@ -219,7 +219,31 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
         extractor_kwargs=dict(use_hybrid=True, mode="chatgpt"),
     ),
+    "ae_gaur_mistral": ModelConfig(
+        extractor_type="gaur",
+        model_type="ae",
+        use_scaler=True,
+        display_name="GAUR mistral+hybrid and AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(use_hybrid=True, mode="mistral"),
+    ),
     # ---- GAUR ablation (Li + GAUR feature subsets) ----
+    "ae_li_gaur_chatgpt_sem": ModelConfig(
+        extractor_type="gaur_ablation",
+        model_type="ae",
+        use_scaler=True,
+        display_name="Li + GAUR chatgpt sem + AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(gaur_features="SEMANTIC_TAGS", mode="chatgpt"),
+    ),
+    "ae_li_gaur_mistral_sem": ModelConfig(
+        extractor_type="gaur_ablation",
+        model_type="ae",
+        use_scaler=True,
+        display_name="Li + GAUR mistral sem + AE",
+        hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
+        extractor_kwargs=dict(gaur_features="SEMANTIC_TAGS", mode="mistral"),
+    ),
     "ae_li_gaur_lex": ModelConfig(
         extractor_type="gaur_ablation",
         model_type="ae",
@@ -252,7 +276,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         use_scaler=True,
         display_name="Li + GAUR Sem + AE",
         hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
-        extractor_kwargs=dict(gaur_features=None),
+        extractor_kwargs=dict(gaur_features="SEMANTIC_TAGS"),
     ),
     # ---- UniXcoder ----
     "ae_unixcoder": ModelConfig(

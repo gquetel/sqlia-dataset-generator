@@ -42,12 +42,11 @@ class GaurAblationExtractor(GaurExtractor):
         X_gaur, _ = self._preprocessor.preprocess_for_preds(df)
         X_gaur = X_gaur.select_dtypes(include="number")
 
-        if self._gaur_features is not None:
-            cols = [c for c in self._gaur_features if c in X_gaur.columns]
-        else:
-            # Semantic: everything not in the lex/synt sets since they change
-            # according to the mode.
+        if self._gaur_features == "SEMANTIC_TAGS":
+            # Keep all GAUR columns that are not lexical and not syntactic.
             cols = [c for c in X_gaur.columns if c not in _GAUR_NON_SEM]
+        else:
+            cols = [c for c in self._gaur_features if c in X_gaur.columns]
 
         X_gaur_subset = X_gaur[cols].to_numpy(dtype=float)
         X_li = self._li.extract_features(df).to_numpy(dtype=float)
