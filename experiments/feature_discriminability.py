@@ -118,38 +118,92 @@ def load_dataset(path: str) -> pd.DataFrame:
     return pd.read_csv(path, dtype=CSV_DTYPES, low_memory=False)
 
 
-def sample_normal_test(df: pd.DataFrame, n: int) -> pd.DataFrame:
-    normal = df[(df["split"] == "test") & (df["label"] == 0)]
-    return normal.sample(n=min(n, len(normal)), random_state=2)
+def sample_disc(df: pd.DataFrame, n: int) -> pd.DataFrame:
+    """Random sample from test split. We don't need label balance."""
+    test = df[df["split"] == "test"]
+    return test.sample(n=min(n, len(test)), random_state=2).reset_index(drop=True)
 
 
-def run_discriminability(feat_a: pd.DataFrame, feat_b: pd.DataFrame, col: str) -> float:
-    """Train a DT on one feature column to distinguish two datasets; return test accuracy."""
-    X_a = feat_a[[col]].fillna(0).to_numpy(dtype=float)
-    X_b = feat_b[[col]].fillna(0).to_numpy(dtype=float)
+def sample_label_balanced(df: pd.DataFrame, n: int) -> pd.DataFrame:
+    """Balanced (50/50) sample from test split. This allows better interpretation."""
+    test = df[df["split"] == "test"]
+    n_each = min(n // 2, (test["label"] == 0).sum(), (test["label"] == 1).sum())
+    normal = test[test["label"] == 0].sample(n=n_each, random_state=2)
+    attack = test[test["label"] == 1].sample(n=n_each, random_state=2)
+    return (
+        pd.concat([normal, attack])
+        .sample(frac=1, random_state=2)
+        .reset_index(drop=True)
+    )
 
-    # Balance classes
-    n = min(len(X_a), len(X_b))
+
+def run_discriminability(
+    feat_a_train: pd.DataFrame,
+    feat_b_train: pd.DataFrame,
+    feat_a_test: pd.DataFrame,
+    feat_b_test: pd.DataFrame,
+    col: str,
+) -> float:
+    """Train a DT (on train split) to distinguish two datasets; evaluate on test split."""
     rng = np.random.default_rng(seed=2)
-    X_a = X_a[rng.choice(len(X_a), n, replace=False)]
-    X_b = X_b[rng.choice(len(X_b), n, replace=False)]
 
-    X = np.concatenate([X_a, X_b])
-    y = np.concatenate([np.zeros(n), np.ones(n)])
+    def _balanced_pair(fa, fb):
+        Xa = fa[[col]].fillna(0).to_numpy(dtype=float)
+        Xb = fb[[col]].fillna(0).to_numpy(dtype=float)
+        n = min(len(Xa), len(Xb))
+        Xa = Xa[rng.choice(len(Xa), n, replace=False)]
+        Xb = Xb[rng.choice(len(Xb), n, replace=False)]
+        return np.concatenate([Xa, Xb]), np.concatenate([np.zeros(n), np.ones(n)])
 
-    # Constant features carry no discriminative signal
-    if np.std(X) == 0:
+    X_train, y_train = _balanced_pair(feat_a_train, feat_b_train)
+    X_test, y_test = _balanced_pair(feat_a_test, feat_b_test)
+
+    if np.std(X_train) == 0:
         return 0.5
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=2
+    clf = DecisionTreeClassifier(random_state=2)
+    clf.fit(X_train, y_train)
+    return float(clf.score(X_test, y_test))
+
+
+def run_label_prediction(
+    feat_a_train: pd.DataFrame,
+    feat_b_train: pd.DataFrame,
+    labels_a_train: np.ndarray,
+    labels_b_train: np.ndarray,
+    feat_a_test: pd.DataFrame,
+    feat_b_test: pd.DataFrame,
+    labels_a_test: np.ndarray,
+    labels_b_test: np.ndarray,
+    col: str,
+) -> float:
+    """Train a DT (on train split) to predict label (0/1); evaluate on test split."""
+    X_train = np.concatenate(
+        [
+            feat_a_train[[col]].fillna(0).to_numpy(dtype=float),
+            feat_b_train[[col]].fillna(0).to_numpy(dtype=float),
+        ]
     )
+    y_train = np.concatenate([labels_a_train, labels_b_train])
+
+    X_test = np.concatenate(
+        [
+            feat_a_test[[col]].fillna(0).to_numpy(dtype=float),
+            feat_b_test[[col]].fillna(0).to_numpy(dtype=float),
+        ]
+    )
+    y_test = np.concatenate([labels_a_test, labels_b_test])
+
+    if np.std(X_train) == 0:
+        return 0.5
+
     clf = DecisionTreeClassifier(random_state=2)
     clf.fit(X_train, y_train)
     return float(clf.score(X_test, y_test))
 
 
 def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path):
+    import plotly.colors as pc
     import plotly.graph_objects as go
 
     def sort_key(f):
@@ -159,77 +213,233 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     features_sorted = sorted(results_df["feature"].unique(), key=sort_key)
     pairs = sorted(results_df["pair"].unique())
 
-    pivot = results_df.pivot(index="feature", columns="pair", values="accuracy")
-    pivot = pivot.reindex(features_sorted)
+    pivot_disc = results_df.pivot(
+        index="feature", columns="pair", values="disc_acc"
+    ).reindex(features_sorted)
+    pivot_label = results_df.pivot(
+        index="feature", columns="pair", values="label_acc"
+    ).reindex(features_sorted)
 
     # Build interleaved rows: features + mean row after each category block
     row_labels = []
-    row_data = []
-    shapes = []
+    row_disc = []
+    row_label = []
+    separator_before: list[int] = []  # row indices that get a separator line above them
     prev_cat = None
     row_idx = 0
-    cat_blocks: dict[str, list[int]] = {}  # cat -> list of feature row indices
+    cat_blocks: dict[str, list[int]] = {}
 
     for f in features_sorted:
         cat = FEATURE_CATEGORIES.get(f, "unknown")
         if prev_cat is not None and cat != prev_cat:
-            # Insert mean row for the previous category
-            mean_vals = np.mean([row_data[i] for i in cat_blocks[prev_cat]], axis=0)
-            row_labels.append(f"► mean {prev_cat}")
-            row_data.append(mean_vals)
+            mean_disc = np.mean([row_disc[i] for i in cat_blocks[prev_cat]], axis=0)
+            mean_label = np.mean([row_label[i] for i in cat_blocks[prev_cat]], axis=0)
+            row_labels.append(f"Mean {prev_cat}")
+            row_disc.append(mean_disc)
+            row_label.append(mean_label)
             row_idx += 1
-            # Separator line after the mean row
-            shapes.append(
-                dict(
-                    type="line",
-                    x0=-0.5,
-                    x1=len(pairs) - 0.5,
-                    y0=row_idx - 0.5,
-                    y1=row_idx - 0.5,
-                    xref="x",
-                    yref="y",
-                    line=dict(color="white", width=3),
-                )
-            )
+            separator_before.append(row_idx)
         cat_blocks.setdefault(cat, []).append(row_idx)
-        row_labels.append(f"[{CATEGORY_ABBREV.get(cat, '?')}] {f}")
-        row_data.append(pivot.loc[f, pairs].to_numpy(dtype=float))
+        row_labels.append(f)
+        row_disc.append(pivot_disc.loc[f, pairs].to_numpy(dtype=float))
+        row_label.append(pivot_label.loc[f, pairs].to_numpy(dtype=float))
         prev_cat = cat
         row_idx += 1
 
-    # Insert mean row for the last category
     if prev_cat is not None:
-        mean_vals = np.mean([row_data[i] for i in cat_blocks[prev_cat]], axis=0)
-        row_labels.append(f"► mean {prev_cat}")
-        row_data.append(mean_vals)
+        mean_disc = np.mean([row_disc[i] for i in cat_blocks[prev_cat]], axis=0)
+        mean_label = np.mean([row_label[i] for i in cat_blocks[prev_cat]], axis=0)
+        row_labels.append(f"Mean {prev_cat}")
+        row_disc.append(mean_disc)
+        row_label.append(mean_label)
 
-    z = np.array(row_data)
+    z_disc = np.array(row_disc)
+    z_label = np.array(row_label)
 
+    disc_min = float(np.nanmin(z_disc))
+    label_min = float(np.nanmin(z_label))
+    n_rows, n_cols = z_disc.shape
+
+    def to_color(val: float, vmin: float) -> str:
+        norm = max(0.0, min(1.0, (val - vmin) / (1.0 - vmin))) if 1.0 > vmin else 0.5
+        return pc.sample_colorscale("RdYlGn", [norm])[0]
+
+    shapes = []
+    annotations = []
+
+    # "domain" / "label" sub-headers above each pair column
+    for j in range(n_cols):
+        for xoff, label in [(-0.25, "domain"), (0.25, "label")]:
+            annotations.append(
+                dict(
+                    x=j + xoff,
+                    xref="x",
+                    y=1.0,
+                    yref="paper",
+                    text=label,
+                    showarrow=False,
+                    font=dict(size=9, color="#444"),
+                    xanchor="center",
+                    yanchor="bottom",
+                )
+            )
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            # Left half — domain discriminability
+            shapes.append(
+                dict(
+                    type="rect",
+                    xref="x",
+                    yref="y",
+                    x0=j - 0.5,
+                    x1=j,
+                    y0=i - 0.5,
+                    y1=i + 0.5,
+                    fillcolor=to_color(z_disc[i, j], disc_min),
+                    line_width=0,
+                    layer="below",
+                )
+            )
+            # Right half — label predictive power
+            shapes.append(
+                dict(
+                    type="rect",
+                    xref="x",
+                    yref="y",
+                    x0=j,
+                    x1=j + 0.5,
+                    y0=i - 0.5,
+                    y1=i + 0.5,
+                    fillcolor=to_color(z_label[i, j], label_min),
+                    line_width=0,
+                    layer="below",
+                )
+            )
+            # Value labels: disc on left half, label on right half
+            annotations.append(
+                dict(
+                    x=j - 0.25,
+                    y=i,
+                    xref="x",
+                    yref="y",
+                    text=f"{z_disc[i, j]:.2f}",
+                    showarrow=False,
+                    font=dict(size=8),
+                    align="center",
+                )
+            )
+            annotations.append(
+                dict(
+                    x=j + 0.25,
+                    y=i,
+                    xref="x",
+                    yref="y",
+                    text=f"{z_label[i, j]:.2f}",
+                    showarrow=False,
+                    font=dict(size=8),
+                    align="center",
+                )
+            )
+
+    # Dummy scatter traces to render the two independent colorbars
     fig = go.Figure(
-        data=go.Heatmap(
-            z=z,
-            x=pairs,
-            y=row_labels,
-            colorscale="RdYlGn",
-            zmid=0.5,
-            zmin=0.0,
-            zmax=1.0,
-            colorbar=dict(title="Accuracy"),
-            text=np.round(z, 2),
-            texttemplate="%{text:.2f}",
-            hovertemplate="Feature: %{y}<br>Pair: %{x}<br>Accuracy: %{z:.3f}<extra></extra>",
-        )
+        data=[
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                marker=dict(
+                    colorscale="RdYlGn",
+                    cmin=disc_min,
+                    cmax=1.0,
+                    showscale=True,
+                    size=0,
+                    colorbar=dict(title="Domain disc.", x=1.02, len=0.85, thickness=14),
+                    color=[disc_min],
+                ),
+                showlegend=False,
+            ),
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                marker=dict(
+                    colorscale="RdYlGn",
+                    cmin=label_min,
+                    cmax=1.0,
+                    showscale=True,
+                    size=0,
+                    colorbar=dict(title="Label pred.", x=1.14, len=0.85, thickness=14),
+                    color=[label_min],
+                ),
+                showlegend=False,
+            ),
+        ]
     )
 
+    # Vertical separators between dataset pair columns
+    for j in range(1, n_cols):
+        shapes.append(
+            dict(
+                type="line",
+                xref="x",
+                yref="y",
+                x0=j - 0.5,
+                x1=j - 0.5,
+                y0=-0.5,
+                y1=n_rows - 0.5,
+                line=dict(color="white", width=2),
+            )
+        )
+
+    # Category separator lines (horizontal, between category blocks)
+    for row in separator_before:
+        shapes.append(
+            dict(
+                type="line",
+                xref="x",
+                yref="y",
+                x0=-0.5,
+                x1=n_cols - 0.5,
+                y0=row - 0.5,
+                y1=row - 0.5,
+                line=dict(color="white", width=3),
+            )
+        )
+
     fig.update_layout(
-        title=f"Per-feature discriminability — {extractor_name}",
-        xaxis_title="Dataset pair",
-        yaxis_title="Feature",
+        title=dict(
+            text=f"Per-feature discriminability — {extractor_name}",
+            x=0.5,
+            xanchor="center",
+        ),
         shapes=shapes,
-        height=max(400, len(row_labels) * 22 + 120),
-        width=max(600, len(pairs) * 120 + 350),
-        margin=dict(l=230, r=100, t=60, b=60),
-        yaxis=dict(autorange="reversed"),
+        annotations=annotations,
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(n_cols)),
+            ticktext=pairs,
+            title="Dataset pair",
+            range=[-0.5, n_cols - 0.5],
+            side="bottom",
+            showgrid=False,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            tickmode="array",
+            tickvals=list(range(n_rows)),
+            ticktext=row_labels,
+            title="Feature",
+            range=[n_rows - 0.5, -0.5],
+            autorange=False,
+            showgrid=False,
+            zeroline=False,
+        ),
+        plot_bgcolor="white",
+        height=max(400, n_rows * 24 + 160),
+        width=max(600, n_cols * 140 + 450),
+        margin=dict(l=230, r=160, t=80, b=60),
     )
 
     out_path = output_dir / f"discriminability_{extractor_name}.svg"
@@ -275,18 +485,33 @@ def main():
         print(f"Loading {name} from {path} ...")
         datasets[name] = load_dataset(path)
 
-    samples: dict[str, pd.DataFrame] = {}
+    disc_train_dfs: dict[str, pd.DataFrame] = {}
+    disc_test_dfs: dict[str, pd.DataFrame] = {}
+    label_train_dfs: dict[str, pd.DataFrame] = {}
+    label_test_dfs: dict[str, pd.DataFrame] = {}
     for name, df in datasets.items():
-        s = sample_normal_test(df, n_samples)
-        print(f"  {name}: {len(s)} normal test samples")
-        samples[name] = s.reset_index(drop=True)
+        disc = sample_disc(df, n_samples)
+        disc_tr, disc_te = train_test_split(disc, test_size=0.5, random_state=2)
+        disc_train_dfs[name] = disc_tr.reset_index(drop=True)
+        disc_test_dfs[name] = disc_te.reset_index(drop=True)
+
+        label = sample_label_balanced(df, n_samples)
+        label_tr, label_te = train_test_split(
+            label, test_size=0.5, random_state=2, stratify=label["label"]
+        )
+        label_train_dfs[name] = label_tr.reset_index(drop=True)
+        label_test_dfs[name] = label_te.reset_index(drop=True)
+
+        print(
+            f" Dataset {name}: Domain train {len(disc_tr)}, disc test {len(disc_te)}."
+            f" Label train{len(label_tr)}, label test{len(label_te)}."
+        )
 
     pairs = list(itertools.combinations(sorted(datasets.keys()), 2))
-    print(f"Dataset pairs: {[f'{a}-{b}' for a, b in pairs]}")
 
     extractors = [
-        ("li", LiExtractor()),
-        ("gaur", GaurExtractor(use_hybrid=False, mode="chatgpt")),
+        ("Li et al.", LiExtractor()),
+        ("GAUR (ChatGPT)", GaurExtractor(use_hybrid=False, mode="chatgpt")),
     ]
 
     all_results = []
@@ -294,29 +519,78 @@ def main():
     for extractor_name, extractor in extractors:
         print(f"\n=== Extractor: {extractor_name} ===")
 
-        feats: dict[str, pd.DataFrame] = {}
-        for name, df in samples.items():
-            print(f"Extracting {extractor_name} features for {name} ...")
+        def _extract(df: pd.DataFrame) -> pd.DataFrame:
             feat = extractor.extract_features(df)
-            feats[name] = feat if isinstance(feat, pd.DataFrame) else pd.DataFrame(feat)
-            print(f"  {name}: {feats[name].shape}")
+            return feat if isinstance(feat, pd.DataFrame) else pd.DataFrame(feat)
 
-        feature_cols = feats[next(iter(feats))].columns.tolist()
+        disc_train_feats: dict[str, pd.DataFrame] = {}
+        disc_test_feats: dict[str, pd.DataFrame] = {}
+        label_train_feats: dict[str, pd.DataFrame] = {}
+        label_train_labels: dict[str, np.ndarray] = {}
+        label_test_feats: dict[str, pd.DataFrame] = {}
+        label_test_labels: dict[str, np.ndarray] = {}
+        for name in datasets:
+            print(f"Extracting {extractor_name} features for {name} ...")
+            disc_train_feats[name] = _extract(disc_train_dfs[name])
+            disc_test_feats[name] = _extract(disc_test_dfs[name])
+            label_train_feats[name] = _extract(label_train_dfs[name])
+            label_train_labels[name] = label_train_dfs[name]["label"].to_numpy()
+            label_test_feats[name] = _extract(label_test_dfs[name])
+            label_test_labels[name] = label_test_dfs[name]["label"].to_numpy()
+            print(
+                f"  disc {disc_train_feats[name].shape}/{disc_test_feats[name].shape}"
+                f" | label {label_train_feats[name].shape}/{label_test_feats[name].shape}"
+            )
 
+        feature_cols = disc_train_feats[next(iter(disc_train_feats))].columns.tolist()
+
+        extractor_results = []
         for a, b in pairs:
             pair_label = f"{a}-{b}"
             print(f"  Pair {pair_label} ...")
             for col in feature_cols:
-                acc = run_discriminability(feats[a], feats[b], col)
-                all_results.append(
+                disc_acc = run_discriminability(
+                    disc_train_feats[a],
+                    disc_train_feats[b],
+                    disc_test_feats[a],
+                    disc_test_feats[b],
+                    col,
+                )
+                label_acc = run_label_prediction(
+                    label_train_feats[a],
+                    label_train_feats[b],
+                    label_train_labels[a],
+                    label_train_labels[b],
+                    label_test_feats[a],
+                    label_test_feats[b],
+                    label_test_labels[a],
+                    label_test_labels[b],
+                    col,
+                )
+                extractor_results.append(
                     {
                         "extractor": extractor_name,
                         "feature": col,
                         "pair": pair_label,
-                        "accuracy": acc,
+                        "disc_acc": disc_acc,
+                        "label_acc": label_acc,
                         "category": FEATURE_CATEGORIES.get(col, "unknown"),
                     }
                 )
+
+        # Features constant across all pairs return 0.5 for every pair
+        ext_df = pd.DataFrame(extractor_results)
+        constant_features = (
+            ext_df.groupby("feature")["disc_acc"]
+            .apply(lambda s: (s == 0.5).all())
+            .pipe(lambda s: s[s].index.tolist())
+        )
+        if constant_features:
+            print(
+                f"  Constant features (excluded from output): {sorted(constant_features)}"
+            )
+        ext_df = ext_df[~ext_df["feature"].isin(constant_features)]
+        all_results.extend(ext_df.to_dict("records"))
 
     results_df = pd.DataFrame(all_results)
     csv_path = output_dir / "feature_discriminability.csv"
