@@ -75,7 +75,7 @@ MODEL_PROFILES = {
     "ae_li_gaur_synt": "cpu",
     "ae_li_gaur_sem": "cpu",
     "ae_codebert": "gpu_v100",
-    "ae_codet5": "gpu_long",
+    "ae_codet5": "gpu_long",  # Can't use V100 using this requirements.txt
     "ae_unixcoder": "gpu_v100",
     "ae_flan_t5": "gpu_v100",
     "ae_sentbert": "gpu_v100",
