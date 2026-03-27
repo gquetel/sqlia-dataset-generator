@@ -227,40 +227,24 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     separator_before: list[int] = []  # row indices that get a separator line above them
     prev_cat = None
     row_idx = 0
-    cat_blocks: dict[str, list[int]] = {}
 
     for f in features_sorted:
         cat = FEATURE_CATEGORIES.get(f, "unknown")
         if prev_cat is not None and cat != prev_cat:
-            mean_disc = np.mean([row_disc[i] for i in cat_blocks[prev_cat]], axis=0)
-            mean_label = np.mean([row_label[i] for i in cat_blocks[prev_cat]], axis=0)
-            row_labels.append(f"Mean {prev_cat}")
-            row_disc.append(mean_disc)
-            row_label.append(mean_label)
-            row_idx += 1
             separator_before.append(row_idx)
-        cat_blocks.setdefault(cat, []).append(row_idx)
         row_labels.append(f)
         row_disc.append(pivot_disc.loc[f, pairs].to_numpy(dtype=float))
         row_label.append(pivot_label.loc[f, pairs].to_numpy(dtype=float))
         prev_cat = cat
         row_idx += 1
 
-    if prev_cat is not None:
-        mean_disc = np.mean([row_disc[i] for i in cat_blocks[prev_cat]], axis=0)
-        mean_label = np.mean([row_label[i] for i in cat_blocks[prev_cat]], axis=0)
-        row_labels.append(f"Mean {prev_cat}")
-        row_disc.append(mean_disc)
-        row_label.append(mean_label)
-
     z_disc = np.array(row_disc)
     z_label = np.array(row_label)
 
-    disc_min = float(np.nanmin(z_disc))
-    label_min = float(np.nanmin(z_label))
+    vmin = float(min(np.nanmin(z_disc), np.nanmin(z_label)))
     n_rows, n_cols = z_disc.shape
 
-    def to_color(val: float, vmin: float) -> str:
+    def to_color(val: float) -> str:
         norm = max(0.0, min(1.0, (val - vmin) / (1.0 - vmin))) if 1.0 > vmin else 0.5
         return pc.sample_colorscale("RdYlGn", [norm])[0]
 
@@ -269,7 +253,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
 
     # "domain" / "label" sub-headers above each pair column
     for j in range(n_cols):
-        for xoff, label in [(-0.25, "domain"), (0.25, "label")]:
+        for xoff, label in [(-0.25, "Domain"), (0.25, "Label")]:
             annotations.append(
                 dict(
                     x=j + xoff,
@@ -278,7 +262,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     yref="paper",
                     text=label,
                     showarrow=False,
-                    font=dict(size=9, color="#444"),
+                    font=dict(size=11, color="#444"),
                     xanchor="center",
                     yanchor="bottom",
                 )
@@ -296,7 +280,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     x1=j,
                     y0=i - 0.5,
                     y1=i + 0.5,
-                    fillcolor=to_color(z_disc[i, j], disc_min),
+                    fillcolor=to_color(z_disc[i, j]),
                     line_width=0,
                     layer="below",
                 )
@@ -311,7 +295,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     x1=j + 0.5,
                     y0=i - 0.5,
                     y1=i + 0.5,
-                    fillcolor=to_color(z_label[i, j], label_min),
+                    fillcolor=to_color(z_label[i, j]),
                     line_width=0,
                     layer="below",
                 )
@@ -342,7 +326,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                 )
             )
 
-    # Dummy scatter traces to render the two independent colorbars
+    # Dummy scatter trace for the single shared colorbar
     fig = go.Figure(
         data=[
             go.Scatter(
@@ -351,27 +335,12 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                 mode="markers",
                 marker=dict(
                     colorscale="RdYlGn",
-                    cmin=disc_min,
+                    cmin=vmin,
                     cmax=1.0,
                     showscale=True,
                     size=0,
-                    colorbar=dict(title="Domain disc.", x=1.02, len=0.85, thickness=14),
-                    color=[disc_min],
-                ),
-                showlegend=False,
-            ),
-            go.Scatter(
-                x=[None],
-                y=[None],
-                mode="markers",
-                marker=dict(
-                    colorscale="RdYlGn",
-                    cmin=label_min,
-                    cmax=1.0,
-                    showscale=True,
-                    size=0,
-                    colorbar=dict(title="Label pred.", x=1.14, len=0.85, thickness=14),
-                    color=[label_min],
+                    colorbar=dict(title="Accuracy", x=1.02, len=0.85, thickness=14),
+                    color=[vmin],
                 ),
                 showlegend=False,
             ),
@@ -394,26 +363,21 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
         )
 
     # Category separator lines (horizontal, between category blocks)
-    for row in separator_before:
-        shapes.append(
-            dict(
-                type="line",
-                xref="x",
-                yref="y",
-                x0=-0.5,
-                x1=n_cols - 0.5,
-                y0=row - 0.5,
-                y1=row - 0.5,
-                line=dict(color="white", width=3),
-            )
-        )
+    # for row in separator_before:
+    #     shapes.append(
+    #         dict(
+    #             type="line",
+    #             xref="x",
+    #             yref="y",
+    #             x0=-0.5,
+    #             x1=n_cols - 0.5,
+    #             y0=row - 0.5,
+    #             y1=row - 0.5,
+    #             line=dict(color="white", width=3),
+    #         )
+    #     )
 
     fig.update_layout(
-        title=dict(
-            text=f"Per-feature discriminability — {extractor_name}",
-            x=0.5,
-            xanchor="center",
-        ),
         shapes=shapes,
         annotations=annotations,
         xaxis=dict(
@@ -430,7 +394,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
             tickmode="array",
             tickvals=list(range(n_rows)),
             ticktext=row_labels,
-            title="Feature",
+            title=f"Features from {extractor_name}",
             range=[n_rows - 0.5, -0.5],
             autorange=False,
             showgrid=False,
@@ -439,7 +403,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
         plot_bgcolor="white",
         height=max(400, n_rows * 24 + 160),
         width=max(600, n_cols * 140 + 450),
-        margin=dict(l=230, r=160, t=80, b=60),
+        margin=dict(l=230, r=160, t=40, b=60),
     )
 
     out_path = output_dir / f"discriminability_{extractor_name}.svg"
@@ -452,12 +416,16 @@ def main():
         description="Per-feature dataset discriminability via DecisionTree"
     )
     parser.add_argument(
+        "--from-csv",
+        metavar="PATH",
+        help="Skip computation and plot heatmaps from a previously saved results CSV",
+    )
+    parser.add_argument(
         "--dataset",
         nargs=2,
         action="append",
         metavar=("NAME", "PATH"),
-        required=True,
-        help="Dataset short name and CSV path (repeatable)",
+        help="Dataset short name and CSV path (repeatable); required without --from-csv",
     )
     parser.add_argument(
         "--output-dir",
@@ -471,14 +439,25 @@ def main():
     )
     args = parser.parse_args()
 
+    if not args.from_csv and not args.dataset:
+        parser.error("--dataset is required when --from-csv is not specified")
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.from_csv:
+        print(f"Loading results from {args.from_csv} ...")
+        results_df = pd.read_csv(args.from_csv)
+        for extractor_name in results_df["extractor"].unique():
+            subset = results_df[results_df["extractor"] == extractor_name]
+            make_heatmap(subset, extractor_name, output_dir)
+        return
 
     n_samples = TESTING_N_SAMPLES if args.testing else N_SAMPLES
     if args.testing:
         print(f"[testing] using {n_samples} samples per dataset")
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     datasets: dict[str, pd.DataFrame] = {}
     for name, path in args.dataset:
