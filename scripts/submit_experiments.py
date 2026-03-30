@@ -39,7 +39,7 @@ SLURM_PROFILES = {
         "gres": "gpu:1",
         "cpus": 16,
         "mem": "64G",
-        "time": "4:00:00",
+        "time": "8:00:00",
         "exclude": ["node43"],
     },
     "V100_long": {
@@ -67,8 +67,8 @@ SLURM_PROFILES = {
 }
 
 MODEL_PROFILES = {
-    "ae_securebert": "V100_long",
-    "ae_securebert2": "V100_long",
+    "ae_securebert": "V100",
+    "ae_securebert2": "V100",
     "ae_modernbert": "A100",  # For diversity
     "ae_roberta": "A100",
     "ae_kakisim_c": "V100_long",
@@ -89,7 +89,7 @@ MODEL_PROFILES = {
     "ae_sentbert": "V100",
     "ae_llm2vec": "A100_long",  # Requires 32Gb+ GPU, and 64+ memory
     "ae_qwen3_emb": "gpu_long",
-    "ae_cv": "cpu",
+    "ae_cv": "cpu_long",
     "ocsvm_li": "cpu",
 }
 DATASETS = {
