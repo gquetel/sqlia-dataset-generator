@@ -61,7 +61,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         use_scaler=False,
         display_name="CountVectorizer and AE",
         hyperparams=dict(lr=0.001, epochs=100, batch_size=4096),
-        extractor_kwargs=dict(max_features=20000),
+        extractor_kwargs=dict(max_features=10000),
     ),
     # ---- RoBERTa-base ----
     "ocsvm_roberta": ModelConfig(
