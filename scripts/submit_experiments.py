@@ -20,34 +20,35 @@ GENERATED_DIR = REPO_ROOT / "scripts" / "generated"
 
 
 SLURM_PROFILES = {
-    "gpu_standard": {
+    "A100": {
         "partition": "A100",
         "gres": "gpu:1",
         "cpus": 16,
         "mem": "32G",
         "time": "4:00:00",
     },
-    "gpu_v100": {
-        "partition": "V100",
-        "gres": "gpu:1",
-        "cpus": 16,
-        "mem": "64G",
-        "time": "8:00:00",
-        "exclude": ["node43"],
-    },
-    "gpu_long": {
+    "A100_long": {
         "partition": "A100",
         "gres": "gpu:1",
         "cpus": 16,
         "mem": "64G",
         "time": "12:00:00",
     },
-    "gpu_A40": {
-        "partition": "A40",
+    "V100": {
+        "partition": "V100",
         "gres": "gpu:1",
         "cpus": 16,
-        "mem": "32G",
-        "time": "12:00:00",
+        "mem": "64G",
+        "time": "4:00:00",
+        "exclude": ["node43"],
+    },
+    "V100_long": {
+        "partition": "V100",
+        "gres": "gpu:1",
+        "cpus": 16,
+        "mem": "64G",
+        "time": "24:00:00",
+        "exclude": ["node43"],
     },
     "cpu": {
         "partition": "CPU",
@@ -56,14 +57,21 @@ SLURM_PROFILES = {
         "mem": "64G",
         "time": "12:00:00",
     },
+    "cpu_long": {
+        "partition": "CPU",
+        "gres": None,
+        "cpus": 32,
+        "mem": "64G",
+        "time": "24:00:00",
+    },
 }
 
 MODEL_PROFILES = {
-    "ae_securebert": "gpu_v100",
-    "ae_securebert2": "gpu_v100",
-    "ae_modernbert": "gpu_standard",  # For diversity
-    "ae_roberta": "gpu_A40",  # For diversity
-    "ae_kakisim_c": "gpu_v100",
+    "ae_securebert": "V100_long",
+    "ae_securebert2": "V100_long",
+    "ae_modernbert": "A100",  # For diversity
+    "ae_roberta": "A100",
+    "ae_kakisim_c": "V100_long",
     "ae_li": "cpu",
     "ae_loginov": "cpu",
     "ae_gaur": "cpu",
@@ -74,12 +82,12 @@ MODEL_PROFILES = {
     "ae_li_gaur_lex": "cpu",
     "ae_li_gaur_synt": "cpu",
     "ae_li_gaur_sem": "cpu",
-    "ae_codebert": "gpu_v100",
-    "ae_codet5": "gpu_long",  # Can't use V100 using this requirements.txt
-    "ae_unixcoder": "gpu_v100",
-    "ae_flan_t5": "gpu_v100",
-    "ae_sentbert": "gpu_v100",
-    "ae_llm2vec": "gpu_long",  # Requires 32Gb+ GPU, and 64+ memory
+    "ae_codebert": "A100",
+    "ae_codet5": "A100_long",  # Can't use V100 using this requirements.txt
+    "ae_unixcoder": "A100_long",
+    "ae_flan_t5": "A100_long",
+    "ae_sentbert": "V100",
+    "ae_llm2vec": "A100_long",  # Requires 32Gb+ GPU, and 64+ memory
     "ae_qwen3_emb": "gpu_long",
     "ae_cv": "cpu",
     "ocsvm_li": "cpu",
@@ -155,9 +163,16 @@ CONCEPT_DRIFT_DATASETS_DIR = os.path.expanduser("~/datasets/concept-drift/")
 GAUR_MODELS = {m for m in MODEL_PROFILES if "gaur" in m}
 
 
-def get_profile(model: str) -> dict:
-    """Return the SLURM resource profile for a model."""
+def get_profile(model: str, long: bool = False) -> dict:
+    """Return the SLURM resource profile for a model.
+
+    When long=True, upgrade to the _long variant of the profile if one exists.
+    """
     profile_name = MODEL_PROFILES[model]
+    if long:
+        long_name = f"{profile_name}_long"
+        if long_name in SLURM_PROFILES:
+            profile_name = long_name
     return SLURM_PROFILES[profile_name]
 
 
@@ -193,9 +208,11 @@ def make_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d_%H%M")
 
 
-def sbatch_header(model: str, job_suffix: str, log_path: str) -> str:
+def sbatch_header(
+    model: str, job_suffix: str, log_path: str, long: bool = False
+) -> str:
     """Generate SBATCH header lines for a model."""
-    profile = get_profile(model)
+    profile = get_profile(model, long=long)
     job_name = f"{model}_{job_suffix}"
     lines = [
         "#!/bin/bash",
@@ -326,7 +343,7 @@ def generate_generic_script(
 
     parts = []
     if slurm:
-        parts.append(sbatch_header(model, job_suffix, log_path))
+        parts.append(sbatch_header(model, job_suffix, log_path, long=not no_matrix))
     else:
         parts.append("#!/bin/bash")
     parts.append("")
@@ -352,7 +369,12 @@ def generate_generic_script(
     parts.append(f"# Evaluate {model_name} on all test datasets")
     parts.append(
         eval_cmd(
-            model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache
+            model,
+            model_name,
+            models_dir,
+            results_dir,
+            test_datasets,
+            no_cache=no_cache,
         )
     )
     parts.append("")
@@ -395,7 +417,7 @@ def generate_specialised_script(
 
     parts = []
     if slurm:
-        parts.append(sbatch_header(model, job_suffix, log_path))
+        parts.append(sbatch_header(model, job_suffix, log_path, long=not no_matrix))
     else:
         parts.append("#!/bin/bash")
     parts.append("")
@@ -421,7 +443,12 @@ def generate_specialised_script(
     parts.append(f"# Evaluate {model_name} on all test datasets")
     parts.append(
         eval_cmd(
-            model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache
+            model,
+            model_name,
+            models_dir,
+            results_dir,
+            test_datasets,
+            no_cache=no_cache,
         )
     )
     parts.append("")
@@ -452,7 +479,7 @@ def generate_wafamole_script(
 
     parts = []
     if slurm:
-        parts.append(sbatch_header(model, job_suffix, log_path))
+        parts.append(sbatch_header(model, job_suffix, log_path, long=not no_matrix))
     else:
         parts.append("#!/bin/bash")
     parts.append("")
@@ -621,7 +648,11 @@ def generate_malignancy_script(
     parts.append(f"# Malignancy experiment for {model_name}")
     parts.append(
         malignancy_cmd(
-            model, scenario["train_label"], models_dir, results_dir, no_cache=no_cache
+            model,
+            scenario["train_label"],
+            models_dir,
+            results_dir,
+            no_cache=no_cache,
         )
     )
     parts.append("")
@@ -774,7 +805,12 @@ def generate_concept_drift_script(
     )
     parts.append(
         eval_cmd(
-            model, model_name, models_dir, results_dir, test_datasets, no_cache=no_cache
+            model,
+            model_name,
+            models_dir,
+            results_dir,
+            test_datasets,
+            no_cache=no_cache,
         )
     )
     parts.append("")
