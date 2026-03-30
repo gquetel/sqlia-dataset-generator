@@ -317,6 +317,7 @@ def generate_generic_script(
     slurm: bool,
     no_matrix: bool = False,
     no_cache: bool = False,
+    eval_only: bool = False,
 ) -> str:
     """Generate a script for a generic (leave-one-out) scenario."""
     scenario = GENERIC_SCENARIOS[scenario_num]
@@ -352,20 +353,21 @@ def generate_generic_script(
     )
     parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
     parts.append("")
-    parts.append(f"# Train {model_name}")
-    parts.append(
-        train_cmd(
-            model,
-            "generic",
-            train_file,
-            model_name,
-            models_dir,
-            training_test_label=training_test_label,
-            no_cache=no_cache,
-            skip_eval=True,
+    if not eval_only:
+        parts.append(f"# Train {model_name}")
+        parts.append(
+            train_cmd(
+                model,
+                "generic",
+                train_file,
+                model_name,
+                models_dir,
+                training_test_label=training_test_label,
+                no_cache=no_cache,
+                skip_eval=True,
+            )
         )
-    )
-    parts.append("")
+        parts.append("")
     parts.append(f"# Evaluate {model_name} on all test datasets")
     parts.append(
         eval_cmd(
@@ -390,6 +392,7 @@ def generate_specialised_script(
     slurm: bool,
     no_matrix: bool = False,
     no_cache: bool = False,
+    eval_only: bool = False,
 ) -> str:
     """Generate a script for a specialised (single-dataset) scenario."""
     scenario = SPECIALISED_SCENARIOS[scenario_num]
@@ -426,20 +429,21 @@ def generate_specialised_script(
     )
     parts.append(f'echo "Running specialised scenario {scenario_num}: {model_name}"')
     parts.append("")
-    parts.append(f"# Train {model_name}")
-    parts.append(
-        train_cmd(
-            model,
-            "specialised",
-            train_file,
-            model_name,
-            models_dir,
-            training_test_label=training_test_label,
-            no_cache=no_cache,
-            skip_eval=True,
+    if not eval_only:
+        parts.append(f"# Train {model_name}")
+        parts.append(
+            train_cmd(
+                model,
+                "specialised",
+                train_file,
+                model_name,
+                models_dir,
+                training_test_label=training_test_label,
+                no_cache=no_cache,
+                skip_eval=True,
+            )
         )
-    )
-    parts.append("")
+        parts.append("")
     parts.append(f"# Evaluate {model_name} on all test datasets")
     parts.append(
         eval_cmd(
@@ -965,6 +969,11 @@ def main():
         action="store_true",
         help="Disable all feature and embedding caches in training and evaluation",
     )
+    parser.add_argument(
+        "--eval-only",
+        action="store_true",
+        help="Skip training and only run evaluation (requires a pre-trained model). Only applies to generic and specialised modes.",
+    )
     args = parser.parse_args()
 
     if args.dry_run and args.local:
@@ -1109,6 +1118,7 @@ def main():
                 use_slurm,
                 args.no_matrix,
                 args.no_cache,
+                args.eval_only,
             )
             write_and_submit(
                 script,
