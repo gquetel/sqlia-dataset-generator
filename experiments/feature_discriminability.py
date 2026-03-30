@@ -406,7 +406,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
         margin=dict(l=230, r=160, t=40, b=60),
     )
 
-    out_path = output_dir / f"discriminability_{extractor_name}.svg"
+    out_path = output_dir / f"discriminability_{extractor_name}.pdf"
     fig.write_image(str(out_path))
     print(f"Saved heatmap: {out_path}")
 
