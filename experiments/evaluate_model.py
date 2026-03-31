@@ -198,6 +198,13 @@ def main():
         help="Testing mode: limit test set to 500 samples",
     )
     parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=None,
+        dest="n_samples",
+        help="Limit test set to N samples (deterministic). Overrides --testing's default of 500.",
+    )
+    parser.add_argument(
         "--embeddings-cache",
         type=str,
         default=None,
@@ -284,7 +291,8 @@ def main():
         cur_output_dir.mkdir(parents=True, exist_ok=True)
 
         # Load test data
-        df_test = load_test_data(test_path, 500 if args.testing else None)
+        test_size = args.n_samples or (500 if args.testing else None)
+        df_test = load_test_data(test_path, test_size)
 
         # Score
         labels, scores = get_scores_generic(

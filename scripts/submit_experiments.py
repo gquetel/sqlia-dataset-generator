@@ -241,8 +241,10 @@ def env_setup(
     log_dir: str,
     log_file: str,
     conda_env: str = CONDA_ENV,
+    n_samples: int | None = None,
 ) -> str:
     """Generate environment setup lines with log directory creation and latest symlink."""
+    n_samples_flag = f"--n-samples={n_samples}" if n_samples else ""
     return dedent(
         f"""\
         echo "Starting job on node: $(hostname)"
@@ -258,6 +260,7 @@ def env_setup(
         DATASETS_DIR={datasets_dir}
         TESTING_FLAG="{'--testing' if testing else ''}"
         MODEL_NAME_SUFFIX="{'_testing' if testing else ''}"
+        N_SAMPLES_FLAG="{n_samples_flag}"
     """
     )
 
@@ -280,7 +283,7 @@ def train_cmd(
         f"    --models {model} \\\n"
         f"    --subfolder={subfolder} \\\n"
         f"    --save-model-path={models_dir}/{model_name} \\\n"
-        f"    $TESTING_FLAG"
+        f"    $TESTING_FLAG $N_SAMPLES_FLAG"
         + (" \\\n    --no-feature-cache" if no_cache else "")
         + (" \\\n    --skip-eval" if skip_eval else "")
     )
@@ -304,7 +307,8 @@ def eval_cmd(
         f"    --test-datasets {td_args} \\\n"
         f"    --output-dir={results_dir}/ \\\n"
         f"    --fixed-fpr=0.01 \\\n"
-        f"    $TESTING_FLAG" + (" \\\n    --no-feature-cache" if no_cache else "")
+        f"    $TESTING_FLAG $N_SAMPLES_FLAG"
+        + (" \\\n    --no-feature-cache" if no_cache else "")
     )
     return cmd
 
@@ -318,17 +322,20 @@ def generate_generic_script(
     no_matrix: bool = False,
     no_cache: bool = False,
     eval_only: bool = False,
+    n_samples: int | None = None,
+    run_id: int | None = None,
 ) -> str:
     """Generate a script for a generic (leave-one-out) scenario."""
     scenario = GENERIC_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename("generic", scenario["train_dataset"])
-    models_dir = f"./output/checkpoints/{model}_generic"
-    results_dir = f"./output/results/{model}_generic"
+    run_suffix = f"_repro{run_id}" if run_id is not None else ""
+    models_dir = f"./output/checkpoints/{model}_generic{run_suffix}"
+    results_dir = f"./output/results/{model}_generic{run_suffix}"
     # The held-out (test) dataset for this generic scenario
     training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
 
-    job_suffix = f"generic_s{scenario_num}"
+    job_suffix = f"generic_s{scenario_num}{run_suffix}"
     log_dir = log_dir_for(model, job_suffix)
     timestamp = make_timestamp()
     log_file = f"{timestamp}.log"
@@ -349,7 +356,9 @@ def generate_generic_script(
         parts.append("#!/bin/bash")
     parts.append("")
     parts.append(
-        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+        env_setup(
+            testing, datasets_dir, log_dir, log_file, conda_env_for(model), n_samples
+        )
     )
     parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
     parts.append("")
@@ -393,17 +402,20 @@ def generate_specialised_script(
     no_matrix: bool = False,
     no_cache: bool = False,
     eval_only: bool = False,
+    n_samples: int | None = None,
+    run_id: int | None = None,
 ) -> str:
     """Generate a script for a specialised (single-dataset) scenario."""
     scenario = SPECIALISED_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     train_file = dataset_filename("specialised", scenario["train_dataset"])
-    models_dir = f"./output/checkpoints/{model}_specialised"
-    results_dir = f"./output/results/{model}_specialised"
+    run_suffix = f"_repro{run_id}" if run_id is not None else ""
+    models_dir = f"./output/checkpoints/{model}_specialised{run_suffix}"
+    results_dir = f"./output/results/{model}_specialised{run_suffix}"
     # For specialised, the test set during training is the same dataset as training
     training_test_label = scenario["train_label"]
 
-    job_suffix = f"specialised_s{scenario_num}"
+    job_suffix = f"specialised_s{scenario_num}{run_suffix}"
     log_dir = log_dir_for(model, job_suffix)
     timestamp = make_timestamp()
     log_file = f"{timestamp}.log"
@@ -425,7 +437,9 @@ def generate_specialised_script(
         parts.append("#!/bin/bash")
     parts.append("")
     parts.append(
-        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+        env_setup(
+            testing, datasets_dir, log_dir, log_file, conda_env_for(model), n_samples
+        )
     )
     parts.append(f'echo "Running specialised scenario {scenario_num}: {model_name}"')
     parts.append("")
@@ -950,6 +964,22 @@ def main():
         help="Enable testing mode (limit samples)",
     )
     parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=None,
+        dest="n_samples",
+        help="Limit training to N samples (deterministic). Use with --repro-runs for reproducibility checks.",
+    )
+    parser.add_argument(
+        "--repro-runs",
+        type=int,
+        default=1,
+        dest="repro_runs",
+        choices=range(1, 5),
+        metavar="{1-4}",
+        help="Number of independent runs to submit with identical settings (for reproducibility checks). Each run gets isolated output dirs (e.g. _repro1, _repro2, ...). Only applies to generic and specialised modes.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print generated scripts without submitting or running",
@@ -1109,23 +1139,28 @@ def main():
             if args.mode == "generic"
             else generate_specialised_script
         )
+        run_ids = range(1, args.repro_runs + 1) if args.repro_runs > 1 else [None]
         for n in scenario_nums:
-            script = generator(
-                args.model,
-                n,
-                args.testing,
-                args.datasets_dir,
-                use_slurm,
-                args.no_matrix,
-                args.no_cache,
-                args.eval_only,
-            )
-            write_and_submit(
-                script,
-                f"{args.model}_{args.mode}_scenario{n}.sh",
-                args.dry_run,
-                args.local,
-            )
+            for run_id in run_ids:
+                script = generator(
+                    args.model,
+                    n,
+                    args.testing,
+                    args.datasets_dir,
+                    use_slurm,
+                    args.no_matrix,
+                    args.no_cache,
+                    args.eval_only,
+                    args.n_samples,
+                    run_id,
+                )
+                repro_suffix = f"_repro{run_id}" if run_id is not None else ""
+                write_and_submit(
+                    script,
+                    f"{args.model}_{args.mode}_scenario{n}{repro_suffix}.sh",
+                    args.dry_run,
+                    args.local,
+                )
 
 
 if __name__ == "__main__":

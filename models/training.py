@@ -149,6 +149,13 @@ def init_args() -> argparse.Namespace:
         help="Reduce dataset size to test correct code execution",
     )
     parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=None,
+        dest="n_samples",
+        help="Limit dataset to N samples (deterministic, seed-fixed) before splitting. Overrides --testing's default of 5000. Use for reproducibility checks (e.g. --n-samples 20000).",
+    )
+    parser.add_argument(
         "--save-model-path",
         type=str,
         dest="save_model_path",
@@ -620,8 +627,9 @@ if __name__ == "__main__":
         },
     )
     logger.info(f"Training on model: {args.dataset}")
-    if args.testing:
-        df = df.sample(5000)
+    n_samples = args.n_samples or (5000 if args.testing else None)
+    if n_samples:
+        df = df.sample(n_samples, random_state=GENERIC.RANDOM_SEED)
 
     if args.subfolder:
         project_paths.set_subfolder_output_path(args.subfolder)
