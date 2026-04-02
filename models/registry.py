@@ -605,10 +605,20 @@ def decision_score_ae(model, X: np.ndarray):
 
 
 def preprocessing_generic_ae(model, df: pd.DataFrame, use_scaler: bool = False):
-    """Preprocess for AE scoring: extract features → tensor."""
-    X, labels = model.preprocess_for_preds(df=df)
+    """Preprocess for AE scoring: extract features → tensor.
+
+    Returns a 3-tuple (X_tensors, labels, valid_index). valid_index is the pandas
+    index of rows that survived preprocessing (may be a subset of df.index when
+    the extractor drops rows, e.g. gaur dropping unparseable queries).
+    """
+    result = model.preprocess_for_preds(df=df)
+    if len(result) == 3:
+        X, labels, valid_index = result
+    else:
+        X, labels = result
+        valid_index = df.index
     X_tensors = model.X_to_tensor(X)
-    return X_tensors, labels
+    return X_tensors, labels, valid_index
 
 
 def preprocessing_sklearn(model, df: pd.DataFrame, use_scaler: bool = False):

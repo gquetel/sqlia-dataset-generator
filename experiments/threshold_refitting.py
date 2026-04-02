@@ -111,7 +111,7 @@ def load_target_data(
 
 def refit_threshold(model, df_k: pd.DataFrame) -> float:
     """Score k normal samples with frozen model and compute new threshold."""
-    _, s_val = get_scores_generic(
+    _, s_val, _ = get_scores_generic(
         df=df_k,
         batch_size=4096,
         model=model,
@@ -131,7 +131,7 @@ def run_sweep(
 ) -> pd.DataFrame:
     """Sweep over k values, re-fit threshold, evaluate. Return results DataFrame."""
     # Score the test set once (model is frozen)
-    labels, scores = get_scores_generic(
+    _, partial_scores, valid_idx = get_scores_generic(
         df=df_test,
         batch_size=4096,
         model=model,
@@ -139,6 +139,14 @@ def run_sweep(
         score_fn=decision_score_ae,
         use_scaler=False,
     )
+    n_dropped = len(df_test) - len(valid_idx)
+    if n_dropped > 0:
+        logger.warning(
+            f"Extractor dropped {n_dropped} rows; assigning score=0 (predicted normal)"
+        )
+    scores = np.zeros(len(df_test))
+    scores[df_test.index.get_indexer(valid_idx)] = partial_scores
+    labels = df_test["label"].to_numpy()
 
     rows = []
     for k in k_values:
@@ -161,12 +169,20 @@ def run_sweep(
                 threshold=threshold,
                 model_name=f"k{k}_run{run}",
             )
-            rows.append({"k": k, "run": run, "seed": seed, **metrics})
+            rows.append(
+                {
+                    "k": k,
+                    "run": run,
+                    "seed": seed,
+                    "rocauc": float(metrics["rocauc"]),
+                    "auprc": float(metrics["auprc"]),
+                }
+            )
             logger.info(
-                "k=%5d run=%d  AUROC=%.4f  threshold=%.6f",
+                "k=%5d run=%d  AUROC=%s  threshold=%.6f",
                 k,
                 run,
-                metrics["roc_auc"],
+                metrics["rocauc"],  # already a formatted string e.g. "0.5904"
                 threshold,
             )
 
@@ -270,7 +286,7 @@ def main():
     print("\nAUROC vs. k (mean ± std):")
     for _, row in df_summary.iterrows():
         print(
-            f"  k={int(row['k']):>6}  {row['roc_auc_mean']:.4f} ± {row['roc_auc_std']:.4f}"
+            f"  k={int(row['k']):>6}  {row['rocauc_mean']:.4f} ± {row['rocauc_std']:.4f}"
         )
 
 

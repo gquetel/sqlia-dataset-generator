@@ -35,10 +35,15 @@ class GaurExtractor(BaseExtractor):
         return X.select_dtypes(include="number")
 
     def preprocess_for_preds(self, df: pd.DataFrame):
-        """Override base to avoid collecting traces twice."""
+        """Override base to avoid collecting traces twice.
+
+        Returns a 3-tuple (X, labels, valid_index) where valid_index contains
+        the pandas index values of rows that survived trace collection. Some rows
+        may be dropped when gaur_sqld cannot build a semantic tree for a query.
+        """
         df = self._ensure_traces(df)
         X, labels = self._preprocessor.preprocess_for_preds(df)
-        return X.select_dtypes(include="number").to_numpy(dtype=float), labels
+        return X.select_dtypes(include="number").to_numpy(dtype=float), labels, df.index
 
     def _ensure_traces(self, df: pd.DataFrame) -> pd.DataFrame:
         if "semantic_tree" not in df.columns:

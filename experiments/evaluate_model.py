@@ -295,7 +295,7 @@ def main():
         df_test = load_test_data(test_path, test_size)
 
         # Score
-        labels, scores = get_scores_generic(
+        _, partial_scores, valid_idx = get_scores_generic(
             df=df_test,
             batch_size=4096,
             model=model,
@@ -303,6 +303,16 @@ def main():
             score_fn=decision_score_ae,
             use_scaler=False,
         )
+        # Rows dropped by the extractor (e.g. gaur unparseable queries) get score=0,
+        # which falls below any threshold and is treated as predicted-normal.
+        n_dropped = len(df_test) - len(valid_idx)
+        if n_dropped > 0:
+            logger.info(
+                f"Extractor dropped {n_dropped} rows; assigning score=0 (predicted normal)"
+            )
+        scores = np.zeros(len(df_test))
+        scores[df_test.index.get_indexer(valid_idx)] = partial_scores
+        labels = df_test["label"].to_numpy()
 
         # Determine threshold
         if args.fixed_fpr is not None:

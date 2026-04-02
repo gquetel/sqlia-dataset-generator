@@ -307,24 +307,41 @@ def get_scores_generic(
     score_fn: Callable[[Any, np.ndarray], np.ndarray],
     batch_size: int | None = None,
     use_scaler: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Generic scoring loop."""
-    all_labels, all_scores = [], []
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Generic scoring loop.
+
+    Returns (labels, scores, valid_index) where valid_index contains the pandas
+    index values of rows that were actually scored. Some preprocessors (e.g. gaur)
+    may silently drop rows; valid_index lets callers align df metadata with results.
+    """
+    all_labels, all_scores, all_valid_indices = [], [], []
 
     if batch_size:
         for start_idx in tqdm(range(0, len(df), batch_size), desc="Scoring batches"):
             end_idx = min(start_idx + batch_size, len(df))
             batch_df = df.iloc[start_idx:end_idx]
             # For good tqdm bars, we need the preprocess_function to be silent.
-            X, labels = preprocess_fn(model, batch_df, use_scaler=use_scaler)
+            result = preprocess_fn(model, batch_df, use_scaler=use_scaler)
+            if len(result) == 3:
+                X, labels, valid_index = result
+            else:
+                X, labels = result
+                valid_index = batch_df.index
             scores = score_fn(model, X)
             all_labels.extend(labels)
             all_scores.extend(scores)
+            all_valid_indices.extend(valid_index)
     else:
-        X, all_labels = preprocess_fn(model, df, use_scaler=use_scaler)
+        result = preprocess_fn(model, df, use_scaler=use_scaler)
+        if len(result) == 3:
+            X, all_labels, valid_index = result
+            all_valid_indices = list(valid_index)
+        else:
+            X, all_labels = result
+            all_valid_indices = list(df.index)
         all_scores = score_fn(model, X)
 
-    return np.array(all_labels), np.array(all_scores)
+    return np.array(all_labels), np.array(all_scores), np.array(all_valid_indices)
 
 
 def compute_metrics_generic(
@@ -364,7 +381,7 @@ def compute_metrics_generic(
                 batch_size=batch,
             )
     else:
-        _, s_val = get_scores_generic(
+        _, s_val, _ = get_scores_generic(
             df=df_val,
             batch_size=batch,
             model=model,
@@ -373,7 +390,7 @@ def compute_metrics_generic(
             score_fn=get_decision_scores_fn,
         )
         if not skip_eval:
-            l_test, s_test = get_scores_generic(
+            l_test, s_test, _ = get_scores_generic(
                 df=df_test,
                 batch_size=batch,
                 model=model,
