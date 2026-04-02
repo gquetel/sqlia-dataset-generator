@@ -82,14 +82,12 @@ ALL_LETTERS = set(DATASET_LETTERS.values())
 
 # Human-readable labels for known model prefixes; unknown prefixes fall back to the prefix itself
 KNOWN_LABELS: dict[str, str] = {
-    "ae_li": "Li + AE",
-    "ae_securebert": "SecureBERT + AE",
-    "ae_gaur": "GAUR + AE",
-    "ae_kakisim_c": "Kakisim-C + AE",
-    "ae_loginov": "Loginov + AE",
-    "ae_li_gaur_lex": "Li + GAUR Lex + AE",
-    "ae_li_gaur_synt": "Li + GAUR Synt + AE",
-    "ae_li_gaur_sem": "Li + GAUR Sem + AE",
+    "ae_li": "Li et al.",
+    "ae_securebert": "SecureBERT",
+    "ae_gaur": "Gaur (Expert)",
+    "ae_gaur_chatgpt": "Gaur (ChatGPT)",
+    "ae_loginov": "Loginov et al.",
+    "ae_codebert": "CodeBERT",
 }
 
 COLORS = {"generic": "#636EFA", "specialised": "#EF553B"}
@@ -447,7 +445,7 @@ def _tl_heatmap_combined(
         zmin = 50.0 if is_pct else 0.5
         zmax = 100.0 if is_pct else 1.0
         fmt = ".1f" if is_pct else ".3f"
-        low_threshold = 70.0 if is_pct else 0.7
+        high_threshold = 80.0 if is_pct else 0.8
 
         annotations = []
         for train in matrix.index:
@@ -473,7 +471,7 @@ def _tl_heatmap_combined(
                             y=train,
                             text=f"{val:{fmt}}",
                             font=dict(
-                                color="white" if val < low_threshold else "black",
+                                color="white" if val > high_threshold else "black",
                                 size=14,
                                 weight="bold" if is_generalization else "normal",
                             ),
@@ -545,6 +543,137 @@ def plot_tl_matrices(
         )
 
     return figs
+
+
+def plot_all_models_tl_matrix(
+    results_dir: Path,
+    models: list[dict],
+    metric_key: str,
+) -> go.Figure | None:
+    """2-row combined TL matrix for all models: row 1 = generic, row 2 = specialised.
+
+    Each column corresponds to one model. Intended for multi-model comparison.
+    """
+    n = len(models)
+    subplot_titles = [f"{m['label']} [Generic]" for m in models] + [
+        f"{m['label']} [Specialised]" for m in models
+    ]
+    fig = make_subplots(
+        rows=2,
+        cols=n,
+        subplot_titles=subplot_titles,
+        horizontal_spacing=0.01,
+        vertical_spacing=0.15,
+    )
+
+    has_any = False
+    for col_idx, m in enumerate(models, 1):
+        prefix = m["prefix"]
+        all_matrices = {
+            "generic": load_tl_matrix(results_dir, prefix, "generic"),
+            "specialised": load_tl_matrix(results_dir, prefix, "specialised"),
+        }
+        for row_idx, scenario in enumerate(("generic", "specialised"), 1):
+            matrix = all_matrices[scenario][metric_key]
+            flat = matrix.values.astype(float)
+            has_data = ~pd.isna(flat)
+            if not has_data.any():
+                continue
+            has_any = True
+
+            is_pct = flat[has_data].max() > 1
+            zmin = 50.0 if is_pct else 0.5
+            zmax = 100.0 if is_pct else 1.0
+            fmt = ".1f" if is_pct else ".3f"
+            high_threshold = 80.0 if is_pct else 0.8
+
+            subplot_num = (row_idx - 1) * n + col_idx
+            xref = "x" if subplot_num == 1 else f"x{subplot_num}"
+            yref = "y" if subplot_num == 1 else f"y{subplot_num}"
+
+            annotations = []
+            for train in matrix.index:
+                for test in matrix.columns:
+                    val = matrix.loc[train, test]
+                    if pd.isna(val):
+                        annotations.append(
+                            dict(
+                                x=test,
+                                y=train,
+                                text="N/A",
+                                font=dict(color="gray", size=16),
+                                showarrow=False,
+                                xref=xref,
+                                yref=yref,
+                            )
+                        )
+                    else:
+                        annotations.append(
+                            dict(
+                                x=test,
+                                y=train,
+                                text=f"{val:{fmt}}",
+                                font=dict(
+                                    color="white" if val > high_threshold else "black",
+                                    size=16,
+                                ),
+                                showarrow=False,
+                                xref=xref,
+                                yref=yref,
+                            )
+                        )
+
+            # Show colorbar only once: bottom row, last column, horizontal below figures
+            show_scale = col_idx == n and row_idx == 2
+            fig.add_trace(
+                go.Heatmap(
+                    z=flat,
+                    x=matrix.columns.tolist(),
+                    y=matrix.index.tolist(),
+                    colorscale="RdYlGn",
+                    zmin=zmin,
+                    zmax=zmax,
+                    showscale=show_scale,
+                    colorbar=dict(
+                        orientation="h",
+                        x=0.5,
+                        xanchor="center",
+                        y=-0.1,
+                        yanchor="top",
+                        thickness=15,
+                        len=0.5,
+                        outlinewidth=1,
+                        outlinecolor="black",
+                        title=dict(
+                            text=TL_METRIC_DISPLAY.get(metric_key, metric_key.upper()),
+                            side="bottom",
+                        ),
+                    ),
+                ),
+                row=row_idx,
+                col=col_idx,
+            )
+            fig.layout.annotations = list(fig.layout.annotations) + annotations
+
+    if not has_any:
+        return None
+
+    for col_idx in range(1, n + 1):
+        for row_idx in range(1, 3):
+            fig.update_xaxes(title_text="Test Dataset", row=row_idx, col=col_idx)
+            if col_idx == 1:
+                fig.update_yaxes(title_text="Training Set", row=row_idx, col=col_idx)
+            else:
+                fig.update_yaxes(
+                    title_text="", showticklabels=False, row=row_idx, col=col_idx
+                )
+    fig.update_layout(
+        title=None,
+        width=max(900, 380 * n),
+        height=750,
+        margin=dict(b=100),
+    )
+    return fig
 
 
 def load_concept_drift_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
@@ -742,121 +871,129 @@ def main() -> int:
         print("\n=== AUROC delta CSV ===")
         export_auroc_delta_csv(all_results, models, gvs_dir)
 
-    #  Generic vs Specialised
-    for m in models:
-        prefix, label = m["prefix"], m["label"]
-        df = all_results[prefix]
-        print(f"\n=== {label} ===")
-
-        per_model_figs = {
-            f"roc_{prefix}": plot_roc_curves(
-                df,
-                f"ROC Curves: Generic vs Specialised ({label})",
-                scenarios=[
-                    (
-                        "generic",
-                        COLORS["generic"],
-                        lambda l, c, p=prefix: results_dir
-                        / f"{p}_generic"
-                        / f"{p}_{c}_on_{l}"
-                        / "roc_curves",
-                    ),
-                    (
-                        "specialised",
-                        COLORS["specialised"],
-                        lambda l, c, p=prefix: results_dir
-                        / f"{p}_specialised"
-                        / f"{p}_{l}_on_{l}"
-                        / "roc_curves",
-                    ),
-                ],
-            ),
-            f"recall_technique_{prefix}": plot_recall_per_technique(
-                df, f"Recall per Attack Technique: Generic vs Specialised ({label})"
-            ),
-            f"recall_stmt_{prefix}": plot_recall_per_statement_type(
-                df, f"Recall per Statement Type: Generic vs Specialised ({label})"
-            ),
-        }
-        for name, fig in per_model_figs.items():
-            if fig is not None:
-                export_figure(fig, gvs_dir / name, args.format)
+    # # Generic vs Specialised (ROC curves + recall plots — commented out, focusing on TL AUROC matrix)
+    # for m in models:
+    #     prefix, label = m["prefix"], m["label"]
+    #     df = all_results[prefix]
+    #     print(f"\n=== {label} ===")
+    #
+    #     per_model_figs = {
+    #         f"roc_{prefix}": plot_roc_curves(
+    #             df,
+    #             f"ROC Curves: Generic vs Specialised ({label})",
+    #             scenarios=[
+    #                 (
+    #                     "generic",
+    #                     COLORS["generic"],
+    #                     lambda l, c, p=prefix: results_dir
+    #                     / f"{p}_generic"
+    #                     / f"{p}_{c}_on_{l}"
+    #                     / "roc_curves",
+    #                 ),
+    #                 (
+    #                     "specialised",
+    #                     COLORS["specialised"],
+    #                     lambda l, c, p=prefix: results_dir
+    #                     / f"{p}_specialised"
+    #                     / f"{p}_{l}_on_{l}"
+    #                     / "roc_curves",
+    #                 ),
+    #             ],
+    #         ),
+    #         f"recall_technique_{prefix}": plot_recall_per_technique(
+    #             df, f"Recall per Attack Technique: Generic vs Specialised ({label})"
+    #         ),
+    #         f"recall_stmt_{prefix}": plot_recall_per_statement_type(
+    #             df, f"Recall per Statement Type: Generic vs Specialised ({label})"
+    #         ),
+    #     }
+    #     for name, fig in per_model_figs.items():
+    #         if fig is not None:
+    #             export_figure(fig, gvs_dir / name, args.format)
 
     # Transfer Learning Matrices
     print("\n=== Transfer Learning Matrices ===")
-    for m in models:
-        print(f"\n=== TL: {m['label']} ===")
-        tl_figs = plot_tl_matrices(results_dir, m["prefix"], m["label"])
-        for name, fig in tl_figs.items():
-            export_figure(fig, tl_dir / name, args.format)
+    if len(models) > 1:
+        for metric_key in ("auroc", "auprc", "f1"):
+            fig = plot_all_models_tl_matrix(results_dir, models, metric_key)
+            if fig is not None:
+                export_figure(fig, tl_dir / f"tl_combined_{metric_key}", args.format)
+            else:
+                print(f"  [skip] combined {metric_key}: no data")
+    else:
+        for m in models:
+            print(f"\n=== TL: {m['label']} ===")
+            tl_figs = plot_tl_matrices(results_dir, m["prefix"], m["label"])
+            for name, fig in tl_figs.items():
+                export_figure(fig, tl_dir / name, args.format)
 
-    # Concept Drift (auto-detected)
-    cd_prefixes = discover_concept_drift_models(results_dir)
-    if cd_prefixes:
-        print("\n=== Concept Drift ===")
-        print(f"  Found concept-drift models: {cd_prefixes}")
-        cd_dir = args.output_dir / "concept-drift"
-        cd_dir.mkdir(parents=True, exist_ok=True)
-
-        all_cd_results: dict[str, pd.DataFrame] = {}
-        for prefix in cd_prefixes:
-            df = load_concept_drift_results(results_dir, prefix)
-            all_cd_results[prefix] = df
-            print(f"  {prefix}: {len(df)} rows")
-
-        cd_models = [{"prefix": p, "label": model_label(p)} for p in cd_prefixes]
-        for m in cd_models:
-            df = all_cd_results[m["prefix"]]
-            label = m["label"]
-            for name, fig in {
-                f"roc_{m['prefix']}": plot_roc_curves(
-                    df,
-                    f"ROC Curves: Origin vs Shifted ({label})",
-                    scenarios=[
-                        (
-                            "origin",
-                            CONCEPT_DRIFT_COLORS["origin"],
-                            lambda l, c, p=m["prefix"]: next(
-                                (
-                                    d / "roc_curves"
-                                    for d in (results_dir / f"{p}_concept_drift").glob(
-                                        f"{p}_{l}*_on_origin"
-                                    )
-                                ),
-                                results_dir / "__nonexistent__",
-                            ),
-                        ),
-                        (
-                            "shifted",
-                            CONCEPT_DRIFT_COLORS["shifted"],
-                            lambda l, c, p=m["prefix"]: next(
-                                (
-                                    d / "roc_curves"
-                                    for d in (results_dir / f"{p}_concept_drift").glob(
-                                        f"{p}_{l}*_on_shifted"
-                                    )
-                                ),
-                                results_dir / "__nonexistent__",
-                            ),
-                        ),
-                    ],
-                ),
-            }.items():
-                if fig is not None:
-                    export_figure(fig, cd_dir / name, args.format)
-
-        print("\n=== Concept Drift AUROC delta CSV ===")
-        export_auroc_delta_csv(
-            all_cd_results,
-            cd_models,
-            cd_dir,
-            split_col="split",
-            cat_a="origin",
-            cat_b="shifted",
-            filename="auroc_concept_drift_delta.csv",
-        )
-
-        print(f"  Concept drift          : {cd_dir.resolve()}")
+    # # Concept Drift (auto-detected) — commented out, focusing on TL AUROC matrix
+    # cd_prefixes = discover_concept_drift_models(results_dir)
+    # if cd_prefixes:
+    #     print("\n=== Concept Drift ===")
+    #     print(f"  Found concept-drift models: {cd_prefixes}")
+    #     cd_dir = args.output_dir / "concept-drift"
+    #     cd_dir.mkdir(parents=True, exist_ok=True)
+    #
+    #     all_cd_results: dict[str, pd.DataFrame] = {}
+    #     for prefix in cd_prefixes:
+    #         df = load_concept_drift_results(results_dir, prefix)
+    #         all_cd_results[prefix] = df
+    #         print(f"  {prefix}: {len(df)} rows")
+    #
+    #     cd_models = [{"prefix": p, "label": model_label(p)} for p in cd_prefixes]
+    #     for m in cd_models:
+    #         df = all_cd_results[m["prefix"]]
+    #         label = m["label"]
+    #         for name, fig in {
+    #             f"roc_{m['prefix']}": plot_roc_curves(
+    #                 df,
+    #                 f"ROC Curves: Origin vs Shifted ({label})",
+    #                 scenarios=[
+    #                     (
+    #                         "origin",
+    #                         CONCEPT_DRIFT_COLORS["origin"],
+    #                         lambda l, c, p=m["prefix"]: next(
+    #                             (
+    #                                 d / "roc_curves"
+    #                                 for d in (results_dir / f"{p}_concept_drift").glob(
+    #                                     f"{p}_{l}*_on_origin"
+    #                                 )
+    #                             ),
+    #                             results_dir / "__nonexistent__",
+    #                         ),
+    #                     ),
+    #                     (
+    #                         "shifted",
+    #                         CONCEPT_DRIFT_COLORS["shifted"],
+    #                         lambda l, c, p=m["prefix"]: next(
+    #                             (
+    #                                 d / "roc_curves"
+    #                                 for d in (results_dir / f"{p}_concept_drift").glob(
+    #                                     f"{p}_{l}*_on_shifted"
+    #                                 )
+    #                             ),
+    #                             results_dir / "__nonexistent__",
+    #                         ),
+    #                     ),
+    #                 ],
+    #             ),
+    #         }.items():
+    #             if fig is not None:
+    #                 export_figure(fig, cd_dir / name, args.format)
+    #
+    #     print("\n=== Concept Drift AUROC delta CSV ===")
+    #     export_auroc_delta_csv(
+    #         all_cd_results,
+    #         cd_models,
+    #         cd_dir,
+    #         split_col="split",
+    #         cat_a="origin",
+    #         cat_b="shifted",
+    #         filename="auroc_concept_drift_delta.csv",
+    #     )
+    #
+    #     print(f"  Concept drift          : {cd_dir.resolve()}")
 
     print(f"\nDone.")
     if models:

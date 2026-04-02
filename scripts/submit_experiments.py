@@ -836,6 +836,105 @@ def generate_concept_drift_script(
     return "\n".join(parts)
 
 
+def threshold_refitting_cmd(
+    model: str,
+    model_path: str,
+    target_dataset_file: str,
+    output_dir: str,
+    no_cache: bool = False,
+) -> str:
+    """Generate the threshold re-fitting command for a single scenario."""
+    cmd = (
+        f"python3 experiments/threshold_refitting.py \\\n"
+        f"    --model-type={model} \\\n"
+        f"    --model-path={model_path} \\\n"
+        f"    --target-dataset=$DATASETS_DIR/{target_dataset_file} \\\n"
+        f"    --output-dir={output_dir} \\\n"
+        f"    $TESTING_FLAG" + (" \\\n    --no-feature-cache" if no_cache else "")
+    )
+    return cmd
+
+
+def generate_threshold_refitting_script(
+    model: str,
+    scenario_num: int,
+    testing: bool,
+    datasets_dir: str,
+    slurm: bool,
+    no_cache: bool = False,
+) -> str:
+    """Generate a threshold re-fitting script for one generic scenario.
+
+    Loads the pre-trained generic model (fails if absent) and sweeps k normal
+    samples from the held-out target domain to re-fit the anomaly threshold.
+    """
+    scenario = GENERIC_SCENARIOS[scenario_num]
+    model_name = f"{model}_{scenario['train_label']}"
+    target_label = next(l for l in "ABCD" if l not in scenario["train_label"])
+    target_file = dataset_filename("generic", DATASETS[target_label])
+    models_dir = f"./output/checkpoints/{model}_generic"
+    results_dir = f"./output/results/{model}_threshold_refitting"
+
+    job_suffix = f"threshold_refitting_s{scenario_num}"
+    log_dir = log_dir_for(model, job_suffix)
+    timestamp = make_timestamp()
+    log_file = f"{timestamp}.log"
+    log_path = f"{log_dir}/{log_file}"
+
+    output_dir = f"{results_dir}/{model_name}_on_{target_label}"
+
+    parts = []
+    if slurm:
+        parts.append(sbatch_header(model, job_suffix, log_path))
+    else:
+        parts.append("#!/bin/bash")
+    parts.append("")
+    parts.append(
+        env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
+    )
+    parts.append(
+        f'echo "Running threshold re-fitting scenario {scenario_num}: {model_name} → {target_label}"'
+    )
+    parts.append("")
+
+    train_file = dataset_filename("generic", scenario["train_dataset"])
+    training_test_label = target_label
+    parts.append(
+        f"if [ ! -f {models_dir}/{model_name}${{MODEL_NAME_SUFFIX}}.pth ]; then"
+    )
+    parts.append(f'    echo "Training {model_name} ..."')
+    parts.append(
+        "    "
+        + train_cmd(
+            model,
+            "generic",
+            train_file,
+            model_name,
+            models_dir,
+            training_test_label=training_test_label,
+            no_cache=no_cache,
+            skip_eval=True,
+        ).replace("\n", "\n    ")
+    )
+    parts.append("else")
+    parts.append(f'    echo "Skipping training — {model_name} already exists"')
+    parts.append("fi")
+    parts.append("")
+
+    parts.append(
+        threshold_refitting_cmd(
+            model,
+            f"{models_dir}/{model_name}${{MODEL_NAME_SUFFIX}}.pth",
+            target_file,
+            output_dir,
+            no_cache=no_cache,
+        )
+    )
+    parts.append("")
+    parts.append('echo "Job finished at: $(date)"')
+    return "\n".join(parts)
+
+
 def generate_domain_shift_script(
     model: str,
     testing: bool,
@@ -943,6 +1042,7 @@ def main():
             "malignancy",
             "shap",
             "concept_drift",
+            "threshold_refitting",
         ],
         help="Experiment mode",
     )
@@ -1065,6 +1165,32 @@ def main():
             write_and_submit(
                 script,
                 f"{args.model}_concept_drift_scenario{n}.sh",
+                args.dry_run,
+                args.local,
+            )
+    elif args.mode == "threshold_refitting":
+        if args.scenario == "all":
+            scenario_nums = [1, 2, 3, 4]
+        else:
+            try:
+                n = int(args.scenario)
+                if n < 1 or n > 4:
+                    raise ValueError
+                scenario_nums = [n]
+            except ValueError:
+                parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
+        for n in scenario_nums:
+            script = generate_threshold_refitting_script(
+                args.model,
+                n,
+                args.testing,
+                args.datasets_dir,
+                use_slurm,
+                args.no_cache,
+            )
+            write_and_submit(
+                script,
+                f"{args.model}_threshold_refitting_scenario{n}.sh",
                 args.dry_run,
                 args.local,
             )

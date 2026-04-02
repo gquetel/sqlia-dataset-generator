@@ -411,6 +411,71 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     print(f"Saved heatmap: {out_path}")
 
 
+def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
+    """2-D scatter: mean disc_acc (x) vs mean label_acc (y) per feature, both extractors."""
+    import plotly.graph_objects as go
+
+    means = (
+        results_df.groupby(["extractor", "feature"])[["disc_acc", "label_acc"]]
+        .mean()
+        .reset_index()
+    )
+
+    extractor_styles = {
+        "Li et al.": {"color": "#1f77b4", "symbol": "circle"},
+        "GAUR (ChatGPT)": {"color": "#ff7f0e", "symbol": "diamond"},
+    }
+
+    fig = go.Figure()
+    for extractor_name, grp in means.groupby("extractor"):
+        style = extractor_styles.get(
+            extractor_name, {"color": "#999999", "symbol": "circle"}
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=grp["disc_acc"],
+                y=grp["label_acc"],
+                mode="markers+text",
+                marker=dict(
+                    symbol=style["symbol"],
+                    size=9,
+                    color=style["color"],
+                    line=dict(width=0.8, color="white"),
+                ),
+                text=grp["feature"],
+                textposition="top center",
+                textfont=dict(size=7),
+                name=extractor_name,
+                hovertemplate=(
+                    "<b>%{text}</b><br>"
+                    f"Extractor: {extractor_name}<br>"
+                    "Domain acc: %{x:.3f}<br>"
+                    "Label acc: %{y:.3f}<extra></extra>"
+                ),
+            )
+        )
+
+    # Reference lines at 0.5 (chance)
+    fig.add_hline(y=0.5, line=dict(color="gray", dash="dash", width=1))
+    fig.add_vline(x=0.5, line=dict(color="gray", dash="dash", width=1))
+
+    fig.update_layout(
+        xaxis=dict(title="Mean domain discriminability accuracy", range=[0.45, 1.02]),
+        yaxis=dict(title="Mean label prediction accuracy", range=[0.45, 1.02]),
+        legend=dict(title="Extractor"),
+        plot_bgcolor="white",
+        width=900,
+        height=750,
+        margin=dict(l=60, r=40, t=40, b=60),
+    )
+    fig.update_xaxes(showgrid=True, gridcolor="#eeeeee")
+    fig.update_yaxes(showgrid=True, gridcolor="#eeeeee")
+
+    out_path = output_dir / "discriminability_mean_scatter.pdf"
+    fig.write_image(str(out_path))
+    print(f"Saved scatter plot: {out_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Per-feature dataset discriminability via DecisionTree"
@@ -453,6 +518,7 @@ def main():
         for extractor_name in results_df["extractor"].unique():
             subset = results_df[results_df["extractor"] == extractor_name]
             make_heatmap(subset, extractor_name, output_dir)
+        make_mean_scatter(results_df, output_dir)
         return
 
     n_samples = TESTING_N_SAMPLES if args.testing else N_SAMPLES
@@ -579,6 +645,7 @@ def main():
     for extractor_name in results_df["extractor"].unique():
         subset = results_df[results_df["extractor"] == extractor_name]
         make_heatmap(subset, extractor_name, output_dir)
+    make_mean_scatter(results_df, output_dir)
 
 
 if __name__ == "__main__":
