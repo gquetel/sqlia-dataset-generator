@@ -836,16 +836,16 @@ def generate_concept_drift_script(
     return "\n".join(parts)
 
 
-def threshold_refitting_cmd(
+def fine_tuning_cmd(
     model: str,
     model_path: str,
     target_dataset_file: str,
     output_dir: str,
     no_cache: bool = False,
 ) -> str:
-    """Generate the threshold re-fitting command for a single scenario."""
+    """Generate the fine-tuning command for a single scenario."""
     cmd = (
-        f"python3 experiments/threshold_refitting.py \\\n"
+        f"python3 experiments/fine_tuning.py \\\n"
         f"    --model-type={model} \\\n"
         f"    --model-path={model_path} \\\n"
         f"    --target-dataset=$DATASETS_DIR/{target_dataset_file} \\\n"
@@ -855,7 +855,7 @@ def threshold_refitting_cmd(
     return cmd
 
 
-def generate_threshold_refitting_script(
+def generate_fine_tuning_script(
     model: str,
     scenario_num: int,
     testing: bool,
@@ -863,19 +863,19 @@ def generate_threshold_refitting_script(
     slurm: bool,
     no_cache: bool = False,
 ) -> str:
-    """Generate a threshold re-fitting script for one generic scenario.
+    """Generate a fine-tuning script for one generic scenario.
 
-    Loads the pre-trained generic model (fails if absent) and sweeps k normal
-    samples from the held-out target domain to re-fit the anomaly threshold.
+    Loads the pre-trained generic model (trains it if absent) and sweeps k normal
+    samples from the held-out target domain to fine-tune the AE.
     """
     scenario = GENERIC_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     target_label = next(l for l in "ABCD" if l not in scenario["train_label"])
-    target_file = dataset_filename("generic", DATASETS[target_label])
+    target_file = dataset_filename("specialised", DATASETS[target_label])
     models_dir = f"./output/checkpoints/{model}_generic"
-    results_dir = f"./output/results/{model}_threshold_refitting"
+    results_dir = f"./output/results/{model}_fine_tuning"
 
-    job_suffix = f"threshold_refitting_s{scenario_num}"
+    job_suffix = f"fine_tuning_s{scenario_num}"
     log_dir = log_dir_for(model, job_suffix)
     timestamp = make_timestamp()
     log_file = f"{timestamp}.log"
@@ -893,7 +893,7 @@ def generate_threshold_refitting_script(
         env_setup(testing, datasets_dir, log_dir, log_file, conda_env_for(model))
     )
     parts.append(
-        f'echo "Running threshold re-fitting scenario {scenario_num}: {model_name} → {target_label}"'
+        f'echo "Running fine-tuning scenario {scenario_num}: {model_name} → {target_label}"'
     )
     parts.append("")
 
@@ -922,7 +922,7 @@ def generate_threshold_refitting_script(
     parts.append("")
 
     parts.append(
-        threshold_refitting_cmd(
+        fine_tuning_cmd(
             model,
             f"{models_dir}/{model_name}${{MODEL_NAME_SUFFIX}}.pth",
             target_file,
@@ -1042,7 +1042,7 @@ def main():
             "malignancy",
             "shap",
             "concept_drift",
-            "threshold_refitting",
+            "fine_tuning",
         ],
         help="Experiment mode",
     )
@@ -1168,7 +1168,7 @@ def main():
                 args.dry_run,
                 args.local,
             )
-    elif args.mode == "threshold_refitting":
+    elif args.mode == "fine_tuning":
         if args.scenario == "all":
             scenario_nums = [1, 2, 3, 4]
         else:
@@ -1180,7 +1180,7 @@ def main():
             except ValueError:
                 parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
         for n in scenario_nums:
-            script = generate_threshold_refitting_script(
+            script = generate_fine_tuning_script(
                 args.model,
                 n,
                 args.testing,
@@ -1190,7 +1190,7 @@ def main():
             )
             write_and_submit(
                 script,
-                f"{args.model}_threshold_refitting_scenario{n}.sh",
+                f"{args.model}_fine_tuning_scenario{n}.sh",
                 args.dry_run,
                 args.local,
             )

@@ -239,7 +239,8 @@ def _cached_preprocess_preds(
     from extractors.kakisim import KakisimExtractor
 
     if extractor and isinstance(extractor, KakisimExtractor):
-        return preprocess_fn(model, df, use_scaler=use_scaler)
+        X, labels, valid_index = preprocess_fn(model, df, use_scaler=use_scaler)
+        return X, labels, valid_index
 
     df_hash = hash_df(df)
     state_tag = _model_state_tag(model)
@@ -248,16 +249,16 @@ def _cached_preprocess_preds(
 
     cached = load_cache(path)
     if cached is not None:
-        X, labels = cached
+        X, labels, valid_index = cached
         if isinstance(X, torch.Tensor) and hasattr(model, "device"):
             X = X.to(model.device)
-        return X, labels
+        return X, labels, valid_index
 
-    X, labels = preprocess_fn(model, df, use_scaler=use_scaler)
+    X, labels, valid_index = preprocess_fn(model, df, use_scaler=use_scaler)
 
-    save_obj = (X.cpu() if isinstance(X, torch.Tensor) else X, labels)
+    save_obj = (X.cpu() if isinstance(X, torch.Tensor) else X, labels, valid_index)
     save_cache(path, save_obj)
-    return X, labels
+    return X, labels, valid_index
 
 
 def get_scores_with_cache(
@@ -271,7 +272,7 @@ def get_scores_with_cache(
     batch_size: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Preprocess the full DataFrame (with caching), then score in batches."""
-    X, labels = _cached_preprocess_preds(
+    X, labels, _ = _cached_preprocess_preds(
         preprocess_fn=preprocess_fn,
         model=model,
         df=df,
