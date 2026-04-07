@@ -821,20 +821,19 @@ def main() -> int:
         default=False,
         help=(
             "Include WAFAMOLE (E) as an external test-only dataset. "
-            "Adds E to test sets and specialised training sets but not generic training."
+            "Adds E to test sets only (not to any training sets)."
         ),
     )
     args = parser.parse_args()
 
     # Extend constants if WAFAMOLE is included.
-    # WAFAMOLE is test-only and single-dataset specialised; it must NOT enter
-    # ALL_LETTERS because leave_one_out_complement() uses ALL_LETTERS to derive
-    # generic training sets (ABC, ABD, ACD, BCD) — adding E would corrupt them.
+    # WAFAMOLE is test-only; it must NOT enter ALL_LETTERS because
+    # leave_one_out_complement() uses ALL_LETTERS to derive generic training sets
+    # (ABC, ABD, ACD, BCD) — adding E would corrupt them.
     if args.include_wafamole:
         DATASET_LETTERS["wafamole"] = "E"
         DATASETS.append("wafamole")
         TL_TEST_SETS.append("E")
-        TL_SPECIALISED_TRAIN_SETS.insert(0, "E")
 
     results_dir = args.results_dir.expanduser().resolve()
     if not results_dir.exists():

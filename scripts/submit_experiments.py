@@ -481,6 +481,7 @@ def generate_wafamole_script(
     slurm: bool,
     no_matrix: bool = False,
     no_cache: bool = False,
+    no_train: bool = False,
 ) -> str:
     """Generate a script for wafamole experiments (3 phases)."""
     spec_models_dir = f"./output/checkpoints/{model}_specialised"
@@ -507,20 +508,21 @@ def generate_wafamole_script(
 
     # Phase 1: Train E model
     model_name_e = f"{model}_E"
-    parts.append("# ── Phase 1: Train E (specialised on wafamole) ──")
-    parts.append(
-        train_cmd(
-            model,
-            "specialised",
-            wafamole_file,
-            model_name_e,
-            spec_models_dir,
-            training_test_label="E",
-            no_cache=no_cache,
-            skip_eval=True,
+    if not no_train:
+        parts.append("# ── Phase 1: Train E (specialised on wafamole) ──")
+        parts.append(
+            train_cmd(
+                model,
+                "specialised",
+                wafamole_file,
+                model_name_e,
+                spec_models_dir,
+                training_test_label="E",
+                no_cache=no_cache,
+                skip_eval=True,
+            )
         )
-    )
-    parts.append("")
+        parts.append("")
 
     # Phase 2: Evaluate all existing models on E
     if not no_matrix:
@@ -570,22 +572,23 @@ def generate_wafamole_script(
         parts.append("")
 
     # Phase 3: Evaluate E model on all other datasets
-    parts.append("# ── Phase 3: Evaluate E model on other datasets ──")
-    other_test = [
-        (dataset_filename("specialised", DATASETS[label]), label)
-        for label in ["A", "B", "C", "D"]
-    ]
-    parts.append(
-        eval_cmd(
-            model,
-            model_name_e,
-            spec_models_dir,
-            spec_results_dir,
-            other_test,
-            no_cache=no_cache,
+    if not no_train:
+        parts.append("# ── Phase 3: Evaluate E model on other datasets ──")
+        other_test = [
+            (dataset_filename("specialised", DATASETS[label]), label)
+            for label in ["A", "B", "C", "D"]
+        ]
+        parts.append(
+            eval_cmd(
+                model,
+                model_name_e,
+                spec_models_dir,
+                spec_results_dir,
+                other_test,
+                no_cache=no_cache,
+            )
         )
-    )
-    parts.append("")
+        parts.append("")
     parts.append('echo "Job finished at: $(date)"')
     return "\n".join(parts)
 
@@ -1095,6 +1098,11 @@ def main():
         help="Only evaluate on the key dataset (left-out for generic, trained for specialised); skips wafamole phase 2",
     )
     parser.add_argument(
+        "--no-train",
+        action="store_true",
+        help="Skip training (phases 1 and 3 for wafamole mode); only run evaluations on existing models.",
+    )
+    parser.add_argument(
         "--no-cache",
         action="store_true",
         help="Disable all feature and embedding caches in training and evaluation",
@@ -1212,6 +1220,7 @@ def main():
             use_slurm,
             args.no_matrix,
             args.no_cache,
+            args.no_train,
         )
         write_and_submit(script, f"{args.model}_wafamole.sh", args.dry_run, args.local)
     elif args.mode == "shap":
