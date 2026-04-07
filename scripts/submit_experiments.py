@@ -850,7 +850,7 @@ def fine_tuning_cmd(
         f"    --model-path={model_path} \\\n"
         f"    --target-dataset=$DATASETS_DIR/{target_dataset_file} \\\n"
         f"    --output-dir={output_dir} \\\n"
-        f"    $TESTING_FLAG" + (" \\\n    --no-feature-cache" if no_cache else "")
+        f"    $TESTING_FLAG"
     )
     return cmd
 
