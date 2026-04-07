@@ -92,7 +92,11 @@ def get_metrics_treshold(
 
 def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
     """Display Recall score per technique from a dataframe with preds."""
-    techniques = df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
+    techniques = [
+        t
+        for t in df.loc[df["label"] == 1, "attack_technique"].unique().tolist()
+        if t and not (isinstance(t, float) and pd.isna(t))
+    ]
     logger.info(f"Computing recall for model: {model_name}{suffix}")
 
     d_res = {}
@@ -101,6 +105,8 @@ def get_recall_per_attack(df: pd.DataFrame, model_name: str, suffix: str = ""):
         mask = df["attack_technique"] == technique
         preds = df.loc[mask, "preds"]
         labels = df.loc[mask, "label"]
+        if len(preds) == 0:
+            continue
         srecall = f"{recall_score(labels, preds, average='binary')* 100:.2f}%"
         logger.info(f"Recall for technique {technique}: {srecall}")
         d_res[f"recall{technique}"] = srecall
@@ -141,7 +147,11 @@ def get_balanced_accuracy_per_attack(
 
 def get_recall_per_statement_type(df: pd.DataFrame, model_name: str, suffix: str = ""):
     """Display Recall score per statement type from a dataframe with preds."""
-    statement_types = df.loc[df["label"] == 1, "statement_type"].unique().tolist()
+    statement_types = [
+        t
+        for t in df.loc[df["label"] == 1, "statement_type"].unique().tolist()
+        if t and not (isinstance(t, float) and pd.isna(t))
+    ]
     logger.info(f"Computing recall per statement type for model: {model_name}{suffix}")
 
     d_res = {}
@@ -150,6 +160,8 @@ def get_recall_per_statement_type(df: pd.DataFrame, model_name: str, suffix: str
         mask = df["statement_type"] == statement_type
         preds = df.loc[mask, "preds"]
         labels = df.loc[mask, "label"]
+        if len(preds) == 0:
+            continue
         srecall = f"{recall_score(labels, preds, average='binary')* 100:.2f}%"
         logger.info(f"Recall for statement type {statement_type}: {srecall}")
         d_res[f"recall_{statement_type}"] = srecall
