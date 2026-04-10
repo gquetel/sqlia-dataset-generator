@@ -826,19 +826,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Extend constants if WAFAMOLE is included.
-    # WAFAMOLE is test-only; it must NOT enter ALL_LETTERS because
-    # leave_one_out_complement() uses ALL_LETTERS to derive generic training sets
-    # (ABC, ABD, ACD, BCD) — adding E would corrupt them.
-    if args.include_wafamole:
-        DATASET_LETTERS["wafamole"] = "E"
-        DATASETS.append("wafamole")
-        TL_TEST_SETS.append("E")
-
     results_dir = args.results_dir.expanduser().resolve()
     if not results_dir.exists():
         print(f"ERROR: --results-dir does not exist: {results_dir}")
         return 1
+
+    # Auto-detect WAFAMOLE (E) if *_on_E directories exist in results.
+    # WAFAMOLE is test-only; it must NOT enter ALL_LETTERS because
+    # leave_one_out_complement() uses ALL_LETTERS to derive generic training sets
+    # (ABC, ABD, ACD, BCD) — adding E would corrupt them.
+    if not args.include_wafamole and any(results_dir.glob("*/*_on_E")):
+        args.include_wafamole = True
+        print("Auto-detected WAFAMOLE (E) results — enabling --include-wafamole")
+    if args.include_wafamole:
+        DATASET_LETTERS["wafamole"] = "E"
+        DATASETS.append("wafamole")
+        TL_TEST_SETS.append("E")
 
     if args.models:
         prefixes = args.models
@@ -926,73 +929,34 @@ def main() -> int:
             for name, fig in tl_figs.items():
                 export_figure(fig, tl_dir / name, args.format)
 
-    # # Concept Drift (auto-detected) — commented out, focusing on TL AUROC matrix
-    # cd_prefixes = discover_concept_drift_models(results_dir)
-    # if cd_prefixes:
-    #     print("\n=== Concept Drift ===")
-    #     print(f"  Found concept-drift models: {cd_prefixes}")
-    #     cd_dir = args.output_dir / "concept-drift"
-    #     cd_dir.mkdir(parents=True, exist_ok=True)
-    #
-    #     all_cd_results: dict[str, pd.DataFrame] = {}
-    #     for prefix in cd_prefixes:
-    #         df = load_concept_drift_results(results_dir, prefix)
-    #         all_cd_results[prefix] = df
-    #         print(f"  {prefix}: {len(df)} rows")
-    #
-    #     cd_models = [{"prefix": p, "label": model_label(p)} for p in cd_prefixes]
-    #     for m in cd_models:
-    #         df = all_cd_results[m["prefix"]]
-    #         label = m["label"]
-    #         for name, fig in {
-    #             f"roc_{m['prefix']}": plot_roc_curves(
-    #                 df,
-    #                 f"ROC Curves: Origin vs Shifted ({label})",
-    #                 scenarios=[
-    #                     (
-    #                         "origin",
-    #                         CONCEPT_DRIFT_COLORS["origin"],
-    #                         lambda l, c, p=m["prefix"]: next(
-    #                             (
-    #                                 d / "roc_curves"
-    #                                 for d in (results_dir / f"{p}_concept_drift").glob(
-    #                                     f"{p}_{l}*_on_origin"
-    #                                 )
-    #                             ),
-    #                             results_dir / "__nonexistent__",
-    #                         ),
-    #                     ),
-    #                     (
-    #                         "shifted",
-    #                         CONCEPT_DRIFT_COLORS["shifted"],
-    #                         lambda l, c, p=m["prefix"]: next(
-    #                             (
-    #                                 d / "roc_curves"
-    #                                 for d in (results_dir / f"{p}_concept_drift").glob(
-    #                                     f"{p}_{l}*_on_shifted"
-    #                                 )
-    #                             ),
-    #                             results_dir / "__nonexistent__",
-    #                         ),
-    #                     ),
-    #                 ],
-    #             ),
-    #         }.items():
-    #             if fig is not None:
-    #                 export_figure(fig, cd_dir / name, args.format)
-    #
-    #     print("\n=== Concept Drift AUROC delta CSV ===")
-    #     export_auroc_delta_csv(
-    #         all_cd_results,
-    #         cd_models,
-    #         cd_dir,
-    #         split_col="split",
-    #         cat_a="origin",
-    #         cat_b="shifted",
-    #         filename="auroc_concept_drift_delta.csv",
-    #     )
-    #
-    #     print(f"  Concept drift          : {cd_dir.resolve()}")
+    # Concept Drift (auto-detected)
+    cd_prefixes = discover_concept_drift_models(results_dir)
+    if cd_prefixes:
+        print("\n=== Concept Drift ===")
+        print(f"  Found concept-drift models: {cd_prefixes}")
+        cd_dir = args.output_dir / "concept-drift"
+        cd_dir.mkdir(parents=True, exist_ok=True)
+
+        all_cd_results: dict[str, pd.DataFrame] = {}
+        for prefix in cd_prefixes:
+            df = load_concept_drift_results(results_dir, prefix)
+            all_cd_results[prefix] = df
+            print(f"  {prefix}: {len(df)} rows")
+
+        cd_models = [{"prefix": p, "label": model_label(p)} for p in cd_prefixes]
+
+        print("\n=== Concept Drift AUROC delta CSV ===")
+        export_auroc_delta_csv(
+            all_cd_results,
+            cd_models,
+            cd_dir,
+            split_col="split",
+            cat_a="origin",
+            cat_b="shifted",
+            filename="auroc_concept_drift_delta.csv",
+        )
+
+        print(f"  Concept drift          : {cd_dir.resolve()}")
 
     print(f"\nDone.")
     if models:

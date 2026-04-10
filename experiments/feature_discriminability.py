@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT / "models"))
 
 from extractors.gaur import GaurExtractor
 from extractors.li import LiExtractor
+from extractors.loginov import LoginovExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -32,80 +33,97 @@ CSV_DTYPES = {
     "attack_stage": str,
 }
 
-# Li features qall lexical (23 from extract_li_features + 9 from get_char_kinds_number)
-_LI_FEATURES = [
-    "len_query",
-    "has_null",
-    "has_comment",
-    "has_query_keywords",
-    "has_union",
-    "has_database_keywords",
-    "has_connection_keywords",
-    "has_file_keywords",
-    "has_exec",
-    "has_string_functions",
-    "c_comparison",
-    "has_exist_keyword",
-    "has_floor",
-    "has_rand",
-    "has_group",
-    "has_order",
-    "has_length",
-    "has_ascii",
-    "has_concat",
-    "has_if",
-    "has_count",
-    "has_sleep",
-    "has_tautology",
-    "c_num",
-    "c_upper",
-    "c_space",
-    "c_special",
-    "c_arith",
-    "c_square_brackets",
-    "c_round_brackets",
-    "has_multiline_comment",
-    "c_curly_brackets",
-]
-
-# GAUR feature categories (from gaur_sqld/utils/constants.py)
-_GAUR_LEX = ["avg_c_sqlkywds", "max_c_sqlkywds", "min_c_sqlkywds"]
-_GAUR_SYNT = [
-    "n_terminal",
-    "n_nonterminal",
-    "is_syntax_error",
-    "depth",
-    "n_parser_invoc",
-]
-_GAUR_SEM = [
-    "DDL_ALTER",
-    "DDL_CREATE",
-    "DDL_DROP",
-    "DML_DELETE_TRUNCATE",
-    "DML_INSERT_REPLACE",
-    "DML_MAINTENANCE",
-    "DML_SELECT",
-    "DML_UPDATE",
-    "EXPRESSION_LOGIC",
-    "PARTITIONING_STORAGE",
-    "PRIVILEGES_SECURITY",
-    "PROCEDURAL_LOGIC",
-    "REPLICATION_MANAGEMENT",
-    "SERVER_ADMIN",
-    "SHOW_DESCRIBE_EXPLAIN",
-    "STATEMENT_CONTROL",
-    "STATEMENT_HELP",
-    "STATEMENT_MANAGEMENT",
-    "TRANSACTION_CONTROL",
-    "WINDOW_ANALYTICS",
-]
-
-FEATURE_CATEGORIES: dict[str, str] = (
-    {f: "lexical" for f in _LI_FEATURES}
-    | {f: "lexical" for f in _GAUR_LEX}
-    | {f: "syntactic" for f in _GAUR_SYNT}
-    | {f: "semantic" for f in _GAUR_SEM}
-)
+FEATURE_CATEGORIES: dict[str, str] = {
+    "len_query": "syntactic",
+    "has_null": "semantic",
+    "has_comment": "semantic",
+    "has_query_keywords": "semantic",
+    "has_union": "semantic",
+    "has_database_keywords": "semantic",
+    "has_connection_keywords": "semantic",
+    "has_file_keywords": "semantic",
+    "has_exec": "semantic",
+    "has_string_functions": "semantic",
+    "c_comparison": "lexical",
+    "has_exist_keyword": "semantic",
+    "has_floor": "semantic",
+    "has_rand": "semantic",
+    "has_group": "semantic",
+    "has_order": "semantic",
+    "has_length": "semantic",
+    "has_ascii": "semantic",
+    "has_concat": "semantic",
+    "has_if": "semantic",
+    "has_count": "semantic",
+    "has_sleep": "semantic",
+    "has_tautology": "semantic",
+    "c_num": "lexical",
+    "c_upper": "lexical",
+    "c_space": "lexical",
+    "c_special": "lexical",
+    "c_arith": "lexical",
+    "c_square_brackets": "lexical",
+    "c_round_brackets": "lexical",
+    "has_multiline_comment": "lexical",
+    "c_curly_brackets": "lexical",
+    "avg_c_sqlkywds": "semantic",
+    "max_c_sqlkywds": "semantic",
+    "min_c_sqlkywds": "semantic",
+    "n_terminal": "syntactic",
+    "n_nonterminal": "syntactic",
+    "is_syntax_error": "syntactic",
+    "depth": "syntactic",
+    "n_parser_invoc": "syntactic",
+    "DDL_ALTER": "semantic",
+    "DDL_CREATE": "semantic",
+    "DDL_DROP": "semantic",
+    "DML_DELETE_TRUNCATE": "semantic",
+    "DML_INSERT_REPLACE": "semantic",
+    "DML_MAINTENANCE": "semantic",
+    "DML_SELECT": "semantic",
+    "DML_UPDATE": "semantic",
+    "EXPRESSION_LOGIC": "syntactic",
+    "PARTITIONING_STORAGE": "semantic",
+    "PRIVILEGES_SECURITY": "semantic",
+    "PROCEDURAL_LOGIC": "semantic",
+    "REPLICATION_MANAGEMENT": "semantic",
+    "SERVER_ADMIN": "semantic",
+    "SHOW_DESCRIBE_EXPLAIN": "semantic",
+    "STATEMENT_CONTROL": "semantic",
+    "STATEMENT_HELP": "semantic",
+    "STATEMENT_MANAGEMENT": "semantic",
+    "TRANSACTION_CONTROL": "semantic",
+    "WINDOW_ANALYTICS": "semantic",
+    "n_anomalous_schars": "lexical",
+    "s1_n_keywords": "lexical",
+    "s1_n_alpha": "lexical",
+    "s1_n_numeric": "lexical",
+    "s1_n_mixed": "lexical",
+    "s2_n_keywords": "lexical",
+    "s2_n_alpha": "lexical",
+    "s2_n_numeric": "lexical",
+    "s2_n_mixed": "lexical",
+    # ── GAUR (expert) ────────────────────────────────────────────────────────
+    # action tags
+    "CREATE": "semantic",
+    "DELETE": "semantic",
+    "MODIFY": "semantic",
+    "EXECUTE": "semantic",
+    "READ": "semantic",
+    # object tags
+    "TABLESPACE": "semantic",
+    "TABLE": "semantic",
+    "INDEX": "semantic",
+    "VIEW": "semantic",
+    "USER": "semantic",
+    "PROCEDURE": "semantic",
+    "DATABASE": "semantic",
+    "FUNCTION": "semantic",
+    "INSTANCE": "semantic",
+    "LOGFILE": "semantic",
+    "SERVER": "semantic",
+    "TRIGGER": "semantic",
+}
 
 CATEGORY_ORDER = ["lexical", "syntactic", "semantic"]
 CATEGORY_ABBREV = {"lexical": "LEX", "syntactic": "SYN", "semantic": "SEM"}
@@ -214,7 +232,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     pairs = sorted(results_df["pair"].unique())
 
     pivot_disc = results_df.pivot(
-        index="feature", columns="pair", values="disc_acc"
+        index="feature", columns="pair", values="domain_inv"
     ).reindex(features_sorted)
     pivot_label = results_df.pivot(
         index="feature", columns="pair", values="label_acc"
@@ -253,7 +271,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
 
     # "domain" / "label" sub-headers above each pair column
     for j in range(n_cols):
-        for xoff, label in [(-0.25, "Domain"), (0.25, "Label")]:
+        for xoff, label in [(-0.25, "Inv."), (0.25, "Label")]:
             annotations.append(
                 dict(
                     x=j + xoff,
@@ -300,7 +318,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     layer="below",
                 )
             )
-            # Value labels: disc on left half, label on right half
+            # Value labels: domain_inv on left half, label on right half
             annotations.append(
                 dict(
                     x=j - 0.25,
@@ -394,7 +412,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
             tickmode="array",
             tickvals=list(range(n_rows)),
             ticktext=row_labels,
-            title=f"Features from {extractor_name}",
+            title=f"Features — {extractor_name}",
             range=[n_rows - 0.5, -0.5],
             autorange=False,
             showgrid=False,
@@ -412,57 +430,60 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
 
 
 def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
-    """2-D scatter: mean disc_acc (x) vs mean label_acc (y) per feature, both extractors."""
+    """2-D scatter: mean domain_inv (x) vs mean label_acc (y) per feature, colored by category."""
     import plotly.graph_objects as go
 
     means = (
-        results_df.groupby(["extractor", "feature"])[["disc_acc", "label_acc"]]
-        .mean()
-        .reset_index()
+        results_df.groupby("feature")[["domain_inv", "label_acc"]].mean().reset_index()
+    )
+    means["category"] = means["feature"].map(
+        lambda f: FEATURE_CATEGORIES.get(f, "unknown")
     )
 
-    extractor_styles = {
-        "Li et al.": {"color": "#1f77b4", "symbol": "circle"},
-        "GAUR (ChatGPT)": {"color": "#ff7f0e", "symbol": "diamond"},
+    category_colors = {
+        "lexical": "#1f77b4",
+        "syntactic": "#ff7f0e",
+        "semantic": "#2ca02c",
+        "unknown": "#999999",
     }
 
     fig = go.Figure()
-    for extractor_name, grp in means.groupby("extractor"):
-        style = extractor_styles.get(
-            extractor_name, {"color": "#999999", "symbol": "circle"}
-        )
+    for cat in CATEGORY_ORDER + ["unknown"]:
+        grp = means[means["category"] == cat]
+        if grp.empty:
+            continue
         fig.add_trace(
             go.Scatter(
-                x=grp["disc_acc"],
+                x=grp["domain_inv"],
                 y=grp["label_acc"],
                 mode="markers+text",
                 marker=dict(
-                    symbol=style["symbol"],
+                    symbol="circle",
                     size=9,
-                    color=style["color"],
+                    color=category_colors.get(cat, "#999999"),
                     line=dict(width=0.8, color="white"),
                 ),
                 text=grp["feature"],
                 textposition="top center",
                 textfont=dict(size=7),
-                name=extractor_name,
+                name=cat,
                 hovertemplate=(
                     "<b>%{text}</b><br>"
-                    f"Extractor: {extractor_name}<br>"
-                    "Domain acc: %{x:.3f}<br>"
+                    f"Category: {cat}<br>"
+                    "Domain invariance: %{x:.3f}<br>"
                     "Label acc: %{y:.3f}<extra></extra>"
                 ),
             )
         )
 
-    # Reference lines at 0.5 (chance)
-    fig.add_hline(y=0.5, line=dict(color="gray", dash="dash", width=1))
+    # Quadrant cross: midpoint of each axis (domain_inv ∈ [0,1], label_acc ∈ [0.5,1])
     fig.add_vline(x=0.5, line=dict(color="gray", dash="dash", width=1))
+    fig.add_hline(y=0.75, line=dict(color="gray", dash="dash", width=1))
 
     fig.update_layout(
-        xaxis=dict(title="Mean domain discriminability accuracy", range=[0.45, 1.02]),
+        xaxis=dict(title="Mean domain invariance", range=[-0.05, 1.05]),
         yaxis=dict(title="Mean label prediction accuracy", range=[0.45, 1.02]),
-        legend=dict(title="Extractor"),
+        legend=dict(title="Feature type"),
         plot_bgcolor="white",
         width=900,
         height=750,
@@ -474,6 +495,56 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
     out_path = output_dir / "discriminability_mean_scatter.pdf"
     fig.write_image(str(out_path))
     print(f"Saved scatter plot: {out_path}")
+
+
+def derive_taxonomy_scores(
+    results_df: pd.DataFrame, output_dir: Path, threshold: float = 0.75
+) -> None:
+    """Save a CSV with raw feature counts and normalized 0-10 scores per extractor.
+
+    Only features whose mean label_acc (averaged across dataset pairs) exceeds
+    *threshold* are counted. Counts per category are normalized so the largest
+    category maps to 10 (rounded to the nearest integer).
+    """
+    means = (
+        results_df.groupby(["extractor", "feature"])["label_acc"]
+        .mean()
+        .reset_index()
+        .rename(columns={"label_acc": "mean_label_acc"})
+    )
+    means["category"] = means["feature"].map(
+        lambda f: FEATURE_CATEGORIES.get(f, "unknown")
+    )
+
+    above = means[means["mean_label_acc"] > threshold]
+
+    # Li features included in GAUR in practice; pre-compute Li's above-threshold features.
+    li_above = above[above["extractor"] == "Li et al."][
+        ["feature", "category"]
+    ].drop_duplicates()
+
+    rows = []
+    for extractor_name in results_df["extractor"].unique():
+        ext = above[above["extractor"] == extractor_name]
+        if extractor_name.startswith("GAUR"):
+            ext = pd.concat(
+                [ext, li_above.assign(extractor=extractor_name)]
+            ).drop_duplicates(subset="feature")
+        counts_series = ext.groupby("category").size()
+        cat_counts = {cat: int(counts_series.get(cat, 0)) for cat in CATEGORY_ORDER}
+        max_count = max(cat_counts.values()) if any(cat_counts.values()) else 1
+
+        row = {"extractor": extractor_name}
+        for cat in CATEGORY_ORDER:
+            row[f"raw_{cat}"] = cat_counts[cat]
+            row[f"score_{cat}"] = (
+                round(10 * cat_counts[cat] / max_count) if max_count > 0 else 0
+            )
+        rows.append(row)
+
+    out_path = output_dir / "taxonomy_scores.csv"
+    pd.DataFrame(rows).to_csv(out_path, index=False)
+    print(f"Saved taxonomy scores: {out_path}")
 
 
 def main():
@@ -502,6 +573,18 @@ def main():
         action="store_true",
         help=f"Subsample to {TESTING_N_SAMPLES} per dataset for quick iteration",
     )
+    parser.add_argument(
+        "--derive-taxonomy",
+        action="store_true",
+        help="After computing/loading results, print derived 0-5 dimension scores",
+    )
+    parser.add_argument(
+        "--taxonomy-threshold",
+        type=float,
+        default=0.75,
+        metavar="T",
+        help="Mean label_acc threshold for a feature to count (default: 0.75)",
+    )
     args = parser.parse_args()
 
     if not args.from_csv and not args.dataset:
@@ -519,6 +602,10 @@ def main():
             subset = results_df[results_df["extractor"] == extractor_name]
             make_heatmap(subset, extractor_name, output_dir)
         make_mean_scatter(results_df, output_dir)
+        if args.derive_taxonomy:
+            derive_taxonomy_scores(
+                results_df, output_dir, threshold=args.taxonomy_threshold
+            )
         return
 
     n_samples = TESTING_N_SAMPLES if args.testing else N_SAMPLES
@@ -556,7 +643,9 @@ def main():
 
     extractors = [
         ("Li et al.", LiExtractor()),
+        ("GAUR (expert)", GaurExtractor(use_hybrid=False, mode="expert")),
         ("GAUR (ChatGPT)", GaurExtractor(use_hybrid=False, mode="chatgpt")),
+        ("Loginov et al.", LoginovExtractor()),
     ]
 
     all_results = []
@@ -617,7 +706,7 @@ def main():
                         "extractor": extractor_name,
                         "feature": col,
                         "pair": pair_label,
-                        "disc_acc": disc_acc,
+                        "domain_inv": max(0.0, min(1.0, 2 * (1 - disc_acc))),
                         "label_acc": label_acc,
                         "category": FEATURE_CATEGORIES.get(col, "unknown"),
                     }
@@ -626,8 +715,8 @@ def main():
         # Features constant across all pairs return 0.5 for every pair
         ext_df = pd.DataFrame(extractor_results)
         constant_features = (
-            ext_df.groupby("feature")["disc_acc"]
-            .apply(lambda s: (s == 0.5).all())
+            ext_df.groupby("feature")["domain_inv"]
+            .apply(lambda s: (s == 1.0).all())
             .pipe(lambda s: s[s].index.tolist())
         )
         if constant_features:
@@ -646,6 +735,10 @@ def main():
         subset = results_df[results_df["extractor"] == extractor_name]
         make_heatmap(subset, extractor_name, output_dir)
     make_mean_scatter(results_df, output_dir)
+    if args.derive_taxonomy:
+        derive_taxonomy_scores(
+            results_df, output_dir, threshold=args.taxonomy_threshold
+        )
 
 
 if __name__ == "__main__":

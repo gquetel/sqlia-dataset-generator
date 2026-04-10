@@ -83,6 +83,25 @@ COLORS = [
     "#7E57C2",
 ]
 
+MARKERS = ["circle", "cross"]
+
+MODEL_ORDER = [
+    "ae_li",
+    "ae_loginov",
+    "ae_cv",
+    "ae_gaur",
+    "ae_gaur_chatgpt",
+    "ae_gaur_mistral",
+    "ae_kakisim_c",
+    "ae_roberta",
+    "ae_securebert",
+    "ae_sentbert",
+    "ae_flan_t5",
+    "ae_llm2vec",
+    "ae_codebert",
+    "ae_codet5",
+]
+
 
 def model_label(prefix: str) -> str:
     return KNOWN_LABELS.get(prefix, prefix)
@@ -155,6 +174,7 @@ def build_figure(
 
     for idx, (prefix, df) in enumerate(model_data.items()):
         color = COLORS[idx % len(COLORS)]
+        marker_symbol = MARKERS[idx // len(COLORS) % len(MARKERS)]
         label = model_label(prefix)
 
         # Align to global k order
@@ -187,7 +207,7 @@ def build_figure(
                 mode="lines+markers",
                 name=label,
                 line=dict(color=color, width=2),
-                marker=dict(size=6),
+                marker=dict(size=6, symbol=marker_symbol),
             )
         )
 
@@ -315,6 +335,14 @@ def main():
     if not model_data:
         print("No data loaded.", file=sys.stderr)
         sys.exit(1)
+
+    # Sort models according to canonical order; unknowns go at the end
+    known_order = {p: i for i, p in enumerate(MODEL_ORDER)}
+    model_data = dict(
+        sorted(
+            model_data.items(), key=lambda kv: known_order.get(kv[0], len(MODEL_ORDER))
+        )
+    )
 
     # Only pass entries for models actually loaded
     specialized = {
