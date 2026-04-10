@@ -13,6 +13,7 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
+from extractors.countvect import CountVectExtractor
 from extractors.gaur import GaurExtractor
 from extractors.li import LiExtractor
 from extractors.loginov import LoginovExtractor
@@ -123,6 +124,14 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "LOGFILE": "semantic",
     "SERVER": "semantic",
     "TRIGGER": "semantic",
+}
+
+EXTRACTOR_KEYS = {
+    "li": "Li et al.",
+    "gaur_expert": "GAUR (expert)",
+    "gaur_chatgpt": "GAUR (ChatGPT)",
+    "loginov": "Loginov et al.",
+    "cv": "CountVect",
 }
 
 CATEGORY_ORDER = ["lexical", "syntactic", "semantic"]
@@ -585,6 +594,15 @@ def main():
         metavar="T",
         help="Mean label_acc threshold for a feature to count (default: 0.75)",
     )
+    parser.add_argument(
+        "--fe",
+        default="all",
+        metavar="EXTRACTORS",
+        help=(
+            "Comma-separated list of extractors to run (default: all). "
+            f"Valid keys: {', '.join(EXTRACTOR_KEYS)}"
+        ),
+    )
     args = parser.parse_args()
 
     if not args.from_csv and not args.dataset:
@@ -641,20 +659,51 @@ def main():
 
     pairs = list(itertools.combinations(sorted(datasets.keys()), 2))
 
-    extractors = [
+    all_extractors = [
         ("Li et al.", LiExtractor()),
         ("GAUR (expert)", GaurExtractor(use_hybrid=False, mode="expert")),
         ("GAUR (ChatGPT)", GaurExtractor(use_hybrid=False, mode="chatgpt")),
         ("Loginov et al.", LoginovExtractor()),
+        ("CountVect", CountVectExtractor()),
     ]
+
+    if args.fe == "all":
+        extractors = all_extractors
+    else:
+        requested = [k.strip() for k in args.fe.split(",")]
+        unknown = [k for k in requested if k not in EXTRACTOR_KEYS]
+        if unknown:
+            parser.error(
+                f"Unknown extractor key(s): {unknown}. Valid: {list(EXTRACTOR_KEYS)}"
+            )
+        selected_names = {EXTRACTOR_KEYS[k] for k in requested}
+        extractors = [
+            (name, ext) for name, ext in all_extractors if name in selected_names
+        ]
 
     all_results = []
 
     for extractor_name, extractor in extractors:
         print(f"\n=== Extractor: {extractor_name} ===")
 
-        def _extract(df: pd.DataFrame) -> pd.DataFrame:
-            feat = extractor.extract_features(df)
+        # CountVectorizer must be fit on combined training data before any transform
+        if isinstance(extractor, CountVectExtractor):
+            all_train = pd.concat(
+                [disc_train_dfs[n] for n in datasets]
+                + [label_train_dfs[n] for n in datasets]
+            )
+            extractor.vectorizer.fit(all_train["full_query"])
+            extractor._fitted = True
+            print(
+                f"  CountVect vocabulary size: {len(extractor.vectorizer.vocabulary_)}"
+            )
+
+        def _extract(df: pd.DataFrame, _ext=extractor) -> pd.DataFrame:
+            feat = _ext.extract_features(df)
+            if hasattr(feat, "toarray"):
+                return pd.DataFrame(
+                    feat.toarray(), columns=_ext.get_feature_names_out()
+                )
             return feat if isinstance(feat, pd.DataFrame) else pd.DataFrame(feat)
 
         disc_train_feats: dict[str, pd.DataFrame] = {}
@@ -708,9 +757,44 @@ def main():
                         "pair": pair_label,
                         "domain_inv": max(0.0, min(1.0, 2 * (1 - disc_acc))),
                         "label_acc": label_acc,
-                        "category": FEATURE_CATEGORIES.get(col, "unknown"),
+                        "category": FEATURE_CATEGORIES.get(
+                            col,
+                            (
+                                "lexical"
+                                if isinstance(extractor, CountVectExtractor)
+                                else "unknown"
+                            ),
+                        ),
                     }
                 )
+
+        # For CountVect, keep only features with mean label_acc > 0.75 across pairs,
+        # plus 20 randomly sampled dimensions to represent the full vocabulary.
+        if isinstance(extractor, CountVectExtractor):
+            cv_df = pd.DataFrame(extractor_results)
+            mean_acc = cv_df.groupby("feature")["label_acc"].mean()
+            good_features = set(mean_acc[mean_acc > 0.75].index)
+            n_before = mean_acc.shape[0]
+            rng_cv = np.random.default_rng(seed=2)
+            all_cv_features = mean_acc.index.tolist()
+            random_sample = set(
+                rng_cv.choice(
+                    all_cv_features, size=min(20, len(all_cv_features)), replace=False
+                ).tolist()
+            )
+            kept_features = good_features | random_sample
+            extractor_results = [
+                r for r in extractor_results if r["feature"] in kept_features
+            ]
+            # Mark randomly-sampled-only features so they're distinguishable in the plot
+            random_only = random_sample - good_features
+            for r in extractor_results:
+                if r["feature"] in random_only:
+                    r["feature"] = r["feature"] + " *"
+            print(
+                f"  CountVect: kept {len(good_features)}/{n_before} features with mean label_acc > 0.75"
+                f" + {len(random_only)} random sample features (marked with *)"
+            )
 
         # Features constant across all pairs return 0.5 for every pair
         ext_df = pd.DataFrame(extractor_results)
