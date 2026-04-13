@@ -137,6 +137,11 @@ EXTRACTOR_KEYS = {
 CATEGORY_ORDER = ["lexical", "syntactic", "semantic"]
 CATEGORY_ABBREV = {"lexical": "LEX", "syntactic": "SYN", "semantic": "SEM"}
 
+# LNCS figures: Times New Roman matches the paper body font.
+# Alternatives: "STIX Two Text" (open-source Times clone), "serif" (system default).
+PAPER_FONT = "Times New Roman"
+PAPER_FONT_SIZE = 13  # base size; sub-labels and value annotations use smaller sizes
+
 N_SAMPLES = 50_000
 TESTING_N_SAMPLES = 1_000
 
@@ -233,8 +238,14 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     import plotly.colors as pc
     import plotly.graph_objects as go
 
+    feature_to_cat = (
+        results_df.drop_duplicates("feature").set_index("feature")["category"].to_dict()
+        if "category" in results_df.columns
+        else {}
+    )
+
     def sort_key(f):
-        cat = FEATURE_CATEGORIES.get(f, "unknown")
+        cat = feature_to_cat.get(f, FEATURE_CATEGORIES.get(f, "unknown"))
         return (CATEGORY_ORDER.index(cat) if cat in CATEGORY_ORDER else 99, f)
 
     features_sorted = sorted(results_df["feature"].unique(), key=sort_key)
@@ -256,7 +267,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     row_idx = 0
 
     for f in features_sorted:
-        cat = FEATURE_CATEGORIES.get(f, "unknown")
+        cat = feature_to_cat.get(f, FEATURE_CATEGORIES.get(f, "unknown"))
         if prev_cat is not None and cat != prev_cat:
             separator_before.append(row_idx)
         row_labels.append(f)
@@ -280,7 +291,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
 
     # "domain" / "label" sub-headers above each pair column
     for j in range(n_cols):
-        for xoff, label in [(-0.25, "Inv."), (0.25, "Label")]:
+        for xoff, label in [(-0.25, "Indisc."), (0.25, "Label")]:
             annotations.append(
                 dict(
                     x=j + xoff,
@@ -289,7 +300,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     yref="paper",
                     text=label,
                     showarrow=False,
-                    font=dict(size=11, color="#444"),
+                    font=dict(size=PAPER_FONT_SIZE, color="#444", family=PAPER_FONT),
                     xanchor="center",
                     yanchor="bottom",
                 )
@@ -336,7 +347,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     yref="y",
                     text=f"{z_disc[i, j]:.2f}",
                     showarrow=False,
-                    font=dict(size=8),
+                    font=dict(size=10, family=PAPER_FONT),
                     align="center",
                 )
             )
@@ -348,7 +359,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     yref="y",
                     text=f"{z_label[i, j]:.2f}",
                     showarrow=False,
-                    font=dict(size=8),
+                    font=dict(size=10, family=PAPER_FONT),
                     align="center",
                 )
             )
@@ -366,7 +377,16 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
                     cmax=1.0,
                     showscale=True,
                     size=0,
-                    colorbar=dict(title="Accuracy", x=1.02, len=0.85, thickness=14),
+                    colorbar=dict(
+                        title=dict(
+                            text="Accuracy",
+                            font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+                        ),
+                        tickfont=dict(size=PAPER_FONT_SIZE - 1, family=PAPER_FONT),
+                        x=1.02,
+                        len=0.85,
+                        thickness=14,
+                    ),
                     color=[vmin],
                 ),
                 showlegend=False,
@@ -407,11 +427,15 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     fig.update_layout(
         shapes=shapes,
         annotations=annotations,
+        font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
         xaxis=dict(
             tickmode="array",
             tickvals=list(range(n_cols)),
             ticktext=pairs,
-            title="Dataset pair",
+            title=dict(
+                text="Dataset pair", font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT)
+            ),
+            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
             range=[-0.5, n_cols - 0.5],
             side="bottom",
             showgrid=False,
@@ -421,15 +445,19 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
             tickmode="array",
             tickvals=list(range(n_rows)),
             ticktext=row_labels,
-            title=f"Features — {extractor_name}",
+            title=dict(
+                text=f"Features — {extractor_name}",
+                font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            ),
+            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
             range=[n_rows - 0.5, -0.5],
             autorange=False,
             showgrid=False,
             zeroline=False,
         ),
         plot_bgcolor="white",
-        height=max(400, n_rows * 24 + 160),
-        width=max(600, n_cols * 140 + 450),
+        height=max(400, n_rows * 28 + 160),
+        width=max(600, n_cols * 160 + 450),
         margin=dict(l=230, r=160, t=40, b=60),
     )
 
@@ -442,12 +470,29 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
     """2-D scatter: mean domain_inv (x) vs mean label_acc (y) per feature, colored by category."""
     import plotly.graph_objects as go
 
+    group_cols = (
+        ["extractor", "feature"] if "extractor" in results_df.columns else ["feature"]
+    )
     means = (
-        results_df.groupby("feature")[["domain_inv", "label_acc"]].mean().reset_index()
+        results_df.groupby(group_cols)[["domain_inv", "label_acc"]].mean().reset_index()
     )
-    means["category"] = means["feature"].map(
-        lambda f: FEATURE_CATEGORIES.get(f, "unknown")
-    )
+    if "category" in results_df.columns:
+        feature_to_cat = (
+            results_df.drop_duplicates("feature")
+            .set_index("feature")["category"]
+            .to_dict()
+        )
+        means["category"] = means["feature"].map(
+            lambda f: feature_to_cat.get(f, FEATURE_CATEGORIES.get(f, "unknown"))
+        )
+    else:
+        means["category"] = means["feature"].map(
+            lambda f: FEATURE_CATEGORIES.get(f, "unknown")
+        )
+
+    csv_path = output_dir / "feature_discriminability_mean.csv"
+    means.to_csv(csv_path, index=False)
+    print(f"Saved mean results: {csv_path}")
 
     category_colors = {
         "lexical": "#1f77b4",
@@ -474,12 +519,12 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
                 ),
                 text=grp["feature"],
                 textposition="top center",
-                textfont=dict(size=7),
+                textfont=dict(size=10, family=PAPER_FONT),
                 name=cat,
                 hovertemplate=(
                     "<b>%{text}</b><br>"
                     f"Category: {cat}<br>"
-                    "Domain invariance: %{x:.3f}<br>"
+                    "Domain indiscriminability: %{x:.3f}<br>"
                     "Label acc: %{y:.3f}<extra></extra>"
                 ),
             )
@@ -490,9 +535,29 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
     fig.add_hline(y=0.75, line=dict(color="gray", dash="dash", width=1))
 
     fig.update_layout(
-        xaxis=dict(title="Mean domain invariance", range=[-0.05, 1.05]),
-        yaxis=dict(title="Mean label prediction accuracy", range=[0.45, 1.02]),
-        legend=dict(title="Feature type"),
+        font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
+        xaxis=dict(
+            title=dict(
+                text="Mean domain indiscriminability",
+                font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            ),
+            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            range=[-0.05, 1.05],
+        ),
+        yaxis=dict(
+            title=dict(
+                text="Mean label prediction accuracy",
+                font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            ),
+            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            range=[0.45, 1.02],
+        ),
+        legend=dict(
+            title=dict(
+                text="Feature type", font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT)
+            ),
+            font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+        ),
         plot_bgcolor="white",
         width=900,
         height=750,

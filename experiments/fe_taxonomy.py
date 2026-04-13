@@ -14,28 +14,31 @@ Dimensions (scores 0–10):
   - Distributional Sem.:   meaning from co-occurrence / large pre-trained corpora
 
 Run:
-    python experiments/fe_taxonomy_radar.py
+    python experiments/fe_taxonomy.py
 """
 
+import argparse
 import math
+from pathlib import Path
 
 import plotly.graph_objects as go
 
 # fmt: off
 FEATURE_EXTRACTORS = {
     # name                    Lexical  Syntactic  Formal Sem.  Distrib. Sem.
-    "Li":                    [10,      2,          6,           0], # See analysis
-    "Loginov":               [10,      2,          4,           0], # See analysis
+    "Li":                    [10,      2,          7,           0], # Derived from taxonomy_scores.csv
+    "Loginov":               [10,      0,          0,           0], # Derived from taxonomy_scores.csv
     "CountVect":             [10,      0,          0,           0], # Pure lexical
     "Kakisim":               [6,       10,         6,           0], # See analysis
-    "GAUR":                  [0,       4,          10,          0], # See analysis
-    "SecureBERT":            [0,       0,          4,           10], # Distributional and some code concept through tokeniser / corpus
-    "RoBERTa":               [0,       0,          0,           10], # Pure distributional
-    "CodeBERT":              [0,       6,          6,           10], # Distributional
-    "CodeT5":                [0,       6,          6,           10],
-    "Flan-T5":               [0,       0,          0,           10],
-    "SentBERT":              [0,       0,          0,           10],
-    "LLM2Vec":               [0,       0,          0,           10],
+    "GAUR (expert)":         [4,       3,          10,          0], # Derived from taxonomy_scores.csv
+    "GAUR (ChatGPT)":        [5,       5,          10,          0], # Derived from taxonomy_scores.csv
+    "SecureBERT":            [0,       0,          4,           10],# Distributional and some code concept through tokeniser / corpus
+    "RoBERTa":               [0,       0,          0,           10],# Pure distributional
+    "CodeBERT":              [0,       6,          6,           10],# Distributional with AST capabilities (thus semantic too)
+    "CodeT5":                [0,       6,          6,           10],# Distributional with AST capabilities (thus semantic too)
+    "Flan-T5":               [0,       0,          0,           10],# Pure distributional  
+    "SentBERT":              [0,       0,          0,           10],# Pure distributional
+    "LLM2Vec":               [0,       0,          0,           10],# Pure distributional
 }
 # fmt: on
 
@@ -63,8 +66,9 @@ _TEXT_POSITIONS: dict[str, str] = {
     "Li":           "top right",
     "Loginov":      "bottom left",
     "CountVect":    "top center",
-    "Kakisim":      "top center",
-    "GAUR":         "top center",
+    "Kakisim":          "top center",
+    "GAUR (expert)":    "top center",
+    "GAUR (ChatGPT)":   "bottom center",
     "SecureBERT":   "top center",
     "RoBERTa":      "top right",
     "CodeBERT":     "top left",
@@ -179,7 +183,18 @@ def build_figure() -> go.Figure:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Barycentric FE taxonomy scatter chart")
+    parser.add_argument(
+        "--output-dir",
+        default="output/experiments/fe_taxonomy",
+        help="Output directory for the PDF figure",
+    )
+    args = parser.parse_args()
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     fig = build_figure()
-    out = "fe_taxonomy.pdf"
-    fig.write_image(out, format="pdf")
+    out = output_dir / "fe_taxonomy.pdf"
+    fig.write_image(str(out), format="pdf")
     print(f"Saved → {out}")

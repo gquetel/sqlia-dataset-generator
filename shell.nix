@@ -232,6 +232,7 @@ pkgs.mkShell rec {
     pkgs.metasploit
     sqlmap
     pkgs.chromium # Required by kaleido for plotly figure export... #cursed
+    pkgs.corefonts # Times New Roman (and other MS core fonts) for paper figures
     # Formatting tools
     pkgs.treefmt
     pkgs.black
@@ -244,6 +245,9 @@ pkgs.mkShell rec {
   catchConflicts = false;
   shellHook = ''
     export CUSTOM_INTERPRETER_PATH="${pythonEnv}/bin/python"
+
+    # Make corefonts (Times New Roman, etc.) visible to fontconfig
+    export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.corefonts ]; }}"
 
     # MySQL environment variables used by mysql-start / mysql-stop scripts.
     # Data lives in /tmp (local to each machine) to avoid NFS conflicts.
