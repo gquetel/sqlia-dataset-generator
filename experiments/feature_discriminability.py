@@ -13,10 +13,12 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(REPO_ROOT / "models"))
 
+from constants import mysql_functions, mysql_keywords
 from extractors.countvect import CountVectExtractor
 from extractors.gaur import GaurExtractor
 from extractors.li import LiExtractor
 from extractors.loginov import LoginovExtractor
+from extractors.kakisim import KakisimExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -36,28 +38,28 @@ CSV_DTYPES = {
 
 FEATURE_CATEGORIES: dict[str, str] = {
     "len_query": "syntactic",
-    "has_null": "semantic",
-    "has_comment": "semantic",
-    "has_query_keywords": "semantic",
-    "has_union": "semantic",
-    "has_database_keywords": "semantic",
-    "has_connection_keywords": "semantic",
-    "has_file_keywords": "semantic",
-    "has_exec": "semantic",
-    "has_string_functions": "semantic",
+    "has_null": "protocol-level",
+    "has_comment": "protocol-level",
+    "has_query_keywords": "protocol-level",
+    "has_union": "protocol-level",
+    "has_database_keywords": "protocol-level",
+    "has_connection_keywords": "protocol-level",
+    "has_file_keywords": "protocol-level",
+    "has_exec": "protocol-level",
+    "has_string_functions": "protocol-level",
     "c_comparison": "lexical",
-    "has_exist_keyword": "semantic",
-    "has_floor": "semantic",
-    "has_rand": "semantic",
-    "has_group": "semantic",
-    "has_order": "semantic",
-    "has_length": "semantic",
-    "has_ascii": "semantic",
-    "has_concat": "semantic",
-    "has_if": "semantic",
-    "has_count": "semantic",
-    "has_sleep": "semantic",
-    "has_tautology": "semantic",
+    "has_exist_keyword": "protocol-level",
+    "has_floor": "protocol-level",
+    "has_rand": "protocol-level",
+    "has_group": "protocol-level",
+    "has_order": "protocol-level",
+    "has_length": "protocol-level",
+    "has_ascii": "protocol-level",
+    "has_concat": "protocol-level",
+    "has_if": "protocol-level",
+    "has_count": "protocol-level",
+    "has_sleep": "protocol-level",
+    "has_tautology": "protocol-level",
     "c_num": "lexical",
     "c_upper": "lexical",
     "c_space": "lexical",
@@ -67,75 +69,92 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "c_round_brackets": "lexical",
     "has_multiline_comment": "lexical",
     "c_curly_brackets": "lexical",
-    "avg_c_sqlkywds": "semantic",
-    "max_c_sqlkywds": "semantic",
-    "min_c_sqlkywds": "semantic",
+    "avg_c_sqlkywds": "protocol-level",
+    "max_c_sqlkywds": "protocol-level",
+    "min_c_sqlkywds": "protocol-level",
     "n_terminal": "syntactic",
     "n_nonterminal": "syntactic",
     "is_syntax_error": "syntactic",
     "depth": "syntactic",
     "n_parser_invoc": "syntactic",
-    "DDL_ALTER": "semantic",
-    "DDL_CREATE": "semantic",
-    "DDL_DROP": "semantic",
-    "DML_DELETE_TRUNCATE": "semantic",
-    "DML_INSERT_REPLACE": "semantic",
-    "DML_MAINTENANCE": "semantic",
-    "DML_SELECT": "semantic",
-    "DML_UPDATE": "semantic",
+    "DDL_ALTER": "protocol-level",
+    "DDL_CREATE": "protocol-level",
+    "DDL_DROP": "protocol-level",
+    "DML_DELETE_TRUNCATE": "protocol-level",
+    "DML_INSERT_REPLACE": "protocol-level",
+    "DML_MAINTENANCE": "protocol-level",
+    "DML_SELECT": "protocol-level",
+    "DML_UPDATE": "protocol-level",
     "EXPRESSION_LOGIC": "syntactic",
-    "PARTITIONING_STORAGE": "semantic",
-    "PRIVILEGES_SECURITY": "semantic",
-    "PROCEDURAL_LOGIC": "semantic",
-    "REPLICATION_MANAGEMENT": "semantic",
-    "SERVER_ADMIN": "semantic",
-    "SHOW_DESCRIBE_EXPLAIN": "semantic",
-    "STATEMENT_CONTROL": "semantic",
-    "STATEMENT_HELP": "semantic",
-    "STATEMENT_MANAGEMENT": "semantic",
-    "TRANSACTION_CONTROL": "semantic",
-    "WINDOW_ANALYTICS": "semantic",
-    "n_anomalous_schars": "lexical",
-    "s1_n_keywords": "lexical",
-    "s1_n_alpha": "lexical",
-    "s1_n_numeric": "lexical",
-    "s1_n_mixed": "lexical",
-    "s2_n_keywords": "lexical",
-    "s2_n_alpha": "lexical",
-    "s2_n_numeric": "lexical",
-    "s2_n_mixed": "lexical",
-    # ── GAUR (expert) ────────────────────────────────────────────────────────
+    "PARTITIONING_STORAGE": "protocol-level",
+    "PRIVILEGES_SECURITY": "protocol-level",
+    "PROCEDURAL_LOGIC": "protocol-level",
+    "REPLICATION_MANAGEMENT": "protocol-level",
+    "SERVER_ADMIN": "protocol-level",
+    "SHOW_DESCRIBE_EXPLAIN": "protocol-level",
+    "STATEMENT_CONTROL": "protocol-level",
+    "STATEMENT_HELP": "protocol-level",
+    "STATEMENT_MANAGEMENT": "protocol-level",
+    "TRANSACTION_CONTROL": "protocol-level",
+    "WINDOW_ANALYTICS": "protocol-level",
     # action tags
-    "CREATE": "semantic",
-    "DELETE": "semantic",
-    "MODIFY": "semantic",
-    "EXECUTE": "semantic",
-    "READ": "semantic",
+    "CREATE": "protocol-level",
+    "DELETE": "protocol-level",
+    "MODIFY": "protocol-level",
+    "EXECUTE": "protocol-level",
+    "READ": "protocol-level",
     # object tags
-    "TABLESPACE": "semantic",
-    "TABLE": "semantic",
-    "INDEX": "semantic",
-    "VIEW": "semantic",
-    "USER": "semantic",
-    "PROCEDURE": "semantic",
-    "DATABASE": "semantic",
-    "FUNCTION": "semantic",
-    "INSTANCE": "semantic",
-    "LOGFILE": "semantic",
-    "SERVER": "semantic",
-    "TRIGGER": "semantic",
+    "TABLESPACE": "protocol-level",
+    "TABLE": "protocol-level",
+    "INDEX": "protocol-level",
+    "VIEW": "protocol-level",
+    "USER": "protocol-level",
+    "PROCEDURE": "protocol-level",
+    "DATABASE": "protocol-level",
+    "FUNCTION": "protocol-level",
+    "INSTANCE": "protocol-level",
+    "LOGFILE": "protocol-level",
+    "SERVER": "protocol-level",
+    "TRIGGER": "protocol-level",
+    # Mistral semantic tags
+    "DATA_DEFINITION": "protocol-level",
+    "DATA_IMPORT_EXPORT": "protocol-level",
+    "DATA_MANIPULATION": "protocol-level",
+    "DATA_QUERY": "protocol-level",
+    "DATABASE_MANAGEMENT": "protocol-level",
+    "LOCKING_CONCURRENCY": "protocol-level",
+    "MISCELLANEOUS_OPERATIONS": "protocol-level",
+    "REPLICATION_CLUSTERING": "protocol-level",
+    "RESOURCE_MANAGEMENT": "protocol-level",
+    "SECURITY_PRIVILEGES": "protocol-level",
+    "STORED_PROCEDURES_FUNCTIONS": "protocol-level",
+    "SYSTEM_INFORMATION": "protocol-level",
+    "SYSTEM_MAINTENANCE": "protocol-level",
+    "SYSTEM_VARIABLES": "protocol-level",
+    "TEMPORARY_OBJECTS": "protocol-level",
+    "TRIGGERS_EVENTS": "protocol-level",
+    "USER_MANAGEMENT": "protocol-level",
+    "VIEWS": "protocol-level",
 }
 
 EXTRACTOR_KEYS = {
     "li": "Li et al.",
     "gaur_expert": "GAUR (expert)",
     "gaur_chatgpt": "GAUR (ChatGPT)",
-    "loginov": "Loginov et al.",
+    "gaur_mistral": "GAUR (Mistral)",
+    # "loginov": "Loginov et al.",
+    "kakisim": "Kakisim",
     "cv": "CountVect",
 }
 
-CATEGORY_ORDER = ["lexical", "syntactic", "semantic"]
-CATEGORY_ABBREV = {"lexical": "LEX", "syntactic": "SYN", "semantic": "SEM"}
+
+CATEGORY_ORDER = ["lexical", "syntactic", "protocol-level", "user-level"]
+CATEGORY_ABBREV = {
+    "lexical": "LEX",
+    "syntactic": "SYN",
+    "protocol-level": "PROTO",
+    "user-level": "USER",
+}
 
 # LNCS figures: Times New Roman matches the paper body font.
 # Alternatives: "STIX Two Text" (open-source Times clone), "serif" (system default).
@@ -497,7 +516,8 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
     category_colors = {
         "lexical": "#1f77b4",
         "syntactic": "#ff7f0e",
-        "semantic": "#2ca02c",
+        "protocol-level": "#2ca02c",
+        "user-level": "#9b6dce",
         "unknown": "#999999",
     }
 
@@ -728,7 +748,9 @@ def main():
         ("Li et al.", LiExtractor()),
         ("GAUR (expert)", GaurExtractor(use_hybrid=False, mode="expert")),
         ("GAUR (ChatGPT)", GaurExtractor(use_hybrid=False, mode="chatgpt")),
-        ("Loginov et al.", LoginovExtractor()),
+        ("GAUR (Mistral)", GaurExtractor(use_hybrid=False, mode="mistral")),
+        # ("Loginov et al.", LoginovExtractor()),
+        ("Kakisim", KakisimExtractor()),
         ("CountVect", CountVectExtractor()),
     ]
 
@@ -825,7 +847,12 @@ def main():
                         "category": FEATURE_CATEGORIES.get(
                             col,
                             (
-                                "lexical"
+                                (
+                                    "protocol-level"
+                                    if col.upper() in mysql_keywords
+                                    or col.upper() in mysql_functions
+                                    else "user-level"
+                                )
                                 if isinstance(extractor, CountVectExtractor)
                                 else "unknown"
                             ),
