@@ -37,6 +37,7 @@ CSV_DTYPES = {
 }
 
 FEATURE_CATEGORIES: dict[str, str] = {
+    # Li
     "len_query": "syntactic",
     "has_null": "protocol-level",
     "has_comment": "protocol-level",
@@ -77,6 +78,7 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "is_syntax_error": "syntactic",
     "depth": "syntactic",
     "n_parser_invoc": "syntactic",
+    # Gaur ChatGPT
     "DDL_ALTER": "protocol-level",
     "DDL_CREATE": "protocol-level",
     "DDL_DROP": "protocol-level",
@@ -97,6 +99,8 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "STATEMENT_MANAGEMENT": "protocol-level",
     "TRANSACTION_CONTROL": "protocol-level",
     "WINDOW_ANALYTICS": "protocol-level",
+
+    # Gaur Expert
     # action tags
     "CREATE": "protocol-level",
     "DELETE": "protocol-level",
@@ -116,25 +120,60 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "LOGFILE": "protocol-level",
     "SERVER": "protocol-level",
     "TRIGGER": "protocol-level",
-    # Mistral semantic tags
-    "DATA_DEFINITION": "protocol-level",
-    "DATA_IMPORT_EXPORT": "protocol-level",
-    "DATA_MANIPULATION": "protocol-level",
-    "DATA_QUERY": "protocol-level",
-    "DATABASE_MANAGEMENT": "protocol-level",
-    "LOCKING_CONCURRENCY": "protocol-level",
-    "MISCELLANEOUS_OPERATIONS": "protocol-level",
-    "REPLICATION_CLUSTERING": "protocol-level",
-    "RESOURCE_MANAGEMENT": "protocol-level",
-    "SECURITY_PRIVILEGES": "protocol-level",
-    "STORED_PROCEDURES_FUNCTIONS": "protocol-level",
-    "SYSTEM_INFORMATION": "protocol-level",
-    "SYSTEM_MAINTENANCE": "protocol-level",
-    "SYSTEM_VARIABLES": "protocol-level",
-    "TEMPORARY_OBJECTS": "protocol-level",
-    "TRIGGERS_EVENTS": "protocol-level",
-    "USER_MANAGEMENT": "protocol-level",
-    "VIEWS": "protocol-level",
+
+    # Mistral semantic tags 
+    "Data Definition": "protocol-level",
+    "Data Import Export": "protocol-level",
+    "Data Import/Export": "protocol-level",
+    "Data Manipulation": "protocol-level",
+    "Data Query": "protocol-level",
+    "Database Management": "protocol-level",
+    "Locking & Concurrency": "protocol-level",
+    "Miscellaneous Operations": "protocol-level",
+    "Replication & Clustering": "protocol-level",
+    "Resource Management": "protocol-level",
+    "Security & Privileges": "protocol-level",
+    "Stored Procedures & Functions": "protocol-level",
+    "System Information": "protocol-level",
+    "System Maintenance": "protocol-level",
+    "System Variables": "protocol-level",
+    "Temporary Objects": "protocol-level",
+    "Triggers & Events": "protocol-level",
+    "User Management": "protocol-level",
+    "Views": "protocol-level",
+    "Statement Control": "protocol-level",
+    "Transaction Control": "protocol-level",
+
+    # Loginov
+    "n_anomalous_schars": "lexical",
+    "s1_n_keywords": "lexical",
+    "s1_n_alpha": "lexical",
+    "s1_n_numeric": "lexical",
+    "s1_n_mixed": "lexical",
+    "s2_n_keywords": "lexical",
+    "s2_n_alpha": "lexical",
+    "s2_n_numeric": "lexical",
+    "s2_n_mixed": "lexical",
+
+    # Kakisim (view C — semantic tags)
+    "Par": "protocol-level",
+    "DLL": "protocol-level",
+    "DML": "protocol-level",
+    "Keyw": "protocol-level",
+    "Int": "protocol-level",
+    "Hexadecimal": "protocol-level",
+    "Quot": "protocol-level",
+    "Punct": "protocol-level",
+    "Wildcard": "protocol-level",
+    "Comparison": "protocol-level",
+    "Oper": "protocol-level",
+    "Builtin": "protocol-level",
+    "Func": "protocol-level",
+    "Identifi": "protocol-level",
+    "Escap": "protocol-level",
+    "Error": "protocol-level",
+    "Unknown": "protocol-level",
+    "Identifierlist": "protocol-level",
 }
 
 EXTRACTOR_KEYS = {
@@ -142,20 +181,13 @@ EXTRACTOR_KEYS = {
     "gaur_expert": "GAUR (expert)",
     "gaur_chatgpt": "GAUR (ChatGPT)",
     "gaur_mistral": "GAUR (Mistral)",
-    # "loginov": "Loginov et al.",
+    "loginov": "Loginov et al.",
     "kakisim": "Kakisim",
     "cv": "CountVect",
 }
 
 
 CATEGORY_ORDER = ["lexical", "syntactic", "protocol-level", "user-level"]
-CATEGORY_ABBREV = {
-    "lexical": "LEX",
-    "syntactic": "SYN",
-    "protocol-level": "PROTO",
-    "user-level": "USER",
-}
-
 # LNCS figures: Times New Roman matches the paper body font.
 # Alternatives: "STIX Two Text" (open-source Times clone), "serif" (system default).
 PAPER_FONT = "Times New Roman"
@@ -264,7 +296,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     )
 
     def sort_key(f):
-        cat = feature_to_cat.get(f, FEATURE_CATEGORIES.get(f, "unknown"))
+        cat = feature_to_cat.get(f, "unknown")
         return (CATEGORY_ORDER.index(cat) if cat in CATEGORY_ORDER else 99, f)
 
     features_sorted = sorted(results_df["feature"].unique(), key=sort_key)
@@ -286,7 +318,7 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     row_idx = 0
 
     for f in features_sorted:
-        cat = feature_to_cat.get(f, FEATURE_CATEGORIES.get(f, "unknown"))
+        cat = feature_to_cat.get(f, "unknown")
         if prev_cat is not None and cat != prev_cat:
             separator_before.append(row_idx)
         row_labels.append(f)
@@ -428,21 +460,6 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
             )
         )
 
-    # Category separator lines (horizontal, between category blocks)
-    # for row in separator_before:
-    #     shapes.append(
-    #         dict(
-    #             type="line",
-    #             xref="x",
-    #             yref="y",
-    #             x0=-0.5,
-    #             x1=n_cols - 0.5,
-    #             y0=row - 0.5,
-    #             y1=row - 0.5,
-    #             line=dict(color="white", width=3),
-    #         )
-    #     )
-
     fig.update_layout(
         shapes=shapes,
         annotations=annotations,
@@ -485,33 +502,30 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
     print(f"Saved heatmap: {out_path}")
 
 
-def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
+def compute_mean_scores(results_df: pd.DataFrame) -> pd.DataFrame:
+    """Average domain_inv and label_acc per (extractor, feature) across dataset pairs."""
+    means = (
+        results_df.groupby(["extractor", "feature"])[["domain_inv", "label_acc"]]
+        .mean()
+        .reset_index()
+    )
+    feature_to_cat = (
+        results_df.drop_duplicates("feature")
+        .set_index("feature")["category"]
+        .to_dict()
+    )
+    means["category"] = means["feature"].map(lambda f: feature_to_cat.get(f, "unknown"))
+    return means
+
+
+def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
     """2-D scatter: mean domain_inv (x) vs mean label_acc (y) per feature, colored by category."""
     import plotly.graph_objects as go
 
-    group_cols = (
-        ["extractor", "feature"] if "extractor" in results_df.columns else ["feature"]
-    )
-    means = (
-        results_df.groupby(group_cols)[["domain_inv", "label_acc"]].mean().reset_index()
-    )
-    if "category" in results_df.columns:
-        feature_to_cat = (
-            results_df.drop_duplicates("feature")
-            .set_index("feature")["category"]
-            .to_dict()
-        )
-        means["category"] = means["feature"].map(
-            lambda f: feature_to_cat.get(f, FEATURE_CATEGORIES.get(f, "unknown"))
-        )
-    else:
-        means["category"] = means["feature"].map(
-            lambda f: FEATURE_CATEGORIES.get(f, "unknown")
-        )
-
-    csv_path = output_dir / "feature_discriminability_mean.csv"
-    means.to_csv(csv_path, index=False)
-    print(f"Saved mean results: {csv_path}")
+    unknown = means_df[means_df["category"] == "unknown"]
+    if not unknown.empty:
+        features = sorted(unknown["feature"].unique())
+        logger.warning(f"No category for features: {features}")
 
     category_colors = {
         "lexical": "#1f77b4",
@@ -523,7 +537,7 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
 
     fig = go.Figure()
     for cat in CATEGORY_ORDER + ["unknown"]:
-        grp = means[means["category"] == cat]
+        grp = means_df[means_df["category"] == cat]
         if grp.empty:
             continue
         fig.add_trace(
@@ -550,7 +564,6 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
             )
         )
 
-    # Quadrant cross: midpoint of each axis (domain_inv ∈ [0,1], label_acc ∈ [0.5,1])
     fig.add_vline(x=0.5, line=dict(color="gray", dash="dash", width=1))
     fig.add_hline(y=0.75, line=dict(color="gray", dash="dash", width=1))
 
@@ -591,54 +604,20 @@ def make_mean_scatter(results_df: pd.DataFrame, output_dir: Path):
     print(f"Saved scatter plot: {out_path}")
 
 
-def derive_taxonomy_scores(
-    results_df: pd.DataFrame, output_dir: Path, threshold: float = 0.75
-) -> None:
-    """Save a CSV with raw feature counts and normalized 0-10 scores per extractor.
-
-    Only features whose mean label_acc (averaged across dataset pairs) exceeds
-    *threshold* are counted. Counts per category are normalized so the largest
-    category maps to 10 (rounded to the nearest integer).
-    """
-    means = (
-        results_df.groupby(["extractor", "feature"])["label_acc"]
-        .mean()
-        .reset_index()
-        .rename(columns={"label_acc": "mean_label_acc"})
-    )
-    means["category"] = means["feature"].map(
-        lambda f: FEATURE_CATEGORIES.get(f, "unknown")
-    )
-
-    above = means[means["mean_label_acc"] > threshold]
-
-    # Li features included in GAUR in practice; pre-compute Li's above-threshold features.
-    li_above = above[above["extractor"] == "Li et al."][
-        ["feature", "category"]
-    ].drop_duplicates()
-
-    rows = []
+def _generate_plots(results_df: pd.DataFrame, output_dir: Path):
+    """Shared pipeline: heatmaps → mean CSV → scatter plot."""
     for extractor_name in results_df["extractor"].unique():
-        ext = above[above["extractor"] == extractor_name]
-        if extractor_name.startswith("GAUR"):
-            ext = pd.concat(
-                [ext, li_above.assign(extractor=extractor_name)]
-            ).drop_duplicates(subset="feature")
-        counts_series = ext.groupby("category").size()
-        cat_counts = {cat: int(counts_series.get(cat, 0)) for cat in CATEGORY_ORDER}
-        max_count = max(cat_counts.values()) if any(cat_counts.values()) else 1
+        subset = results_df[results_df["extractor"] == extractor_name]
+        if "constant" in subset.columns:
+            subset = subset[~subset["constant"]]
+        make_heatmap(subset, extractor_name, output_dir)
 
-        row = {"extractor": extractor_name}
-        for cat in CATEGORY_ORDER:
-            row[f"raw_{cat}"] = cat_counts[cat]
-            row[f"score_{cat}"] = (
-                round(10 * cat_counts[cat] / max_count) if max_count > 0 else 0
-            )
-        rows.append(row)
+    means = compute_mean_scores(results_df)
+    csv_path = output_dir / "feature_discriminability_mean.csv"
+    means.to_csv(csv_path, index=False)
+    print(f"Saved mean results: {csv_path}")
 
-    out_path = output_dir / "taxonomy_scores.csv"
-    pd.DataFrame(rows).to_csv(out_path, index=False)
-    print(f"Saved taxonomy scores: {out_path}")
+    plot_mean_scatter(means, output_dir)
 
 
 def main():
@@ -660,24 +639,12 @@ def main():
     parser.add_argument(
         "--output-dir",
         default="output/experiments/feature_discriminability",
-        help="Output directory for CSV and HTML heatmaps",
+        help="Output directory for CSV and PDF plots",
     )
     parser.add_argument(
         "--testing",
         action="store_true",
         help=f"Subsample to {TESTING_N_SAMPLES} per dataset for quick iteration",
-    )
-    parser.add_argument(
-        "--derive-taxonomy",
-        action="store_true",
-        help="After computing/loading results, print derived 0-5 dimension scores",
-    )
-    parser.add_argument(
-        "--taxonomy-threshold",
-        type=float,
-        default=0.75,
-        metavar="T",
-        help="Mean label_acc threshold for a feature to count (default: 0.75)",
     )
     parser.add_argument(
         "--fe",
@@ -701,14 +668,7 @@ def main():
     if args.from_csv:
         print(f"Loading results from {args.from_csv} ...")
         results_df = pd.read_csv(args.from_csv)
-        for extractor_name in results_df["extractor"].unique():
-            subset = results_df[results_df["extractor"] == extractor_name]
-            make_heatmap(subset, extractor_name, output_dir)
-        make_mean_scatter(results_df, output_dir)
-        if args.derive_taxonomy:
-            derive_taxonomy_scores(
-                results_df, output_dir, threshold=args.taxonomy_threshold
-            )
+        _generate_plots(results_df, output_dir)
         return
 
     n_samples = TESTING_N_SAMPLES if args.testing else N_SAMPLES
@@ -749,7 +709,7 @@ def main():
         ("GAUR (expert)", GaurExtractor(use_hybrid=False, mode="expert")),
         ("GAUR (ChatGPT)", GaurExtractor(use_hybrid=False, mode="chatgpt")),
         ("GAUR (Mistral)", GaurExtractor(use_hybrid=False, mode="mistral")),
-        # ("Loginov et al.", LoginovExtractor()),
+        ("Loginov et al.", LoginovExtractor()),
         ("Kakisim", KakisimExtractor(views=["C"])),
         ("CountVect", CountVectExtractor()),
     ]
@@ -837,6 +797,21 @@ def main():
                     label_test_labels[b],
                     col,
                 )
+                category = FEATURE_CATEGORIES.get(col)
+                if category is None:
+                    if isinstance(extractor, CountVectExtractor):
+                        category = (
+                            "protocol-level"
+                            if col.upper() in mysql_keywords
+                            or col.upper() in mysql_functions
+                            else "user-level"
+                        )
+                    else:
+                        logger.warning(
+                            f"No category for feature '{col}' "
+                            f"(extractor: {extractor_name})"
+                        )
+                        category = "unknown"
                 extractor_results.append(
                     {
                         "extractor": extractor_name,
@@ -844,19 +819,7 @@ def main():
                         "pair": pair_label,
                         "domain_inv": max(0.0, min(1.0, 2 * (1 - disc_acc))),
                         "label_acc": label_acc,
-                        "category": FEATURE_CATEGORIES.get(
-                            col,
-                            (
-                                (
-                                    "protocol-level"
-                                    if col.upper() in mysql_keywords
-                                    or col.upper() in mysql_functions
-                                    else "user-level"
-                                )
-                                if isinstance(extractor, CountVectExtractor)
-                                else "unknown"
-                            ),
-                        ),
+                        "category": category,
                     }
                 )
 
@@ -878,7 +841,6 @@ def main():
             extractor_results = [
                 r for r in extractor_results if r["feature"] in kept_features
             ]
-            # Mark randomly-sampled-only features so they're distinguishable in the plot
             random_only = random_sample - good_features
             for r in extractor_results:
                 if r["feature"] in random_only:
@@ -888,7 +850,6 @@ def main():
                 f" + {len(random_only)} random sample features (marked with *)"
             )
 
-        # Features constant across all pairs return 0.5 for every pair
         ext_df = pd.DataFrame(extractor_results)
         constant_features = (
             ext_df.groupby("feature")["domain_inv"]
@@ -897,9 +858,9 @@ def main():
         )
         if constant_features:
             print(
-                f"  Constant features (excluded from output): {sorted(constant_features)}"
+                f"  Constant features (excluded from heatmap): {sorted(constant_features)}"
             )
-        ext_df = ext_df[~ext_df["feature"].isin(constant_features)]
+        ext_df["constant"] = ext_df["feature"].isin(constant_features)
         all_results.extend(ext_df.to_dict("records"))
 
     results_df = pd.DataFrame(all_results)
@@ -907,14 +868,7 @@ def main():
     results_df.to_csv(csv_path, index=False)
     print(f"\nSaved results: {csv_path}")
 
-    for extractor_name in results_df["extractor"].unique():
-        subset = results_df[results_df["extractor"] == extractor_name]
-        make_heatmap(subset, extractor_name, output_dir)
-    make_mean_scatter(results_df, output_dir)
-    if args.derive_taxonomy:
-        derive_taxonomy_scores(
-            results_df, output_dir, threshold=args.taxonomy_threshold
-        )
+    _generate_plots(results_df, output_dir)
 
 
 if __name__ == "__main__":
