@@ -750,7 +750,7 @@ def main():
         ("GAUR (ChatGPT)", GaurExtractor(use_hybrid=False, mode="chatgpt")),
         ("GAUR (Mistral)", GaurExtractor(use_hybrid=False, mode="mistral")),
         # ("Loginov et al.", LoginovExtractor()),
-        ("Kakisim", KakisimExtractor()),
+        ("Kakisim", KakisimExtractor(views=["C"])),
         ("CountVect", CountVectExtractor()),
     ]
 
