@@ -148,6 +148,12 @@ def main():
         choices=[
             "ae_li",
             "ae_cv",
+            "ocsvm_li",
+            "ocsvm_loginov",
+            "ocsvm_gaur",
+            "ocsvm_securebert",
+            "ocsvm_sentbert",
+            "ocsvm_codebert",
             "ae_securebert",
             "ae_securebert2",
             "ae_modernbert",

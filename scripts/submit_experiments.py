@@ -91,6 +91,11 @@ MODEL_PROFILES = {
     "ae_qwen3_emb": "gpu_long",
     "ae_cv": "cpu_long",
     "ocsvm_li": "cpu",
+    "ocsvm_loginov": "cpu",
+    "ocsvm_gaur": "cpu",
+    "ocsvm_securebert": "V100_long",
+    "ocsvm_sentbert": "V100_long",
+    "ocsvm_codebert": "A100_long",
 }
 DATASETS = {
     "A": "OurAirports",

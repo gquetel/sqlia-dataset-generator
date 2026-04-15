@@ -310,7 +310,22 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
         extractor_kwargs=dict(batch_size=64),
     ),
+    # ---- CodeBERT OCSVM ----
+    "ocsvm_codebert": ModelConfig(
+        extractor_type="codebert",
+        model_type="ocsvm",
+        display_name="CodeBERT and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(batch_size=64),
+    ),
     # ---- SentenceBERT (all-mpnet-base-v2) ----
+    "ocsvm_sentbert": ModelConfig(
+        extractor_type="sentbert",
+        model_type="ocsvm",
+        display_name="SentenceBERT-mpnet and OCSVM",
+        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
+        extractor_kwargs=dict(batch_size=64),
+    ),
     "ae_sentbert": ModelConfig(
         extractor_type="sentbert",
         model_type="ae",
