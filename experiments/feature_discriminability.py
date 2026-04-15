@@ -99,7 +99,6 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "STATEMENT_MANAGEMENT": "protocol-level",
     "TRANSACTION_CONTROL": "protocol-level",
     "WINDOW_ANALYTICS": "protocol-level",
-
     # Gaur Expert
     # action tags
     "CREATE": "protocol-level",
@@ -120,8 +119,7 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "LOGFILE": "protocol-level",
     "SERVER": "protocol-level",
     "TRIGGER": "protocol-level",
-
-    # Mistral semantic tags 
+    # Mistral semantic tags
     "Data Definition": "protocol-level",
     "Data Import Export": "protocol-level",
     "Data Import/Export": "protocol-level",
@@ -143,7 +141,6 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "Views": "protocol-level",
     "Statement Control": "protocol-level",
     "Transaction Control": "protocol-level",
-
     # Loginov
     "n_anomalous_schars": "lexical",
     "s1_n_keywords": "lexical",
@@ -154,7 +151,6 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "s2_n_alpha": "lexical",
     "s2_n_numeric": "lexical",
     "s2_n_mixed": "lexical",
-
     # Kakisim (view C — semantic tags)
     "Par": "protocol-level",
     "DLL": "protocol-level",
@@ -510,9 +506,7 @@ def compute_mean_scores(results_df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     feature_to_cat = (
-        results_df.drop_duplicates("feature")
-        .set_index("feature")["category"]
-        .to_dict()
+        results_df.drop_duplicates("feature").set_index("feature")["category"].to_dict()
     )
     means["category"] = means["feature"].map(lambda f: feature_to_cat.get(f, "unknown"))
     return means
@@ -572,7 +566,7 @@ def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
         xaxis=dict(
             title=dict(
                 text="Mean domain indiscriminability",
-                font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
             ),
             tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
             range=[-0.05, 1.05],
@@ -580,16 +574,24 @@ def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
         yaxis=dict(
             title=dict(
                 text="Mean label prediction accuracy",
-                font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
             ),
             tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
             range=[0.45, 1.02],
         ),
         legend=dict(
             title=dict(
-                text="Feature type", font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT)
+                text="Feature type",
+                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
             ),
-            font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            font=dict(size=1.2 * PAPER_FONT_SIZE, family=PAPER_FONT),
+            x=0.02,
+            y=0.02,
+            xanchor="left",
+            yanchor="bottom",
+            # bgcolor="rgba(255,255,255,0.8)",
+            # bordercolor="lightgrey",
+            # borderwidth=1,
         ),
         plot_bgcolor="white",
         width=900,
@@ -630,6 +632,11 @@ def main():
         help="Skip computation and plot heatmaps from a previously saved results CSV",
     )
     parser.add_argument(
+        "--scatter-from-mean",
+        metavar="PATH",
+        help="Plot the mean scatter figure from a previously saved mean results CSV",
+    )
+    parser.add_argument(
         "--dataset",
         nargs=2,
         action="append",
@@ -656,6 +663,14 @@ def main():
         ),
     )
     args = parser.parse_args()
+
+    if args.scatter_from_mean:
+        print(f"Loading mean results from {args.scatter_from_mean} ...")
+        means_df = pd.read_csv(args.scatter_from_mean)
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        plot_mean_scatter(means_df, output_dir)
+        return
 
     if not args.from_csv and not args.dataset:
         parser.error("--dataset is required when --from-csv is not specified")

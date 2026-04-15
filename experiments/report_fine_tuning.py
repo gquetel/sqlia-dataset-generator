@@ -237,26 +237,6 @@ def build_figure(
                         hovertemplate=f"{model_label(prefix)}: within 0.01 of specialized at k={crossover[0]}<extra></extra>",
                     )
                 )
-            else:
-                # Model didn't reach within 0.01 of specialized — red marker at k=10000
-                k_max = 10000
-                if k_max in df.set_index("k").index:
-                    m_at_max = df.set_index("k").loc[k_max, "rocauc_mean"]
-                    xl_max = _k_label(k_max)
-                    fig.add_trace(
-                        go.Scatter(
-                            x=[xl_max],
-                            y=[m_at_max],
-                            mode="markers",
-                            marker=dict(
-                                size=10,
-                                color=color,
-                                line=dict(color="red", width=1),
-                            ),
-                            showlegend=False,
-                            hovertemplate=f"{model_label(prefix)}: gap {spec - m_at_max:.3f} at k={k_max}<extra></extra>",
-                        )
-                    )
 
     fig.update_layout(
         xaxis=dict(
