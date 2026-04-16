@@ -638,12 +638,17 @@ def preprocessing_generic_ae(model, df: pd.DataFrame, use_scaler: bool = False):
 
 def preprocessing_sklearn(model, df: pd.DataFrame, use_scaler: bool = False):
     """Preprocess for OCSVM/LOF scoring: extract features → numpy."""
-    X, labels = model.preprocess_for_preds(df=df)
+    result = model.preprocess_for_preds(df=df)
+    if len(result) == 3:
+        X, labels, valid_index = result
+    else:
+        X, labels = result
+        valid_index = df.index
     if isinstance(X, pd.DataFrame):
         X = X.to_numpy()
     if use_scaler:
         X = model._scaler.transform(X)
-    return X, labels
+    return X, labels, valid_index
 
 
 def get_preprocess_fn(config_name: str):

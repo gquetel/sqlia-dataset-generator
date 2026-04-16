@@ -5,6 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 import torch
@@ -71,6 +72,7 @@ class BaseOCSVM:
         self.clf = None
         self.model_name = None
         self.feature_columns = None
+        self.threshold = None
 
     def _ensure_scaler(self, X):
         """Create scaler on first use, with_mean=False for sparse data."""
@@ -109,6 +111,56 @@ class BaseOCSVM:
             max_iter=self.max_iter,
         )
         self.clf.fit(X)
+
+    def save_model(self, save_path: str, threshold: float = None):
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        model_path = save_path.with_suffix(".pth")
+        meta_path = save_path.parent / f"{save_path.stem}_meta.pkl"
+
+        joblib.dump(self.clf, model_path)
+
+        metadata = {
+            "use_scaler": self.use_scaler,
+            "scaler": self._scaler if self.use_scaler else None,
+            "feature_columns": self.feature_columns,
+            "threshold": threshold,
+        }
+        if hasattr(self.extractor, "valid_schars"):
+            metadata["valid_schars"] = self.extractor.valid_schars
+        if hasattr(self.extractor, "vectorizer"):
+            metadata["vectorizer"] = self.extractor.vectorizer
+
+        pd.to_pickle(metadata, meta_path, compression="zstd")
+        logger.info(f"Saved OCSVM model to {model_path}")
+
+    def load_model(self, load_path: str):
+        load_path = Path(load_path)
+        if load_path.suffix != ".pth":
+            load_path = load_path.with_suffix(".pth")
+        meta_path = load_path.parent / f"{load_path.stem}_meta.pkl"
+
+        if not load_path.exists():
+            raise FileNotFoundError(f"Model weights not found: {load_path}")
+        if not meta_path.exists():
+            raise FileNotFoundError(f"Model metadata not found: {meta_path}")
+
+        self.clf = joblib.load(load_path)
+
+        try:
+            metadata = pd.read_pickle(meta_path, compression="zstd")
+        except Exception:
+            metadata = pd.read_pickle(meta_path, compression=None)
+
+        self.use_scaler = metadata.get("use_scaler", self.use_scaler)
+        self.feature_columns = metadata.get("feature_columns", None)
+        self.threshold = metadata.get("threshold", None)
+        if self.use_scaler and metadata.get("scaler") is not None:
+            self._scaler = metadata["scaler"]
+        if "valid_schars" in metadata:
+            self.extractor.valid_schars = metadata["valid_schars"]
+        if "vectorizer" in metadata:
+            self.extractor.vectorizer = metadata["vectorizer"]
 
 
 class BaseLOF:

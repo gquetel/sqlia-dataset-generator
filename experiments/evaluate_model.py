@@ -29,8 +29,8 @@ from explain import (
 from registry import (
     MODEL_CONFIGS,
     build_model,
-    decision_score_ae,
-    preprocessing_generic_ae,
+    get_preprocess_fn,
+    get_score_fn,
 )
 from training import get_scores_generic
 
@@ -301,13 +301,14 @@ def main():
         df_test = load_test_data(test_path, test_size)
 
         # Score
+        config = MODEL_CONFIGS[args.model_type]
         _, partial_scores, valid_idx = get_scores_generic(
             df=df_test,
             batch_size=4096,
             model=model,
-            preprocess_fn=preprocessing_generic_ae,
-            score_fn=decision_score_ae,
-            use_scaler=False,
+            preprocess_fn=get_preprocess_fn(args.model_type),
+            score_fn=get_score_fn(args.model_type),
+            use_scaler=config.use_scaler,
         )
         # Rows dropped by the extractor (e.g. gaur unparseable queries) get score=0,
         # which falls below any threshold and is treated as predicted-normal.

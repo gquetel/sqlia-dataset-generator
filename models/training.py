@@ -533,7 +533,7 @@ def _train_single_model(
         use_batches=True,
     )
 
-    if save_model_path and config.model_type == "ae":
+    if save_model_path and config.model_type in ("ae", "ocsvm"):
         model.save_model(save_model_path, threshold=threshold)
 
     if with_shap:
