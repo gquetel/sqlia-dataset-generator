@@ -768,7 +768,7 @@ def main():
         ("GAUR (Mistral)", GaurExtractor(use_hybrid=False, mode="mistral")),
         ("Loginov et al.", LoginovExtractor()),
         ("Kakisim", KakisimExtractor(views=["C"])),
-        ("CountVect", CountVectExtractor()),
+        ("CountVect", CountVectExtractor(max_features=10_000)),
     ]
 
     if args.fe == "all":
