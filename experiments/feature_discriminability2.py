@@ -22,6 +22,19 @@ from extractors.loginov import LoginovExtractor
 
 logger = logging.getLogger(__name__)
 
+CV_CATEGORIES_PATH = SCRIPT_DIR / "cv_feature_categories.py"
+
+try:
+    import importlib.util as _ilu
+
+    _spec = _ilu.spec_from_file_location("cv_feature_categories", CV_CATEGORIES_PATH)
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    CV_FEATURE_CATEGORIES: dict[str, str] = _mod.CV_FEATURE_CATEGORIES
+    logger.info(f"Loaded CV feature categories from {CV_CATEGORIES_PATH}")
+except (FileNotFoundError, AttributeError):
+    CV_FEATURE_CATEGORIES: dict[str, str] = {}
+
 CSV_DTYPES = {
     "full_query": str,
     "label": int,
@@ -180,6 +193,9 @@ EXTRACTOR_KEYS = {
     "cv": "CountVect",
 }
 
+
+LABELS_TO_DISPLAY = ["information_schema"]
+
 CATEGORY_ORDER = ["lexical", "syntactic", "protocol-level", "user-level"]
 PAPER_FONT = "Times New Roman"
 PAPER_FONT_SIZE = 13
@@ -261,6 +277,8 @@ def run_label_prediction(
 def _feature_category(col: str, is_cv: bool) -> str:
     if col in FEATURE_CATEGORIES:
         return FEATURE_CATEGORIES[col]
+    if col in CV_FEATURE_CATEGORIES:
+        return CV_FEATURE_CATEGORIES[col]
     if is_cv:
         return (
             "protocol-level"
@@ -269,6 +287,25 @@ def _feature_category(col: str, is_cv: bool) -> str:
         )
     logger.warning(f"No category for feature '{col}'")
     return "unknown"
+
+
+def _export_cv_categories(agg: pd.DataFrame) -> None:
+    """Export auto-labelled CV feature→category dict for manual review.
+
+    Run once; edit cv_feature_categories.py, then it will be imported on the
+    next run instead of relying on the automatic keyword-lookup heuristic.
+    """
+    if CV_CATEGORIES_PATH.exists():
+        print(
+            f"CV categories file already exists, skipping export: {CV_CATEGORIES_PATH}"
+        )
+        return
+    lines = ["CV_FEATURE_CATEGORIES: dict[str, str] = {"]
+    for _, row in agg.sort_values("feature").iterrows():
+        lines.append(f"    {row['feature']!r}: {row['category']!r},")
+    lines.append("}")
+    CV_CATEGORIES_PATH.write_text("\n".join(lines) + "\n")
+    print(f"Exported {len(agg)} CV feature categories for review: {CV_CATEGORIES_PATH}")
 
 
 def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
@@ -296,8 +333,9 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
             .reset_index()
         )
 
-        # if len(agg) > 500:
-        #     agg = agg.sample(n=500, random_state=2).reset_index(drop=True)
+        if len(agg) > 2000:
+            _export_cv_categories(agg)
+            agg = agg.sample(n=2000, random_state=2).reset_index(drop=True)
 
         # Label the 3 most-discriminable and 1 least-discriminable features
         labeled = set(agg.nlargest(3, "mean_domain_inv")["feature"]) | {
@@ -542,8 +580,12 @@ def main():
                     col,
                 )
 
-            #  Discriminability vs each target
-            # Sample 50k from src train, split 30/70 for DT train/test.
+            # ── Discriminability vs each target ─────────────────────────────
+            # TEMPORARY (uncomment to verify attack leakage hypothesis):
+            # src_pool = sample_n(src_test, n_samples)
+            # src_disc_train, src_disc_test = train_test_split(
+            #     src_pool, test_size=0.5, random_state=2
+            # )
             src_pool = sample_n(src_train, n_samples)
             src_disc_train, src_disc_test = train_test_split(
                 src_pool, test_size=0.7, random_state=2
@@ -582,7 +624,7 @@ def main():
                     )
                     disc_per_feat[col].append((tgt_name, disc_acc, 2 * (1 - disc_acc)))
 
-            # ── Aggregate ───────────────────────────────────────────────────
+            #  Aggregate
             for col in feature_cols:
                 pairs_data = disc_per_feat[col]
                 raw_accs = [d[1] for d in pairs_data]
