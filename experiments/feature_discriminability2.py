@@ -193,8 +193,18 @@ EXTRACTOR_KEYS = {
     "cv": "CountVect",
 }
 
-
-LABELS_TO_DISPLAY = ["information_schema"]
+# information_schema, présent en très petites qté dans rq d'administration, mais est typiquement ciblé par sqlmap.
+LABELS_TO_DISPLAY = [
+    "information_schema",
+    "s1_n_alpha",
+    "n_nonterminal",
+    "depth",
+    "c_round_brackets",
+    "has_comment",
+    "FUNCTION",
+    "has_connection_keywords",
+    "has_tautology",
+]
 
 CATEGORY_ORDER = ["lexical", "syntactic", "protocol-level", "user-level"]
 PAPER_FONT = "Times New Roman"
@@ -311,7 +321,7 @@ def _export_cv_categories(agg: pd.DataFrame) -> None:
 def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
     """Scatter: mean domain_inv (x) vs mean label_acc (y), colored by category.
 
-    One PDF per extractor; points are averaged across all source specialisations.
+    Single PDF aggregating all extractors and sources.
     """
     import plotly.graph_objects as go
 
@@ -323,104 +333,90 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
         "unknown": "#999999",
     }
 
-    for ext_name in means_df["extractor"].unique():
-        ext_df = means_df[means_df["extractor"] == ext_name].copy()
+    # Average across all sources and extractors
+    agg = (
+        means_df.groupby(["feature", "category"])[["mean_domain_inv", "label_acc"]]
+        .mean()
+        .reset_index()
+    )
 
-        # Average across sources
-        agg = (
-            ext_df.groupby(["feature", "category"])[["mean_domain_inv", "label_acc"]]
-            .mean()
-            .reset_index()
-        )
+    if len(agg) > 2000:
+        agg = agg.sample(n=2000, random_state=2).reset_index(drop=True)
+        _export_cv_categories(agg)
 
-        if len(agg) > 2000:
-            _export_cv_categories(agg)
-            agg = agg.sample(n=2000, random_state=2).reset_index(drop=True)
-
-        # Label the 3 most-discriminable and 1 least-discriminable features
-        labeled = set(agg.nlargest(3, "mean_domain_inv")["feature"]) | {
-            agg.loc[agg["mean_domain_inv"].idxmin(), "feature"]
-        }
-
-        fig = go.Figure()
-        for cat in CATEGORY_ORDER + ["unknown"]:
-            grp = agg[agg["category"] == cat]
-            if grp.empty:
-                continue
-            fig.add_trace(
-                go.Scatter(
-                    x=grp["mean_domain_inv"],
-                    y=grp["label_acc"],
-                    mode="markers+text",
-                    marker=dict(
-                        symbol="circle",
-                        size=9,
-                        color=category_colors.get(cat, "#999999"),
-                        line=dict(width=0.8, color="white"),
-                    ),
-                    text=grp["feature"].where(grp["feature"].isin(labeled), ""),
-                    textposition="top center",
-                    textfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
-                    name=cat,
-                    hovertemplate=(
-                        "<b>%{text}</b><br>"
-                        f"Category: {cat}<br>"
-                        "Domain indiscriminability: %{x:.3f}<br>"
-                        "Label acc: %{y:.3f}<extra></extra>"
-                    ),
-                    customdata=grp["feature"],
-                )
+    fig = go.Figure()
+    for cat in CATEGORY_ORDER + ["unknown"]:
+        grp = agg[agg["category"] == cat]
+        if grp.empty:
+            continue
+        fig.add_trace(
+            go.Scatter(
+                x=grp["mean_domain_inv"],
+                y=grp["label_acc"],
+                mode="markers+text",
+                marker=dict(
+                    symbol="circle",
+                    size=9,
+                    color=category_colors.get(cat, "#999999"),
+                    line=dict(width=0.8, color="white"),
+                ),
+                text=grp["feature"].where(grp["feature"].isin(LABELS_TO_DISPLAY), ""),
+                textposition="top center",
+                textfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+                name=cat,
+                hovertemplate=(
+                    "<b>%{text}</b><br>"
+                    f"Category: {cat}<br>"
+                    "Domain indiscriminability: %{x:.3f}<br>"
+                    "Label acc: %{y:.3f}<extra></extra>"
+                ),
+                customdata=grp["feature"],
             )
-
-        fig.add_vline(x=DISC_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
-        fig.add_hline(y=LABEL_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
-
-        fig.update_layout(
-            font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
-            xaxis=dict(
-                title=dict(
-                    text="Mean domain indiscriminability",
-                    font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
-                ),
-                tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
-                range=[-0.05, 1.05],
-            ),
-            yaxis=dict(
-                title=dict(
-                    text="Label prediction accuracy",
-                    font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
-                ),
-                tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
-                range=[0.45, 1.02],
-            ),
-            legend=dict(
-                title=dict(
-                    text="Feature type",
-                    font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
-                ),
-                font=dict(size=1.2 * PAPER_FONT_SIZE, family=PAPER_FONT),
-                x=0.02,
-                y=0.02,
-                xanchor="left",
-                yanchor="bottom",
-            ),
-            plot_bgcolor="white",
-            width=900,
-            height=750,
-            margin=dict(l=60, r=40, t=40, b=60),
         )
-        fig.update_xaxes(showgrid=True, gridcolor="#eeeeee")
-        fig.update_yaxes(showgrid=True, gridcolor="#eeeeee")
 
-        safe_name = (
-            ext_name.replace(" ", "_")
-            .replace(".", "")
-            .replace("(", "")
-            .replace(")", "")
-        )
-        out_path = output_dir / f"fd_{safe_name}.pdf"
-        fig.write_image(str(out_path))
-        print(f"Saved scatter: {out_path}")
+    fig.add_vline(x=DISC_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
+    fig.add_hline(y=LABEL_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
+
+    fig.update_layout(
+        font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
+        xaxis=dict(
+            title=dict(
+                text="Mean domain indiscriminability",
+                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
+            ),
+            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            range=[-0.05, 1.05],
+        ),
+        yaxis=dict(
+            title=dict(
+                text="Label prediction accuracy",
+                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
+            ),
+            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            range=[0.45, 1.02],
+        ),
+        legend=dict(
+            title=dict(
+                text="Feature type",
+                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
+            ),
+            font=dict(size=1.2 * PAPER_FONT_SIZE, family=PAPER_FONT),
+            x=0.02,
+            y=0.02,
+            xanchor="left",
+            yanchor="bottom",
+        ),
+        plot_bgcolor="white",
+        width=900,
+        height=750,
+        margin=dict(l=60, r=40, t=40, b=60),
+    )
+    fig.update_xaxes(showgrid=True, gridcolor="#eeeeee")
+    fig.update_yaxes(showgrid=True, gridcolor="#eeeeee")
+
+    out_path = output_dir / "fd_all.pdf"
+    fig.write_image(str(out_path))
+    print(f"Saved scatter: {out_path}")
 
 
 def main():
@@ -445,9 +441,9 @@ def main():
         help=f"Subsample to {TESTING_N_SAMPLES} rows for quick iteration",
     )
     parser.add_argument(
-        "--from-csv",
+        "--from-folder",
         metavar="PATH",
-        help="Skip computation; re-plot from a previously saved results CSV",
+        help="Skip computation; re-plot from all fd_*.csv files in a folder",
     )
     parser.add_argument(
         "--fe",
@@ -460,17 +456,21 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.from_csv and not args.dataset:
-        parser.error("--dataset is required when --from-csv is not specified")
+    if not args.from_folder and not args.dataset:
+        parser.error("--dataset is required when --from-folder is not specified")
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.from_csv:
-        print(f"Loading results from {args.from_csv} ...")
-        results_df = pd.read_csv(args.from_csv)
+    if args.from_folder:
+        folder = Path(args.from_folder)
+        csv_files = sorted(folder.glob("fd_*.csv"))
+        if not csv_files:
+            parser.error(f"No fd_*.csv files found in {folder}")
+        print(f"Loading {len(csv_files)} CSV(s) from {folder} ...")
+        results_df = pd.concat([pd.read_csv(p) for p in csv_files], ignore_index=True)
         plot_scatter(results_df, output_dir)
         return
 
@@ -622,7 +622,9 @@ def main():
                         tgt_disc_test_feats,
                         col,
                     )
-                    disc_per_feat[col].append((tgt_name, disc_acc, 2 * (1 - disc_acc)))
+                    disc_per_feat[col].append(
+                        (tgt_name, disc_acc, min(1.0, 2 * (1 - disc_acc)))
+                    )
 
             #  Aggregate
             for col in feature_cols:
@@ -651,11 +653,6 @@ def main():
         csv_path = output_dir / f"fd_{safe_name}.csv"
         ext_df.to_csv(csv_path, index=False)
         print(f"Saved: {csv_path}")
-
-    # Combined CSV
-    csv_path = output_dir / "fd_all.csv"
-    results_df.to_csv(csv_path, index=False)
-    print(f"Saved: {csv_path}")
 
     plot_scatter(results_df, output_dir)
 
