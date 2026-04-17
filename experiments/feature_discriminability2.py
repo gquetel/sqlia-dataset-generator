@@ -380,7 +380,7 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
             .replace("(", "")
             .replace(")", "")
         )
-        out_path = output_dir / f"source_specialization_{safe_name}.pdf"
+        out_path = output_dir / f"fd_{safe_name}.pdf"
         fig.write_image(str(out_path))
         print(f"Saved scatter: {out_path}")
 
@@ -398,7 +398,7 @@ def main():
     )
     parser.add_argument(
         "--output-dir",
-        default="output/results/source_specialization",
+        default="output/results/feature_discriminability2",
         help="Output directory for CSV and PDF plots",
     )
     parser.add_argument(
@@ -542,7 +542,7 @@ def main():
                     col,
                 )
 
-            # ── Discriminability vs each target ─────────────────────────────
+            #  Discriminability vs each target
             # Sample 50k from src train, split 30/70 for DT train/test.
             src_pool = sample_n(src_train, n_samples)
             src_disc_train, src_disc_test = train_test_split(
@@ -603,9 +603,17 @@ def main():
 
     results_df = pd.DataFrame(all_results)
 
-    csv_path = output_dir / "source_specialization.csv"
+    # One CSV per extractor, named after it
+    for ext_name, ext_df in results_df.groupby("extractor"):
+        safe_name = ext_name.replace(" ", "_").replace("(", "").replace(")", "")
+        csv_path = output_dir / f"fd_{safe_name}.csv"
+        ext_df.to_csv(csv_path, index=False)
+        print(f"Saved: {csv_path}")
+
+    # Combined CSV
+    csv_path = output_dir / "fd_all.csv"
     results_df.to_csv(csv_path, index=False)
-    print(f"\nSaved results: {csv_path}")
+    print(f"Saved: {csv_path}")
 
     plot_scatter(results_df, output_dir)
 
