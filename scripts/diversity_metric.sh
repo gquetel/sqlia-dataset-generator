@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=diversity-metric   # Name of your job
-#SBATCH --output=../output/%x_%j.out           # Output file (%x for job name, %j for job ID)
-#SBATCH --error=../output/%x_%j.err            # Error file
+#SBATCH --output=../output/results/%x_%j.out           # Output file (%x for job name, %j for job ID)
+#SBATCH --error=../output/results/%x_%j.err            # Error file
 #SBATCH --partition=A30              # Partition to submit to (A100, V100, etc.)
 #SBATCH --gres=gpu:1                 # Request 1 GPU
 #SBATCH --cpus-per-task=16           # Request 16 CPU cores
@@ -31,10 +31,10 @@ DATASETS="\
   --dataset specialised-sakila $DATASET_DIR/specialised-sakila.csv"
 
 # We run lexical and syntactic metrics on entire datasets
-srun python3 ./diversity_metric.py $DATASETS --vocab --parse-trees --output-dir ../output/diversity_metrics_lex_syn
+srun python3 ./diversity_metric.py $DATASETS --vocab --parse-trees --output-dir ../output/results/diversity_metric_lex_syn
 
 # We run semantic diversity on 5k samples
-srun python3 ./diversity_metric.py $DATASETS --samples 5000 --div-sem --output-dir ../output/diversity_metrics_sem
+srun python3 ./diversity_metric.py $DATASETS --samples 5000 --div-sem --output-dir ../output/results/diversity_metric_sem
 
 # Print job completion time
 echo "Job finished at: $(date)"

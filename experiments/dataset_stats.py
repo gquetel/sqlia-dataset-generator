@@ -16,8 +16,8 @@ Displays:
 - Exploit vs reconnaissance breakdown per technique
 
 Exports results to:
-- output/experiments/dataset_stats.txt - formatted text report
-- output/experiments/dataset_stats.csv - structured data (one row per dataset)
+- output/results/dataset_stats/dataset_stats.txt - formatted text report
+- output/results/dataset_stats/dataset_stats.csv - structured data (one row per dataset)
 
 Script generated using Claude Code.
 """
@@ -324,8 +324,8 @@ def main():
     )
     parser.add_argument(
         "--output-dir",
-        default="../output/experiments/dataset_stats",
-        help="Output directory for reports (default: output/experiments)",
+        default="../output/results/dataset_stats",
+        help="Output directory for reports (default: output/results/dataset_stats)",
     )
     args = parser.parse_args()
 

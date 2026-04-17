@@ -196,7 +196,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output-dir",
-        default="output/experiments/fe_taxonomy",
+        default="output/results/fe_taxonomy",
         help="Output directory for the PDF figure",
     )
     args = parser.parse_args()

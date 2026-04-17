@@ -380,7 +380,10 @@ def main():
         help="Subsample normal and attack queries to N each",
     )
     parser.add_argument(
-        "--output-dir", type=str, default="../output", help="Output directory"
+        "--output-dir",
+        type=str,
+        default="../output/results/diversity_metric",
+        help="Output directory",
     )
     args = parser.parse_args()
 

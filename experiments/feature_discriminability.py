@@ -192,6 +192,9 @@ PAPER_FONT_SIZE = 13  # base size; sub-labels and value annotations use smaller 
 N_SAMPLES = 50_000
 TESTING_N_SAMPLES = 1_000
 
+DISC_THRESHOLD = 0.5
+LABEL_THRESHOLD = 0.75
+
 
 def load_dataset(path: str) -> pd.DataFrame:
     return pd.read_csv(path, dtype=CSV_DTYPES, low_memory=False)
@@ -500,11 +503,10 @@ def make_heatmap(results_df: pd.DataFrame, extractor_name: str, output_dir: Path
 
 def compute_mean_scores(results_df: pd.DataFrame) -> pd.DataFrame:
     """Average domain_inv and label_acc per (extractor, feature) across dataset pairs."""
-    means = (
-        results_df.groupby(["extractor", "feature"])[["domain_inv", "label_acc"]]
-        .mean()
-        .reset_index()
-    )
+    agg_cols = [
+        c for c in ["disc_acc", "domain_inv", "label_acc"] if c in results_df.columns
+    ]
+    means = results_df.groupby(["extractor", "feature"])[agg_cols].mean().reset_index()
     feature_to_cat = (
         results_df.drop_duplicates("feature").set_index("feature")["category"].to_dict()
     )
@@ -529,6 +531,10 @@ def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
         "unknown": "#999999",
     }
 
+    # TEMPORARY: label only the 3 lowest and 1 highest domain_inv features
+    mean_disc = means_df.groupby("feature")["domain_inv"].mean()
+    labeled_features = set(mean_disc.nsmallest(3).index) | {mean_disc.idxmax()}
+
     fig = go.Figure()
     for cat in CATEGORY_ORDER + ["unknown"]:
         grp = means_df[means_df["category"] == cat]
@@ -545,9 +551,9 @@ def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
                     color=category_colors.get(cat, "#999999"),
                     line=dict(width=0.8, color="white"),
                 ),
-                text=grp["feature"],
+                text=grp["feature"].where(grp["feature"].isin(labeled_features), ""),
                 textposition="top center",
-                textfont=dict(size=10, family=PAPER_FONT),
+                textfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
                 name=cat,
                 hovertemplate=(
                     "<b>%{text}</b><br>"
@@ -558,8 +564,8 @@ def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
             )
         )
 
-    fig.add_vline(x=0.5, line=dict(color="gray", dash="dash", width=1))
-    fig.add_hline(y=0.75, line=dict(color="gray", dash="dash", width=1))
+    fig.add_vline(x=DISC_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
+    fig.add_hline(y=LABEL_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
 
     fig.update_layout(
         font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
@@ -606,6 +612,39 @@ def plot_mean_scatter(means_df: pd.DataFrame, output_dir: Path):
     print(f"Saved scatter plot: {out_path}")
 
 
+def compute_quadrant_stats(means_df: pd.DataFrame, output_dir: Path):
+    """Count features per category per scatter quadrant; save to CSV."""
+
+    def _quadrant(row):
+        x = "high-indisc" if row["domain_inv"] >= DISC_THRESHOLD else "low-indisc"
+        y = "high-label" if row["label_acc"] >= LABEL_THRESHOLD else "low-label"
+        return f"{x} / {y}"
+
+    df = means_df.copy()
+    df["quadrant"] = df.apply(_quadrant, axis=1)
+
+    all_quadrants = [
+        f"{x} / {y}"
+        for x in ("low-indisc", "high-indisc")
+        for y in ("low-label", "high-label")
+    ]
+    counts = df.groupby(["quadrant", "category"]).size().reset_index(name="count")
+    pivot = (
+        counts.pivot(index="quadrant", columns="category", values="count")
+        .reindex(index=all_quadrants)
+        .fillna(0)
+        .astype(int)
+    )
+    ordered_cols = [c for c in CATEGORY_ORDER if c in pivot.columns]
+    pivot = pivot.reindex(columns=ordered_cols).fillna(0).astype(int)
+    pivot["total"] = pivot.sum(axis=1)
+    pivot = pivot.reset_index()
+
+    csv_path = output_dir / "feature_discriminability_quadrant_stats.csv"
+    pivot.to_csv(csv_path, index=False)
+    print(f"Saved quadrant stats: {csv_path}")
+
+
 def _generate_plots(results_df: pd.DataFrame, output_dir: Path):
     """Shared pipeline: heatmaps → mean CSV → scatter plot."""
     for extractor_name in results_df["extractor"].unique():
@@ -615,11 +654,13 @@ def _generate_plots(results_df: pd.DataFrame, output_dir: Path):
         make_heatmap(subset, extractor_name, output_dir)
 
     means = compute_mean_scores(results_df)
+
     csv_path = output_dir / "feature_discriminability_mean.csv"
     means.to_csv(csv_path, index=False)
     print(f"Saved mean results: {csv_path}")
 
     plot_mean_scatter(means, output_dir)
+    compute_quadrant_stats(means, output_dir)
 
 
 def main():
@@ -645,7 +686,7 @@ def main():
     )
     parser.add_argument(
         "--output-dir",
-        default="output/experiments/feature_discriminability",
+        default="output/results/feature_discriminability",
         help="Output directory for CSV and PDF plots",
     )
     parser.add_argument(
@@ -670,6 +711,7 @@ def main():
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         plot_mean_scatter(means_df, output_dir)
+        compute_quadrant_stats(means_df, output_dir)
         return
 
     if not args.from_csv and not args.dataset:
@@ -832,6 +874,7 @@ def main():
                         "extractor": extractor_name,
                         "feature": col,
                         "pair": pair_label,
+                        "disc_acc": disc_acc,
                         "domain_inv": max(0.0, min(1.0, 2 * (1 - disc_acc))),
                         "label_acc": label_acc,
                         "category": category,
@@ -842,27 +885,19 @@ def main():
         # plus 20 randomly sampled dimensions to represent the full vocabulary.
         if isinstance(extractor, CountVectExtractor):
             cv_df = pd.DataFrame(extractor_results)
-            mean_acc = cv_df.groupby("feature")["label_acc"].mean()
-            good_features = set(mean_acc[mean_acc > 0.75].index)
-            n_before = mean_acc.shape[0]
+            all_cv_features = cv_df["feature"].unique().tolist()
+            n_before = len(all_cv_features)
             rng_cv = np.random.default_rng(seed=2)
-            all_cv_features = mean_acc.index.tolist()
-            random_sample = set(
+            kept_features = set(
                 rng_cv.choice(
-                    all_cv_features, size=min(20, len(all_cv_features)), replace=False
+                    all_cv_features, size=min(500, n_before), replace=False
                 ).tolist()
             )
-            kept_features = good_features | random_sample
             extractor_results = [
                 r for r in extractor_results if r["feature"] in kept_features
             ]
-            random_only = random_sample - good_features
-            for r in extractor_results:
-                if r["feature"] in random_only:
-                    r["feature"] = r["feature"] + " *"
             print(
-                f"  CountVect: kept {len(good_features)}/{n_before} features with mean label_acc > 0.75"
-                f" + {len(random_only)} random sample features (marked with *)"
+                f"  CountVect: plotting {len(kept_features)}/{n_before} randomly sampled features (seed=2)"
             )
 
         ext_df = pd.DataFrame(extractor_results)
