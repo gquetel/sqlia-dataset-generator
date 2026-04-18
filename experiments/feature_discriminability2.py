@@ -50,6 +50,10 @@ CSV_DTYPES = {
 }
 
 FEATURE_CATEGORIES: dict[str, str] = {
+    # Exceptions from labelised:
+    "columns": "protocol-level",  # https://dev.mysql.com/doc/refman/8.4/en/show-columns.html
+    "information_schema": "protocol-level",  # https://dev.mysql.com/doc/refman/8.4/en/innodb-information-schema-tables.html
+    "end": "protocol-level",  # https://dev.mysql.com/doc/refman/8.4/en/begin-end.html
     # Li
     "len_query": "syntactic",
     "has_null": "protocol-level",
@@ -204,6 +208,10 @@ LABELS_TO_DISPLAY = [
     "FUNCTION",
     "has_connection_keywords",
     "has_tautology",
+    "columns",
+    "DDL_CREATE",
+    "avg_c_sqlkywds",
+    "DML_SELECT",
 ]
 
 CATEGORY_ORDER = ["lexical", "syntactic", "protocol-level", "user-level"]
@@ -284,7 +292,9 @@ def run_label_prediction(
     return float(clf.score(X_test, labels_test))
 
 
-def _feature_category(col: str, is_cv: bool) -> str:
+def _feature_category(col, is_cv: bool) -> str:
+    if not isinstance(col, str):
+        return "unknown"
     if col in FEATURE_CATEGORIES:
         return FEATURE_CATEGORIES[col]
     if col in CV_FEATURE_CATEGORIES:
@@ -333,6 +343,18 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
         "unknown": "#999999",
     }
 
+    # Cap each extractor to 2000 features before averaging
+    def _cap_extractor(df):
+        # if len(df) > 2000:
+        # return df.sample(n=2000, random_state=2)
+        return df
+
+    means_df = (
+        means_df.groupby("extractor", group_keys=False)
+        .apply(_cap_extractor)
+        .reset_index(drop=True)
+    )
+
     # Average across all sources and extractors
     agg = (
         means_df.groupby(["feature", "category"])[["mean_domain_inv", "label_acc"]]
@@ -341,7 +363,6 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
     )
 
     if len(agg) > 2000:
-        agg = agg.sample(n=2000, random_state=2).reset_index(drop=True)
         _export_cv_categories(agg)
 
     fig = go.Figure()
@@ -418,6 +439,43 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
     fig.write_image(str(out_path))
     print(f"Saved scatter: {out_path}")
 
+    # Quadrant counts per category
+    quadrants = [
+        (
+            "top-left",
+            agg["mean_domain_inv"] < DISC_THRESHOLD,
+            agg["label_acc"] >= LABEL_THRESHOLD,
+        ),
+        (
+            "top-right",
+            agg["mean_domain_inv"] >= DISC_THRESHOLD,
+            agg["label_acc"] >= LABEL_THRESHOLD,
+        ),
+        (
+            "bottom-left",
+            agg["mean_domain_inv"] < DISC_THRESHOLD,
+            agg["label_acc"] < LABEL_THRESHOLD,
+        ),
+        (
+            "bottom-right",
+            agg["mean_domain_inv"] >= DISC_THRESHOLD,
+            agg["label_acc"] < LABEL_THRESHOLD,
+        ),
+    ]
+    rows = []
+    print("\nFeatures per quadrant per category:")
+    for qname, x_mask, y_mask in quadrants:
+        counts = agg[x_mask & y_mask].groupby("category").size()
+        print(f"  {qname}:")
+        for cat in CATEGORY_ORDER + ["unknown"]:
+            n = counts.get(cat, 0)
+            if n:
+                print(f"    {cat}: {n}")
+                rows.append({"quadrant": qname, "category": cat, "count": n})
+    quadrant_csv = output_dir / "fd_quadrant_counts.csv"
+    pd.DataFrame(rows).to_csv(quadrant_csv, index=False)
+    print(f"Saved quadrant counts: {quadrant_csv}")
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -471,6 +529,11 @@ def main():
             parser.error(f"No fd_*.csv files found in {folder}")
         print(f"Loading {len(csv_files)} CSV(s) from {folder} ...")
         results_df = pd.concat([pd.read_csv(p) for p in csv_files], ignore_index=True)
+        # This applies exceptions.
+        results_df["category"] = results_df.apply(
+            lambda r: _feature_category(r["feature"], r["extractor"] == "CountVect"),
+            axis=1,
+        )
         plot_scatter(results_df, output_dir)
         return
 
