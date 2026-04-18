@@ -1,25 +1,14 @@
 """
 Dataset Statistics Dashboard
 
-Multi-dataset comparison script for SQL injection detection datasets.
-
 Usage:
     python3 dataset_stats.py --dataset A ~/datasets/OurAirports.csv \\
                               --dataset B ~/datasets/sakila.csv \\
                               --dataset C ~/datasets/AdventureWorks.csv \\
                               --dataset D ~/datasets/OHR.csv
 
-Displays:
-- Attack vs normal sample counts
-- Statement type distributions (normal vs attacks)
-- Attack technique distributions
-- Exploit vs reconnaissance breakdown per technique
-
-Exports results to:
-- output/results/dataset_stats/dataset_stats.txt - formatted text report
-- output/results/dataset_stats/dataset_stats.csv - structured data (one row per dataset)
-
-Script generated using Claude Code.
+This script works as an empirical sanity check. If a metric is anormaly low / high, it
+might significate a problem during the dataset generation.
 """
 
 import argparse

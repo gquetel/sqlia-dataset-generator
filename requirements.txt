@@ -31,5 +31,3 @@ sentence-transformers==5.2.3
 gensim==4.4.0
 # CodeBERT
 protobuf==7.34.0
-# SHAP interpretability
-shap
