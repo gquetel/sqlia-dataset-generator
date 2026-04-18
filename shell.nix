@@ -1,9 +1,14 @@
+{
+  # On a NixOS machine, to support CUDA. You can run: 
+  # nix-shell --arg cudaSupport true
+  # This will grant access to CUDA to torch and other packages.
+  # TODO: Do the same for Ubuntu machines with access to Nix.
+  cudaSupport ? false,
+}:
 let
   inputs = import ./npins;
   pkgs = import inputs.nixpkgs {
     config.allowUnfree = true;
-    # https://discourse.nixos.org/t/on-nixpkgs-and-the-ai-follow-up-to-2023-nix-developer-dialogues/37087
-    # config.cudaSupport = true;
   };
 
   sqlmap = pkgs.python313Packages.sqlmap.overridePythonAttrs (oldAttrs: {
@@ -87,7 +92,7 @@ let
       plotly
       matplotlib
       tabulate
-      torch
+      (if cudaSupport then torch-bin else torch)
       transformers
       accelerate
       sentence-transformers
@@ -98,29 +103,6 @@ let
     ];
     doCheck = false;
   };
-
-  # TODO: If we keep the llm2vec pipeline, find a way to relax dependencies 
-  # llm2vec = pkgs.python313.pkgs.buildPythonPackage {
-  #   pname = "llm2vec";
-  #   version = "0.2.3";
-  #   src = pkgs.fetchurl {
-  #     url = "https://files.pythonhosted.org/packages/79/45/4b71b3d3112d7cb17e9e221ef0a2acd35563f206d7d22ddcf13f460c78c6/llm2vec-0.2.3.tar.gz";
-  #     sha256 = "sha256-SrdJFHgUfaA/B85U0kVnDHLLCeR9TeDIdS7wCEFtNfw=";
-  #   };
-  #   pyproject = true;
-  #   build-system = [ pkgs.python313Packages.setuptools ];
-  #   dependencies = with pkgs.python313Packages; [
-  #     numpy
-  #     tqdm
-  #     torch
-  #     peft
-  #     transformers
-  #     datasets
-  #     evaluate
-  #     scikit-learn
-  #   ];
-  #   doCheck = false;
-  # };
 
   vendi-score = pkgs.python313.pkgs.buildPythonPackage {
     pname = "vendi-score";
@@ -199,7 +181,7 @@ let
         # BERT model
         ps.accelerate
         ps.evaluate
-        ps.torch
+        (if cudaSupport then ps.torch-bin else ps.torch)
         ps.transformers
         ps.sentence-transformers
 
@@ -239,10 +221,20 @@ pkgs.mkShell rec {
     pkgs.nixpkgs-fmt
     pkgs.taplo
     pkgs.mdformat
+  ] ++ pkgs.lib.optionals cudaSupport [
+    pkgs.cudaPackages.cudatoolkit
+    pkgs.cudaPackages.cudnn
   ];
 
   allowUnfree = true;
   catchConflicts = false;
+
+  LD_LIBRARY_PATH = pkgs.lib.optionalString cudaSupport
+    (pkgs.lib.makeLibraryPath [
+      pkgs.cudaPackages.cudatoolkit
+      pkgs.cudaPackages.cudnn
+      pkgs.stdenv.cc.cc.lib
+    ]);
   shellHook = ''
     export CUSTOM_INTERPRETER_PATH="${pythonEnv}/bin/python"
 
