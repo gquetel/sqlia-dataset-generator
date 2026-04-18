@@ -88,6 +88,7 @@ KNOWN_LABELS: dict[str, str] = {
     "ae_gaur_chatgpt": "Gaur (ChatGPT)",
     "ae_loginov": "Loginov et al.",
     "ae_codebert": "CodeBERT",
+    "ae_sentbert": "SentenceBERT (all-mpnet-base-v2)",
 }
 
 COLORS = {"generic": "#636EFA", "specialised": "#EF553B"}
@@ -831,13 +832,6 @@ def main() -> int:
         print(f"ERROR: --results-dir does not exist: {results_dir}")
         return 1
 
-    # Auto-detect WAFAMOLE (E) if *_on_E directories exist in results.
-    # WAFAMOLE is test-only; it must NOT enter ALL_LETTERS because
-    # leave_one_out_complement() uses ALL_LETTERS to derive generic training sets
-    # (ABC, ABD, ACD, BCD) — adding E would corrupt them.
-    if not args.include_wafamole and any(results_dir.glob("*/*_on_E")):
-        args.include_wafamole = True
-        print("Auto-detected WAFAMOLE (E) results — enabling --include-wafamole")
     if args.include_wafamole:
         DATASET_LETTERS["wafamole"] = "E"
         DATASETS.append("wafamole")
