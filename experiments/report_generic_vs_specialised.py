@@ -503,8 +503,8 @@ def _tl_heatmap_combined(
         height=400,
     )
     for col_idx in (1, 2):
-        fig.update_xaxes(title_text="Test Dataset", row=1, col=col_idx)
-        fig.update_yaxes(title_text="Training Set", row=1, col=col_idx)
+        fig.update_xaxes(title_text="Test set", row=1, col=col_idx)
+        fig.update_yaxes(title_text="Training set", row=1, col=col_idx)
 
     return fig
 
@@ -661,9 +661,9 @@ def plot_all_models_tl_matrix(
 
     for col_idx in range(1, n + 1):
         for row_idx in range(1, 3):
-            fig.update_xaxes(title_text="Test Dataset", row=row_idx, col=col_idx)
+            fig.update_xaxes(title_text="Test set", row=row_idx, col=col_idx)
             if col_idx == 1:
-                fig.update_yaxes(title_text="Training Set", row=row_idx, col=col_idx)
+                fig.update_yaxes(title_text="Training set", row=row_idx, col=col_idx)
             else:
                 fig.update_yaxes(
                     title_text="", showticklabels=False, row=row_idx, col=col_idx

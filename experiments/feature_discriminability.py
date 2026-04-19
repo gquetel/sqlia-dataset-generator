@@ -350,6 +350,8 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
         .reset_index()
     )
 
+    # agg = agg[~((agg["label_acc"] < 0.6) & (agg["mean_domain_inv"] > 0.8))]
+
     fig = go.Figure()
     for cat in CATEGORY_ORDER + ["unknown"]:
         grp = agg[agg["category"] == cat]
@@ -359,16 +361,13 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
             go.Scatter(
                 x=grp["mean_domain_inv"],
                 y=grp["label_acc"],
-                mode="markers+text",
+                mode="markers",
                 marker=dict(
                     symbol="circle",
                     size=9,
                     color=category_colors.get(cat, "#999999"),
                     line=dict(width=0.8, color="white"),
                 ),
-                text=grp["feature"].where(grp["feature"].isin(LABELS_TO_DISPLAY), ""),
-                textposition="top center",
-                textfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
                 name=cat,
                 hovertemplate=(
                     "<b>%{text}</b><br>"
@@ -380,8 +379,32 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
             )
         )
 
+    # Add text labels with thin lines connecting to markers
+    for _, row in agg[agg["feature"].isin(LABELS_TO_DISPLAY)].iterrows():
+        fig.add_annotation(
+            x=row["mean_domain_inv"], y=row["label_acc"],
+            text=row["feature"], showarrow=True,
+            arrowhead=0, arrowwidth=0.5, arrowcolor="gray",
+            ax=0, ay=-20,
+            font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+        )
+
     fig.add_vline(x=DISC_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
     fig.add_hline(y=LABEL_THRESHOLD, line=dict(color="gray", dash="dash", width=1))
+
+    # Quadrant type labels
+    quadrant_labels = [
+        ("Type 1", -0.03, 1.01, "left", "top"),
+        ("Type 2", 1.03, 1.01, "right", "top"),
+        ("Type 3", 1.03, 0.46, "right", "bottom"),
+        ("Type 4", -0.03, 0.46, "left", "bottom"),
+    ]
+    for label, x, y, xa, ya in quadrant_labels:
+        fig.add_annotation(
+            x=x, y=y, text=f"<b>{label}</b>", showarrow=False,
+            xanchor=xa, yanchor=ya,
+            font=dict(size=1.3 * PAPER_FONT_SIZE, family=PAPER_FONT, color="black"),
+        )
 
     fig.update_layout(
         font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
@@ -408,9 +431,9 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
             ),
             font=dict(size=1.2 * PAPER_FONT_SIZE, family=PAPER_FONT),
             x=0.02,
-            y=0.02,
+            y=0.5,
             xanchor="left",
-            yanchor="bottom",
+            yanchor="middle",
         ),
         plot_bgcolor="white",
         width=900,
@@ -425,40 +448,41 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
     print(f"Saved scatter: {out_path}")
 
     # Quadrant counts per category
-    quadrants = [
-        (
-            "top-left",
-            agg["mean_domain_inv"] < DISC_THRESHOLD,
-            agg["label_acc"] >= LABEL_THRESHOLD,
-        ),
-        (
-            "top-right",
-            agg["mean_domain_inv"] >= DISC_THRESHOLD,
-            agg["label_acc"] >= LABEL_THRESHOLD,
-        ),
-        (
-            "bottom-left",
+    quadrant_names = {
+        "low-indisc / low-label": (
             agg["mean_domain_inv"] < DISC_THRESHOLD,
             agg["label_acc"] < LABEL_THRESHOLD,
         ),
-        (
-            "bottom-right",
+        "low-indisc / high-label": (
+            agg["mean_domain_inv"] < DISC_THRESHOLD,
+            agg["label_acc"] >= LABEL_THRESHOLD,
+        ),
+        "high-indisc / low-label": (
             agg["mean_domain_inv"] >= DISC_THRESHOLD,
             agg["label_acc"] < LABEL_THRESHOLD,
         ),
-    ]
+        "high-indisc / high-label": (
+            agg["mean_domain_inv"] >= DISC_THRESHOLD,
+            agg["label_acc"] >= LABEL_THRESHOLD,
+        ),
+    }
+    cats = [c for c in CATEGORY_ORDER if c != "unknown"]
     rows = []
-    print("\nFeatures per quadrant per category:")
-    for qname, x_mask, y_mask in quadrants:
+    for qname, (x_mask, y_mask) in quadrant_names.items():
         counts = agg[x_mask & y_mask].groupby("category").size()
-        print(f"  {qname}:")
-        for cat in CATEGORY_ORDER + ["unknown"]:
+        row = {"quadrant": qname}
+        total = 0
+        for cat in cats:
             n = counts.get(cat, 0)
-            if n:
-                print(f"    {cat}: {n}")
-                rows.append({"quadrant": qname, "category": cat, "count": n})
+            row[cat] = n
+            total += n
+        row["total"] = total
+        rows.append(row)
+    quadrant_df = pd.DataFrame(rows)
+    print("\nFeatures per quadrant per category:")
+    print(quadrant_df.to_csv(index=False), end="")
     quadrant_csv = output_dir / "fd_quadrant_counts.csv"
-    pd.DataFrame(rows).to_csv(quadrant_csv, index=False)
+    quadrant_df.to_csv(quadrant_csv, index=False)
     print(f"Saved quadrant counts: {quadrant_csv}")
 
 
