@@ -3,7 +3,8 @@
   # nix-shell --arg cudaSupport true
   # This will grant access to CUDA to torch and other packages.
   # TODO: Do the same for Ubuntu machines with access to Nix.
-  cudaSupport ? false,
+  cudaSupport ? false
+,
 }:
 let
   inputs = import ./npins;
@@ -215,6 +216,7 @@ pkgs.mkShell rec {
     sqlmap
     pkgs.chromium # Required by kaleido for plotly figure export... #cursed
     pkgs.corefonts # Times New Roman (and other MS core fonts) for paper figures
+    pkgs.cm_unicode # Computer Modern Unicode fonts (CMU Serif / CMU Sans Serif)
     # Formatting tools
     pkgs.treefmt
     pkgs.black
@@ -238,8 +240,8 @@ pkgs.mkShell rec {
   shellHook = ''
     export CUSTOM_INTERPRETER_PATH="${pythonEnv}/bin/python"
 
-    # Make corefonts (Times New Roman, etc.) visible to fontconfig
-    export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.corefonts ]; }}"
+    # Make corefonts (Times New Roman, etc.) and Computer Modern visible to fontconfig
+    export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.corefonts pkgs.cm_unicode ]; }}"
 
     # MySQL environment variables used by mysql-start / mysql-stop scripts.
     # Data lives in /tmp (local to each machine) to avoid NFS conflicts.

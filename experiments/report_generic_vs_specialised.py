@@ -556,16 +556,20 @@ def plot_all_models_tl_matrix(
     Each column corresponds to one model. Intended for multi-model comparison.
     """
     n = len(models)
-    subplot_titles = [f"{m['label']} [Generic]" for m in models] + [
-        f"{m['label']} [Specialised]" for m in models
-    ]
+    # subplot_titles = [f"{m['label']} [Generic]" for m in models] + [
+    #     f"{m['label']} [Specialised]" for m in models
+    # ]
+    subplot_titles = [m["label"] for m in models] + [m["label"] for m in models]
     fig = make_subplots(
         rows=2,
         cols=n,
         subplot_titles=subplot_titles,
         horizontal_spacing=0.01,
-        vertical_spacing=0.15,
+        vertical_spacing=0.2,
     )
+    # Make subplot title font bigger and use Computer Modern
+    for ann in fig.layout.annotations:
+        ann.font = dict(size=22, family="CMU Serif")
 
     has_any = False
     for col_idx, m in enumerate(models, 1):
@@ -648,7 +652,9 @@ def plot_all_models_tl_matrix(
                         title=dict(
                             text=TL_METRIC_DISPLAY.get(metric_key, metric_key.upper()),
                             side="bottom",
+                            font=dict(family="CMU Serif", size=22),
                         ),
+                        tickfont=dict(family="CMU Serif", size=18),
                     ),
                 ),
                 row=row_idx,
@@ -659,11 +665,30 @@ def plot_all_models_tl_matrix(
     if not has_any:
         return None
 
+    _axis_font = dict(family="CMU Serif", size=22)
+    _tick_font = dict(family="CMU Serif", size=18)
     for col_idx in range(1, n + 1):
         for row_idx in range(1, 3):
-            fig.update_xaxes(title_text="Test set", row=row_idx, col=col_idx)
+            fig.update_xaxes(
+                title_text="Test set",
+                title_font=_axis_font,
+                tickfont=_tick_font,
+                row=row_idx,
+                col=col_idx,
+            )
             if col_idx == 1:
-                fig.update_yaxes(title_text="Training set", row=row_idx, col=col_idx)
+                train_label = (
+                    "Training set (LODO)"
+                    if row_idx == 1
+                    else "Training set (in-domain)"
+                )
+                fig.update_yaxes(
+                    title_text=train_label,
+                    title_font=_axis_font,
+                    tickfont=_tick_font,
+                    row=row_idx,
+                    col=col_idx,
+                )
             else:
                 fig.update_yaxes(
                     title_text="", showticklabels=False, row=row_idx, col=col_idx
@@ -673,6 +698,7 @@ def plot_all_models_tl_matrix(
         width=max(900, 380 * n),
         height=750,
         margin=dict(b=100),
+        # font=dict(family="CMU Serif"),
     )
     return fig
 

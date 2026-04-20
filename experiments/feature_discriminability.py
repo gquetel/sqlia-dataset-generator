@@ -153,30 +153,29 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "s2_n_alpha": "lexical",
     "s2_n_numeric": "lexical",
     "s2_n_mixed": "lexical",
-
     # Kakisim (view C)
     "par": "lexical",
     "dll": "protocol-level",  # There is an a priori of the impact of part of parse tree on the system
-    "dml": "protocol-level", # There is an a priori of the impact of part of parse tree on the system
+    "dml": "protocol-level",  # There is an a priori of the impact of part of parse tree on the system
     "keyw": "syntactic",
     "int": "lexical",
-    "cte" : "protocol-level", # Common table expression, syntactic group with a meaning, is protocol.
-    "dcl" : "protocol-level", # There is an a priori of the impact of part of parse tree on the system
-    "order" : "protocol-level", # Focus on specific keywords: because of the impact, protocol
-    "where": "protocol-level", # Focus on specific keywords: because of the impact, protocol
+    "cte": "protocol-level",  # Common table expression, syntactic group with a meaning, is protocol.
+    "dcl": "protocol-level",  # There is an a priori of the impact of part of parse tree on the system
+    "order": "protocol-level",  # Focus on specific keywords: because of the impact, protocol
+    "where": "protocol-level",  # Focus on specific keywords: because of the impact, protocol
     "hexadecimal": "lexical",
     "quot": "lexical",
     "punct": "lexical",
-    "wildcard": "protocol-level", # Focus on specific keywords: because of the impact, protocol
+    "wildcard": "protocol-level",  # Focus on specific keywords: because of the impact, protocol
     "comparison": "lexical",
     "oper": "lexical",
-    "builtin": "protocol-level", 
+    "builtin": "protocol-level",
     "func": "protocol-level",
-    "identifi": "protocol-level", # Focus on specific terminals: because of the impact, protocol
+    "identifi": "protocol-level",  # Focus on specific terminals: because of the impact, protocol
     "escap": "protocol-level",
     "error": "protocol-level",
     "unknown": "protocol-level",
-    "identifierlist": "protocol-level", # Focus on specific terminals: because of the impact, protocol
+    "identifierlist": "protocol-level",  # Focus on specific terminals: because of the impact, protocol
 }
 
 EXTRACTOR_KEYS = {
@@ -191,10 +190,10 @@ EXTRACTOR_KEYS = {
 
 # information_schema, présent en très petites qté dans rq d'administration, mais est typiquement ciblé par sqlmap.
 LABELS_TO_DISPLAY = [
-    #"information_schema", overflows
+    # "information_schema", overflows
     "c_space",
     "n_nonterminal",
-    "depth",
+    "n_terminal",
     "c_round_brackets",
     # "has_comment",
     "FUNCTION",
@@ -202,12 +201,13 @@ LABELS_TO_DISPLAY = [
     # "has_connection_keywords",
     "has_database_keywords",
     "has_tautology",
+    "has_count",
     # "columns",
     "Data Definition",
     # "avg_c_sqlkywds",
     "DML_SELECT",
     "keyw",
-    "employees", 
+    "employees",
     # "airport",
     "businessentityid",
     # "name",
@@ -220,13 +220,15 @@ FEATURES_TO_HIDE: dict[str, set[str]] = {
 }
 
 CATEGORY_ORDER = ["lexical", "syntactic", "protocol-level", "user-level"]
-PAPER_FONT = "Times New Roman"
-PAPER_FONT_SIZE = 13
+PAPER_FONT = "CMU Serif"
+PAPER_FONT_SIZE = 13  # annotation labels on data points (kept small to avoid clutter)
+_AXIS_FONT = dict(family=PAPER_FONT, size=22)
+_TICK_FONT = dict(family=PAPER_FONT, size=18)
 
 N_SAMPLES = 50_000
 TESTING_N_SAMPLES = 1_000
 DISC_THRESHOLD = 0.5
-LABEL_THRESHOLD = 0.75
+LABEL_THRESHOLD = 0.5
 
 
 def load_dataset(path: str) -> pd.DataFrame:
@@ -341,7 +343,9 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
 
     # Remove features flagged in FEATURES_TO_HIDE
     for ext, feats in FEATURES_TO_HIDE.items():
-        means_df = means_df[~((means_df["extractor"] == ext) & (means_df["feature"].isin(feats)))]
+        means_df = means_df[
+            ~((means_df["extractor"] == ext) & (means_df["feature"].isin(feats)))
+        ]
 
     # Average across all sources and extractors
     agg = (
@@ -382,10 +386,15 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
     # Add text labels with thin lines connecting to markers
     for _, row in agg[agg["feature"].isin(LABELS_TO_DISPLAY)].iterrows():
         fig.add_annotation(
-            x=row["mean_domain_inv"], y=row["label_acc"],
-            text=row["feature"], showarrow=True,
-            arrowhead=0, arrowwidth=0.5, arrowcolor="gray",
-            ax=0, ay=-20,
+            x=row["mean_domain_inv"],
+            y=row["label_acc"],
+            text=row["feature"],
+            showarrow=True,
+            arrowhead=0,
+            arrowwidth=0.5,
+            arrowcolor="gray",
+            ax=0,
+            ay=-20,
             font=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
         )
 
@@ -396,40 +405,35 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
     quadrant_labels = [
         ("Type 1", -0.03, 1.01, "left", "top"),
         ("Type 2", 1.03, 1.01, "right", "top"),
-        ("Type 3", 1.03, 0.46, "right", "bottom"),
-        ("Type 4", -0.03, 0.46, "left", "bottom"),
+        ("Type 3", 1.03, -0.04, "right", "bottom"),
+        ("Type 4", -0.03, -0.04, "left", "bottom"),
     ]
     for label, x, y, xa, ya in quadrant_labels:
         fig.add_annotation(
-            x=x, y=y, text=f"<b>{label}</b>", showarrow=False,
-            xanchor=xa, yanchor=ya,
-            font=dict(size=1.3 * PAPER_FONT_SIZE, family=PAPER_FONT, color="black"),
+            x=x,
+            y=y,
+            text=f"<b>{label}</b>",
+            showarrow=False,
+            xanchor=xa,
+            yanchor=ya,
+            font=dict(size=20, family=PAPER_FONT, color="black"),
         )
 
     fig.update_layout(
-        font=dict(family=PAPER_FONT, size=PAPER_FONT_SIZE),
+        font=dict(family=PAPER_FONT, size=18),
         xaxis=dict(
-            title=dict(
-                text="Mean domain indiscriminability",
-                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
-            ),
-            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
+            title=dict(text="Mean domain indiscriminability", font=_AXIS_FONT),
+            tickfont=_TICK_FONT,
             range=[-0.05, 1.05],
         ),
         yaxis=dict(
-            title=dict(
-                text="Label prediction accuracy",
-                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
-            ),
-            tickfont=dict(size=PAPER_FONT_SIZE, family=PAPER_FONT),
-            range=[0.45, 1.02],
+            title=dict(text="Normalized label prediction accuracy", font=_AXIS_FONT),
+            tickfont=_TICK_FONT,
+            range=[-0.05, 1.02],
         ),
         legend=dict(
-            title=dict(
-                text="Feature type",
-                font=dict(size=1.5 * PAPER_FONT_SIZE, family=PAPER_FONT),
-            ),
-            font=dict(size=1.2 * PAPER_FONT_SIZE, family=PAPER_FONT),
+            title=dict(text="Feature type", font=_AXIS_FONT),
+            font=_TICK_FONT,
             x=0.02,
             y=0.5,
             xanchor="left",
@@ -712,7 +716,9 @@ def main():
                         "mean_disc_acc": float(np.mean(raw_accs)),
                         "disc_accs": disc_accs_str,
                         "mean_domain_inv": float(np.mean(domain_invs)),
-                        "label_acc": label_acc_per_feat[col],
+                        "label_acc": min(
+                            1.0, max(0.0, 2 * (label_acc_per_feat[col] - 0.5))
+                        ),
                         "category": _feature_category(col, ext_key == "cv"),
                     }
                 )
@@ -722,7 +728,9 @@ def main():
     unknown_feats = results_df[results_df["category"] == "unknown"]
     if not unknown_feats.empty:
         print("\nFeatures with unknown category:")
-        for _, row in unknown_feats[["extractor", "feature"]].drop_duplicates().iterrows():
+        for _, row in (
+            unknown_feats[["extractor", "feature"]].drop_duplicates().iterrows()
+        ):
             print(f"  [{row['extractor']}] {row['feature']}")
 
     # One CSV per extractor, named after it

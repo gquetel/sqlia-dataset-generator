@@ -238,18 +238,28 @@ def build_figure(
                     )
                 )
 
+    _axis_font = dict(family="CMU Serif", size=22)
+    _tick_font = dict(family="CMU Serif", size=18)
+
     fig.update_layout(
+        font=dict(family="CMU Serif", size=18),
         xaxis=dict(
-            title="k (fine-tuning samples)",
+            title=dict(text="k (fine-tuning samples)", font=_axis_font),
+            tickfont=_tick_font,
             type="category",
         ),
-        yaxis=dict(title="AUROC", range=[0.5, 1.0]),
+        yaxis=dict(
+            title=dict(text="AUROC", font=_axis_font),
+            tickfont=_tick_font,
+            range=[0.5, 1.0],
+        ),
         legend=dict(
-            title="Feature extractor",
-            x=0.9,
-            y=0.0,
-            xanchor="right",
-            yanchor="bottom",
+            title=dict(text="Feature extractor", font=_axis_font),
+            font=_tick_font,
+            x=1.02,
+            y=1.0,
+            xanchor="left",
+            yanchor="top",
             bgcolor="rgba(255,255,255,0.8)",
             bordercolor="lightgrey",
             borderwidth=1,
@@ -257,6 +267,7 @@ def build_figure(
         template="plotly_white",
         width=1000,
         height=580,
+        margin=dict(t=30),
     )
     return fig
 
