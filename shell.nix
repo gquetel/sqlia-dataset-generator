@@ -80,8 +80,8 @@ let
     src = pkgs.fetchFromGitHub {
       owner = "gquetel";
       repo = "gaur-sql-detect";
-      rev = "35b6db06df38dfdefa62d7f085a5db606204619a";
-      sha256 = "sha256-4C7n1NX9m7D19zaywXsK+ppwHmQaFGyTfpyArDkvlxo=";
+      rev = "40596e0cc45c6cf295790e264745bca4e21d0afc";
+      sha256 = "sha256-sxTqC71h3oCP1dkwj8anrk6C3KSdvSraQPEKYQkb1Nc=";
     };
     build-system = [ pkgs.python313Packages.setuptools ];
     dependencies = with pkgs.python313Packages; [
@@ -253,6 +253,6 @@ pkgs.mkShell rec {
     # Put project scripts on PATH
     export PATH="$PWD/scripts:$PATH"
 
-    echo "MySQL servers can be run 'mysql-start' to start MySQL, 'mysql-stop' to stop it."
+    echo "MySQL servers can be manually run using 'mysql-start', 'mysql-stop' to stop it."
   '';
 }
