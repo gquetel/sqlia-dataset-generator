@@ -42,7 +42,7 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "information_schema": "protocol-level",  # https://dev.mysql.com/doc/refman/8.4/en/innodb-information-schema-tables.html
     "end": "protocol-level",  # https://dev.mysql.com/doc/refman/8.4/en/begin-end.html
     # Li
-    "len_query": "syntactic",
+    "len_query": "lexical",
     "has_null": "protocol-level",
     "has_comment": "protocol-level",
     "has_query_keywords": "protocol-level",
@@ -59,7 +59,7 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "has_group": "protocol-level",
     "has_order": "protocol-level",
     "has_length": "protocol-level",
-    "has_ascii": "protocol-level",
+    "has_ascii": "lexical",
     "has_concat": "protocol-level",
     "has_if": "protocol-level",
     "has_count": "protocol-level",
@@ -72,7 +72,7 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "c_arith": "lexical",
     "c_square_brackets": "lexical",
     "c_round_brackets": "lexical",
-    "has_multiline_comment": "lexical",
+    "has_multiline_comment": "protocol-level",
     "c_curly_brackets": "lexical",
     "avg_c_sqlkywds": "protocol-level",
     "max_c_sqlkywds": "protocol-level",
@@ -145,11 +145,11 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "Transaction Control": "protocol-level",
     # Loginov
     "n_anomalous_schars": "lexical",
-    "s1_n_keywords": "lexical",
+    "s1_n_keywords": "syntactic",  # Need list of keywords (grammar)
     "s1_n_alpha": "lexical",
     "s1_n_numeric": "lexical",
     "s1_n_mixed": "lexical",
-    "s2_n_keywords": "lexical",
+    "s2_n_keywords": "lexical",  # Need list of keywords (grammar)
     "s2_n_alpha": "lexical",
     "s2_n_numeric": "lexical",
     "s2_n_mixed": "lexical",
@@ -167,7 +167,7 @@ FEATURE_CATEGORIES: dict[str, str] = {
     "quot": "lexical",
     "punct": "lexical",
     "wildcard": "protocol-level",  # Focus on specific keywords: because of the impact, protocol
-    "comparison": "lexical",
+    "comparison": "syntactic",  # need for AST knowledge: <= in identifier is different than as a keywords.
     "oper": "lexical",
     "builtin": "protocol-level",
     "func": "protocol-level",
@@ -427,7 +427,7 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
             range=[-0.05, 1.05],
         ),
         yaxis=dict(
-            title=dict(text="Normalized label prediction accuracy", font=_AXIS_FONT),
+            title=dict(text="Mean predictive power", font=_AXIS_FONT),
             tickfont=_TICK_FONT,
             range=[-0.05, 1.02],
         ),
