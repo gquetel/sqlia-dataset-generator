@@ -209,7 +209,11 @@ nix-shell
 python3 ./launcher.py --config-file config.toml
 ```
 
-The in-domain and LODO datasets were then generated using the [generate_splits](experiments/generate_splits.py) script.
+The in-domain and LODO splits were then generated using the [generate_splits](experiments/generate_splits.py) script.
+
+```bash
+python3 experiments/generate_splits.py --output-dir ~/datasets/test/ --seed 2
+```
 
 <!-- ### Superviz25-SQL
 
@@ -262,7 +266,20 @@ Two evaluation protocols are supported:
 - **In-domain**: train and test on the same domain.
 - **LODO**: train on three domains, test on the held-out fourth (leave-one-domain-out).
 
-Entry point: `models/training.py`. See [`models/README.md`](models/README.md) for the full list of models, CLI options, and caching details.
+To run in-domain or LODO experiments, use [`scripts/submit_experiments.py`](scripts/submit_experiments.py), which generates and submits (or runs) training and evaluation scripts for each scenario. It internally calls `models/training.py` for training and `experiments/evaluate_model.py` for evaluation. Use `--local` to run locally; without it, scripts are submitted to SLURM via `sbatch`.
+
+```bash
+# Quick local test (limits samples)
+python3 scripts/submit_experiments.py --model ae_li --mode lodo --local --testing
+
+# Run all LODO scenarios locally for a given model
+python3 scripts/submit_experiments.py --model ae_li --mode lodo --local
+
+# Run all in-domain scenarios on SLURM
+python3 scripts/submit_experiments.py --model ae_li --mode in_domain
+```
+
+See [`models/README.md`](models/README.md) for the full list of models, CLI options, and caching details.
 
 ## Experiments
 
