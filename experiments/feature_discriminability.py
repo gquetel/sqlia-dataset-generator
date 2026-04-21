@@ -195,6 +195,7 @@ LABELS_TO_DISPLAY = [
     "n_nonterminal",
     "n_terminal",
     "c_round_brackets",
+    "dll",
     # "has_comment",
     "FUNCTION",
     "TABLE",
@@ -503,7 +504,7 @@ def main():
     )
     parser.add_argument(
         "--output-dir",
-        default="output/results/feature_discriminability2",
+        default="output/results/feature_discriminability",
         help="Output directory for CSV and PDF plots",
     )
     parser.add_argument(

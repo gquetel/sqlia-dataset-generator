@@ -83,7 +83,7 @@ COLORS = [
     "#7E57C2",
 ]
 
-MARKERS = ["circle", "cross"]
+MARKERS = ["circle", "x"]
 
 MODEL_ORDER = [
     "ae_li",
@@ -206,8 +206,8 @@ def build_figure(
                 y=means,
                 mode="lines+markers",
                 name=label,
-                line=dict(color=color, width=2),
-                marker=dict(size=6, symbol=marker_symbol),
+                line=dict(color=color, width=1),
+                marker=dict(size=8, symbol=marker_symbol),
             )
         )
 
@@ -229,7 +229,7 @@ def build_figure(
                         y=[crossover[1]],
                         mode="markers",
                         marker=dict(
-                            size=10,
+                            size=12,
                             color=color,
                             line=dict(color="black", width=1),
                         ),
