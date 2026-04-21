@@ -251,19 +251,19 @@ Full dataset generation takes approximately 10 hours. -->
 
 ## Detection Models
 
-The `models/` directory implements SQL attack detection pipelines used to evaluate in-domain and cross-domain detection performance.
+The `models/` directory implements SQL attack detection pipelines used to evaluate in-domain and cross-domain detection performance. All studied pipelines can be found in [`models/registry.py`](models/registry.py).
 
 **Feature extractors** range from hand-crafted SQL-specific feature sets (Li, Loginov, GAUR, Kakisim) and token-frequency baselines (CountVectorizer) to transformer-based embeddings (SecureBERT, ModernBERT, CodeBERT, CodeT5, Qwen3-Embedding, and others).
 
-**Novelty detectors** are One-Class SVM, Local Outlier Factor, and Autoencoder combined with extractors to form named pipelines (e.g. `ae_li`, `ocsvm_securebert`). All studied pipelines can be found in [`models/registry.py`](models/registry.py).
+**Novelty detectors** are One-Class SVM, Local Outlier Factor, and Autoencoder combined with extractors to form named pipelines (e.g. `ae_li`, `ocsvm_securebert`).
 
 Two evaluation protocols are supported:
 
-- **Specialised**: train and test on the same domain.
-- **Generic**: train on three domains, test on the held-out fourth (leave-one-domain-out).
+- **In-domain**: train and test on the same domain.
+- **LODO**: train on three domains, test on the held-out fourth (leave-one-domain-out).
 
 Entry point: `models/training.py`. See [`models/README.md`](models/README.md) for the full list of models, CLI options, and caching details.
 
 ## Experiments
 
-The `experiments/` directory contains scripts for dataset analysis: dataset statistics, diversity metrics (lexical, syntactic, semantic). It also contains script to analyse models performances: generic vs. specialised performance comparisons, recall heatmaps per attack technique and statement type, and transfer-learning matrices. See [`experiments/readme.md`](experiments/readme.md) for a description of each script and example commands.
+The `experiments/` directory contains scripts for dataset analysis: dataset statistics, diversity metrics (lexical, syntactic, semantic). It also contains script to analyse models performances: LODO vs. in-domain performance comparisons, recall heatmaps per attack technique and statement type, and transfer-learning matrices. See [`experiments/readme.md`](experiments/readme.md) for a description of each script and example commands.

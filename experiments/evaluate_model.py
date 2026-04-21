@@ -32,7 +32,7 @@ from registry import (
     get_preprocess_fn,
     get_score_fn,
 )
-from training import get_scores_generic
+from training import get_scores_lodo
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +189,7 @@ def main():
         nargs="+",
         default=None,
         help="Multiple test datasets as path:label pairs "
-        "(e.g. generic-OurAirports.csv:A generic-sakila.csv:B)",
+        "(e.g. bcd-a.csv:A acd-b.csv:B)",
     )
     parser.add_argument(
         "--output-dir",
@@ -301,7 +301,7 @@ def main():
 
         # Score
         config = MODEL_CONFIGS[args.model_type]
-        _, partial_scores, valid_idx = get_scores_generic(
+        _, partial_scores, valid_idx = get_scores_lodo(
             df=df_test,
             batch_size=4096,
             model=model,

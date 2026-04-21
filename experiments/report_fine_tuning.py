@@ -36,8 +36,8 @@ import plotly.graph_objects as go
 
 TRAIN_TEST_CONFIGS = ["ABC_on_D", "ABD_on_C", "ACD_on_B", "BCD_on_A"]
 
-# Specialized AUROC: train and test on the same dataset (averaged over A→A, B→B, C→C, D→D)
-SPECIALIZED_AUROC: dict[str, float] = {
+# In-domain AUROC: train and test on the same dataset (averaged over A→A, B→B, C→C, D→D)
+IN_DOMAIN_AUROC: dict[str, float] = {
     "ae_codebert": 0.9980,
     "ae_codet5": 0.9603,
     "ae_flan_t5": 0.9949,
@@ -163,10 +163,10 @@ def _k_label(k: int) -> str:
 def build_figure(
     model_data: dict[str, pd.DataFrame],
     show_std: bool = True,
-    specialized: dict[str, float] | None = None,
+    in_domain: dict[str, float] | None = None,
 ) -> go.Figure:
     fig = go.Figure()
-    specialized = specialized or {}
+    in_domain = in_domain or {}
 
     # Collect the union of k values (as category labels) in sorted order
     all_k = sorted({k for df in model_data.values() for k in df["k"].tolist()})
@@ -211,9 +211,9 @@ def build_figure(
             )
         )
 
-        # Highlight first k where gap to specialized <= 0.01
-        if prefix in specialized:
-            spec = specialized[prefix]
+        # Highlight first k where gap to in-domain <= 0.01
+        if prefix in in_domain:
+            spec = in_domain[prefix]
             crossover = next(
                 (
                     (xl, m)
@@ -234,7 +234,7 @@ def build_figure(
                             line=dict(color="black", width=1),
                         ),
                         showlegend=False,
-                        hovertemplate=f"{model_label(prefix)}: within 0.01 of specialized at k={crossover[0]}<extra></extra>",
+                        hovertemplate=f"{model_label(prefix)}: within 0.01 of in-domain at k={crossover[0]}<extra></extra>",
                     )
                 )
 
@@ -336,17 +336,17 @@ def main():
     )
 
     # Only pass entries for models actually loaded
-    specialized = {
-        p: SPECIALIZED_AUROC[p]
+    in_domain = {
+        p: IN_DOMAIN_AUROC[p]
         for p in model_data
-        if p in SPECIALIZED_AUROC and SPECIALIZED_AUROC[p] > 0
+        if p in IN_DOMAIN_AUROC and IN_DOMAIN_AUROC[p] > 0
     }
 
-    # Report first k within 0.01 of specialized, or failure at k=10000
+    # Report first k within 0.01 of in-domain, or failure at k=10000
     for prefix, df in model_data.items():
-        if prefix not in specialized:
+        if prefix not in in_domain:
             continue
-        spec = specialized[prefix]
+        spec = in_domain[prefix]
         label = model_label(prefix)
         df_indexed = df.set_index("k")
         close = [
@@ -357,7 +357,7 @@ def main():
         if close:
             k_close, m_close = min(close, key=lambda t: t[0])
             print(
-                f"  {label}: within 0.01 of specialized ({spec:.3f}) at k={k_close} (AUROC={m_close:.3f})"
+                f"  {label}: within 0.01 of in-domain ({spec:.3f}) at k={k_close} (AUROC={m_close:.3f})"
             )
         else:
             m_at_10k = (
@@ -367,10 +367,10 @@ def main():
             )
             gap = spec - m_at_10k
             print(
-                f"  {label}: never within 0.01 — gap {gap:.3f} at k=10000 (specialized={spec:.3f}, AUROC={m_at_10k:.3f})"
+                f"  {label}: never within 0.01 — gap {gap:.3f} at k=10000 (in-domain={spec:.3f}, AUROC={m_at_10k:.3f})"
             )
 
-    fig = build_figure(model_data, show_std=not args.no_std, specialized=specialized)
+    fig = build_figure(model_data, show_std=not args.no_std, in_domain=in_domain)
 
     for fmt in args.format:
         out_path = output_dir / f"fine_tuning_auroc.{fmt}"

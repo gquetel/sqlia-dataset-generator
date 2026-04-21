@@ -1,7 +1,7 @@
 """
 Generate experimental train/test datasets for cross-dataset generalization studies.
 
-Creates generic (cross-dataset) and specialised (same-dataset) experiment files
+Creates LODO (leave-one-dataset-out) and in-domain experiment files
 by sampling from the full generated datasets in output/.
 
 Script generated using Claude Code.
@@ -14,13 +14,20 @@ import numpy as np
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = "/home/infres/gquetel/datasets/full"
+REPO_ROOT = "~/datasets/full"
 
 DATASETS = {
     "OurAirports": os.path.join(REPO_ROOT, "OurAirports.csv"),
     "sakila": os.path.join(REPO_ROOT, "sakila.csv"),
     "AdventureWorks": os.path.join(REPO_ROOT, "AdventureWorks.csv"),
     "OHR": os.path.join(REPO_ROOT, "OHR.csv"),
+}
+
+DATASET_LETTERS = {
+    "OurAirports": "a",
+    "sakila": "b",
+    "AdventureWorks": "c",
+    "OHR": "d",
 }
 
 TRAIN_SIZE = 100_000
@@ -110,9 +117,9 @@ def main():
         help="Generate small datasets (500 train, 5000 test) for one target only",
     )
     parser.add_argument(
-        "--specialised-only",
+        "--in-domain-only",
         action="store_true",
-        help="Only generate specialised (same-dataset) experiments, skip generic",
+        help="Only generate in-domain (same-dataset) experiments, skip lodo",
     )
     parser.add_argument(
         "--concept-drift",
@@ -177,11 +184,11 @@ def main():
             test_sets[name] = sample_split(DATASETS[name], "test", test_size, args.seed)
             print(f"  -> {len(test_sets[name])} test samples")
 
-        # Step 2: Generic datasets
-        if args.specialised_only:
-            print("\n=== Skipping generic datasets (--specialised-only) ===")
+        # Step 2: LODO datasets
+        if args.in_domain_only:
+            print("\n=== Skipping LODO datasets (--in-domain-only) ===")
         else:
-            print("\n=== Step 2: Generic datasets ===")
+            print("\n=== Step 2: LODO datasets ===")
             for target in targets:
                 sources = [n for n in names if n != target]
                 per_source = train_size // len(sources)
@@ -190,8 +197,10 @@ def main():
                 train_parts = []
                 for i, src in enumerate(sources):
                     n = per_source + (1 if i < remainder else 0)
+                    train_letters = "".join(sorted(DATASET_LETTERS[s] for s in sources))
+                    target_letter = DATASET_LETTERS[target]
                     print(
-                        f"  Sampling {n} train rows from {src} for generic-{target}..."
+                        f"  Sampling {n} train rows from {src} for {train_letters}-{target_letter}..."
                     )
                     part = sample_split(
                         DATASETS[src], "train", n, args.seed + hash(src) % 2**16
@@ -205,14 +214,18 @@ def main():
                 test_df["split"] = "test"
 
                 out = pd.concat([train_df, test_df], ignore_index=True)
-                outpath = os.path.join(args.output_dir, f"generic-{target}{suffix}.csv")
+                train_letters = "".join(sorted(DATASET_LETTERS[s] for s in sources))
+                target_letter = DATASET_LETTERS[target]
+                outpath = os.path.join(
+                    args.output_dir, f"{train_letters}-{target_letter}{suffix}.csv"
+                )
                 out.to_csv(outpath, index=False)
                 print(
                     f"  Saved {outpath} ({len(train_df)} train + {len(test_df)} test)"
                 )
 
-        # Step 3: Specialised datasets
-        print("\n=== Step 3: Specialised datasets ===")
+        # Step 3: In-domain datasets
+        print("\n=== Step 3: In-domain datasets ===")
         for target in targets:
             print(f"  Sampling {train_size} train rows from {target}...")
             train_df = sample_split(
@@ -224,7 +237,8 @@ def main():
             test_df["split"] = "test"
 
             out = pd.concat([train_df, test_df], ignore_index=True)
-            outpath = os.path.join(args.output_dir, f"specialised-{target}{suffix}.csv")
+            letter = DATASET_LETTERS[target]
+            outpath = os.path.join(args.output_dir, f"{letter}-{letter}{suffix}.csv")
             out.to_csv(outpath, index=False)
             print(f"  Saved {outpath} ({len(train_df)} train + {len(test_df)} test)")
 

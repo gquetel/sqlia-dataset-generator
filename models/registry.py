@@ -574,7 +574,7 @@ def build_model(
 # ---- Scoring helpers ----
 
 
-def decision_score_generic(model, X: np.ndarray):
+def decision_score_lodo(model, X: np.ndarray):
     """Negate OCSVM/LOF decision_function so positive = anomalous."""
     return -model.clf.decision_function(X)
 
@@ -584,7 +584,7 @@ def decision_score_ae(model, X: np.ndarray):
     return -model.clf.decision_function(X, is_tensor=True)
 
 
-def preprocessing_generic_ae(model, df: pd.DataFrame, use_scaler: bool = False):
+def preprocessing_lodo_ae(model, df: pd.DataFrame, use_scaler: bool = False):
     """Preprocess for AE scoring: extract features → tensor.
 
     Returns a 3-tuple (X_tensors, labels, valid_index). valid_index is the pandas
@@ -620,7 +620,7 @@ def get_preprocess_fn(config_name: str):
     """Return the appropriate preprocessing function for a model config."""
     config = MODEL_CONFIGS[config_name]
     if config.model_type == "ae":
-        return preprocessing_generic_ae
+        return preprocessing_lodo_ae
     return preprocessing_sklearn
 
 
@@ -629,4 +629,4 @@ def get_score_fn(config_name: str):
     config = MODEL_CONFIGS[config_name]
     if config.model_type == "ae":
         return decision_score_ae
-    return decision_score_generic
+    return decision_score_lodo

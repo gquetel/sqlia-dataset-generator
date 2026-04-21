@@ -1,7 +1,7 @@
 """
 Fine-Tuning Experiment (Full AE Fine-Tune on Target Domain)
 
-For each generic model, fine-tune the full autoencoder on k normal samples from
+For each LODO model, fine-tune the full autoencoder on k normal samples from
 the target domain, then recompute the threshold from those same samples.
 Sweep k over a log scale and report balanced accuracy vs. k.
 
@@ -9,7 +9,7 @@ The feature extractor is not retrained (too expensive / no labels needed).
 Only the AE weights are updated via continued training on target-domain normals.
 
 Protocol:
-  - Load pre-trained generic model (fails if not found)
+  - Load pre-trained LODO model (fails if not found)
   - Pre-extract features for the test set once (extractor is frozen)
   - k=0 baseline: original model + original threshold, no fine-tuning
   - For each k:
@@ -40,7 +40,7 @@ sys.path.insert(0, str(REPO_ROOT / "models"))
 
 from constants import DotDict, ProjectPaths
 from evaluation import compute_all_metrics, get_threshold_for_max_rate
-from registry import build_model, decision_score_ae, preprocessing_generic_ae
+from registry import build_model, decision_score_ae, preprocessing_lodo_ae
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +154,7 @@ def run_sweep(
     """Sweep over k values, fine-tune AE, evaluate. Return results DataFrame."""
     # Pre-extract test features once (extractor is frozen throughout)
     logger.info("Pre-extracting test features...")
-    X_test_tensors, _, valid_index = preprocessing_generic_ae(model, df_test)
+    X_test_tensors, _, valid_index = preprocessing_lodo_ae(model, df_test)
     n_dropped = len(df_test) - len(X_test_tensors)
     if n_dropped > 0:
         logger.warning("Extractor dropped %d rows; assigning score=0", n_dropped)
@@ -197,7 +197,7 @@ def run_sweep(
             df_k = df_train_normal.sample(n=k, random_state=seed)
 
             # Extract features for k samples (extractor is frozen)
-            X_k, _, _ = preprocessing_generic_ae(model, df_k)
+            X_k, _, _ = preprocessing_lodo_ae(model, df_k)
 
             # Fine-tune AE and get new threshold
             threshold = finetune_ae(model, X_k, original_state)
@@ -271,7 +271,7 @@ def main():
         ],
     )
     parser.add_argument(
-        "--model-path", required=True, help="Path to .pth file of generic model"
+        "--model-path", required=True, help="Path to .pth file of LODO model"
     )
     parser.add_argument(
         "--target-dataset", required=True, help="Path to target domain CSV"

@@ -64,5 +64,4 @@ Activated when `extractor.cache_dir` is set. Caches the GAUR traces produced by 
 Activated by default; disable with `--no-feature-cache`. Caches the final preprocessed `(X, labels, valid_index)` arrays to disk, keyed by `{ModelClass}-{split}-{df_hash}-{state_tag}`. Notes:
 
 - Kakisim bypasses this cache and manages its own internal embedding cache.
-- For `GaurAblationExtractor`, the `state_tag` includes a hash of the `gaur_features` parameter so that `lex`, `synt`, and `sem` variants each get their own cache file.
 - Embedding-based extractors (SecureBERT, CodeBERT, etc.) maintain a separate embeddings cache keyed by query content.

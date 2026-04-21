@@ -21,14 +21,14 @@ cd experiments/
 DATASET_DIR=~/datasets/100k-training
 
 DATASETS="\
-  --dataset generic-AdventureWorks $DATASET_DIR/generic-AdventureWorks.csv \
-  --dataset generic-OHR $DATASET_DIR/generic-OHR.csv \
-  --dataset generic-OurAirports $DATASET_DIR/generic-OurAirports.csv \
-  --dataset generic-sakila $DATASET_DIR/generic-sakila.csv \
-  --dataset specialised-AdventureWorks $DATASET_DIR/specialised-AdventureWorks.csv \
-  --dataset specialised-OHR $DATASET_DIR/specialised-OHR.csv \
-  --dataset specialised-OurAirports $DATASET_DIR/specialised-OurAirports.csv \
-  --dataset specialised-sakila $DATASET_DIR/specialised-sakila.csv"
+  --dataset abd-c $DATASET_DIR/abd-c.csv \
+  --dataset abc-d $DATASET_DIR/abc-d.csv \
+  --dataset bcd-a $DATASET_DIR/bcd-a.csv \
+  --dataset acd-b $DATASET_DIR/acd-b.csv \
+  --dataset c-c $DATASET_DIR/c-c.csv \
+  --dataset d-d $DATASET_DIR/d-d.csv \
+  --dataset a-a $DATASET_DIR/a-a.csv \
+  --dataset b-b $DATASET_DIR/b-b.csv"
 
 # We run lexical and syntactic metrics on entire datasets
 srun python3 ./diversity_metric.py $DATASETS --vocab --parse-trees --output-dir ../output/results/diversity_metric_lex_syn

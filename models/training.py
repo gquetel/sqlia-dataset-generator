@@ -37,10 +37,10 @@ from registry import (
     MODEL_CONFIGS,
     build_model,
     decision_score_ae,
-    decision_score_generic,
+    decision_score_lodo,
     get_preprocess_fn,
     get_score_fn,
-    preprocessing_generic_ae,
+    preprocessing_lodo_ae,
     preprocessing_sklearn,
 )
 
@@ -178,7 +178,7 @@ def init_args() -> argparse.Namespace:
         "--with-shap",
         action="store_true",
         dest="with_shap",
-        help="Run SHAP analysis after training (only valid for generic/specialised datasets).",
+        help="Run SHAP analysis after training (only valid for lodo/in_domain datasets).",
     )
 
     return parser.parse_args()
@@ -301,7 +301,7 @@ def preprocess_for_user_inputs_training(df: pd.DataFrame):
     df["full_query"] = df["user_inputs"]
 
 
-def get_scores_generic(
+def get_scores_lodo(
     df: pd.DataFrame,
     model,
     preprocess_fn: Callable[[Any, pd.DataFrame], tuple[np.ndarray, np.ndarray]],
@@ -309,7 +309,7 @@ def get_scores_generic(
     batch_size: int | None = None,
     use_scaler: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Generic scoring loop.
+    """Shared scoring loop.
 
     Returns (labels, scores, valid_index) where valid_index contains the pandas
     index values of rows that were actually scored. Some preprocessors (e.g. gaur)
@@ -345,7 +345,7 @@ def get_scores_generic(
     return np.array(all_labels), np.array(all_scores), np.array(all_valid_indices)
 
 
-def compute_metrics_generic(
+def compute_metrics_lodo(
     model,
     df_test: pd.DataFrame,
     df_val: pd.DataFrame,
@@ -382,7 +382,7 @@ def compute_metrics_generic(
                 batch_size=batch,
             )
     else:
-        _, s_val, _ = get_scores_generic(
+        _, s_val, _ = get_scores_lodo(
             df=df_val,
             batch_size=batch,
             model=model,
@@ -391,7 +391,7 @@ def compute_metrics_generic(
             score_fn=get_decision_scores_fn,
         )
         if not skip_eval:
-            l_test, s_test, _ = get_scores_generic(
+            l_test, s_test, _ = get_scores_lodo(
                 df=df_test,
                 batch_size=batch,
                 model=model,
@@ -519,7 +519,7 @@ def _train_single_model(
     preprocess_fn = get_preprocess_fn(config_name)
     score_fn = get_score_fn(config_name)
 
-    labels, scores, threshold = compute_metrics_generic(
+    labels, scores, threshold = compute_metrics_lodo(
         model=model,
         df_test=df_test,
         df_val=df_val,

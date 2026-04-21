@@ -8,9 +8,9 @@ conda activate conda-env-3.12
 DATASET_DIR=~/datasets/100k-training
 
 python3 experiments/h3_tokenizer_analysis.py \
-  --dataset A $DATASET_DIR/generic-OurAirports.csv \
-  --dataset B $DATASET_DIR/generic-sakila.csv \
-  --dataset C $DATASET_DIR/generic-AdventureWorks.csv \
-  --dataset D $DATASET_DIR/generic-OHR.csv \
+  --dataset A $DATASET_DIR/bcd-a.csv \
+  --dataset B $DATASET_DIR/acd-b.csv \
+  --dataset C $DATASET_DIR/abd-c.csv \
+  --dataset D $DATASET_DIR/abc-d.csv \
 
 echo "Job finished at: $(date)"

@@ -1,61 +1,52 @@
 """
-Generic vs Specialised Comparison + Transfer Learning Matrix Report
+LODO vs In-domain Comparison + Transfer Learning Matrix Report
 
 Generates all comparison plots across all feature extractor types:
-  1. Generic vs Specialised: bar charts, ROC curves, recall heatmaps
+  1. LODO vs In-domain: bar charts, ROC curves, recall heatmaps
   2. Transfer Learning matrices: AUROC / AUPRC / F1 for every train×test pair
 
 Expected results directory structure (flat, one directory per model×scenario):
 
     {results_dir}/
-      ae_li_generic/
+      ae_li_lodo/
         ae_li_BCD_on_A/results.csv
         ae_li_BCD_on_A/roc_curves/ae_li_BCD.csv
         ae_li_ABC_on_D/results.csv   ← also used by TL matrix
         ...
-      ae_li_specialised/
+      ae_li_in_domain/
         ae_li_A_on_A/results.csv
         ae_li_A_on_A/roc_curves/ae_li_A.csv
         ae_li_A_on_B/results.csv     ← cross-domain, used by TL matrix
         ...
-      ae_securebert_generic/ ...
-      ae_securebert_specialised/ ...
+      ae_securebert_lodo/ ...
+      ae_securebert_in_domain/ ...
       ...
 
 Output layout:
 
     {output_dir}/
-      generic-vs-specialised/
-        metrics_ae_li.png
-        roc_ae_li.png
-        recall_technique_ae_li.png
-        recall_stmt_ae_li.png
-        ...
-        balanced_accuracy_combined_heatmap.png
-      tl-matrix/
-        tl_ae_li_auroc.png
-        tl_ae_li_auprc.png
-        tl_ae_li_f1.png
-        ...
+      auroc_lodo_vs_in_domain.csv
+      tl_combined_auroc.png
+      ...
 
 Usage:
     # Auto-discover models from results directory
-    python experiments/report_generic_vs_specialised.py \\
+    python experiments/report_lodo_vs_in_domain.py \\
         --results-dir ~/experiences-results/2026-02-23
 
     # Specify models explicitly
-    python experiments/report_generic_vs_specialised.py \\
+    python experiments/report_lodo_vs_in_domain.py \\
         --results-dir ~/experiences-results/2026-02-23 \\
         --models ae_li ae_securebert ae_kakisim_c ae_loginov
 
     # Custom output directory and format(s)
-    python experiments/report_generic_vs_specialised.py \\
+    python experiments/report_lodo_vs_in_domain.py \\
         --results-dir ~/experiences-results/2026-02-23 \\
         --output-dir output/results \\
         --format png pdf
 
     # Include WAFAMOLE (E) as external test-only dataset
-    python experiments/report_generic_vs_specialised.py \\
+    python experiments/report_lodo_vs_in_domain.py \\
         --results-dir ~/experiences-results/2026-02-23 \\
         --include-wafamole
 """
@@ -91,7 +82,7 @@ KNOWN_LABELS: dict[str, str] = {
     "ae_sentbert": "SentenceBERT (all-mpnet-base-v2)",
 }
 
-COLORS = {"generic": "#636EFA", "specialised": "#EF553B"}
+COLORS = {"lodo": "#636EFA", "in_domain": "#EF553B"}
 CONCEPT_DRIFT_COLORS = {"origin": "#636EFA", "shifted": "#EF553B"}
 
 METRIC_LABELS: dict[str, str] = {
@@ -134,8 +125,8 @@ _PCT_COLS = [
 ]
 
 # TL matrix: leave-one-out training sets and single-dataset training sets
-TL_GENERIC_TRAIN_SETS = ["ABC", "ABD", "ACD", "BCD"]
-TL_SPECIALISED_TRAIN_SETS = ["D", "C", "B", "A"]
+TL_LODO_TRAIN_SETS = ["ABC", "ABD", "ACD", "BCD"]
+TL_IN_DOMAIN_TRAIN_SETS = ["D", "C", "B", "A"]
 TL_TEST_SETS = ["A", "B", "C", "D"]
 TL_METRIC_DISPLAY = {"auroc": "AUROC", "auprc": "AUPRC", "f1": "F1 Score"}
 
@@ -166,24 +157,42 @@ def _normalize_pct_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _find_results_csv(parent: Path, run: str) -> Path | None:
+    """Return the results.csv path for a run directory, trying with and without _testing suffix.
+
+    evaluate_model.py derives the run directory name from the model file stem, so
+    --testing runs produce e.g. ae_li_ABC_testing_on_A instead of ae_li_ABC_on_A.
+    We try both forms: the canonical name and the one with _testing injected before _on_.
+    """
+    for candidate in (run, run.replace("_on_", "_testing_on_", 1)):
+        p = parent / candidate / "results.csv"
+        if p.exists():
+            return p
+    return None
+
+
 def load_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
-    """Load generic/specialised results for the 4 leave-one-out configurations.
+    """Load lodo/in-domain results for the 4 leave-one-out configurations.
 
     Paths:
-      generic:     {results_dir}/{prefix}_generic/{prefix}_{complement}_on_{letter}/results.csv
-      specialised: {results_dir}/{prefix}_specialised/{prefix}_{letter}_on_{letter}/results.csv
+      lodo:      {results_dir}/{prefix}_lodo/{prefix}_{complement}_on_{letter}/results.csv
+      in_domain: {results_dir}/{prefix}_in_domain/{prefix}_{letter}_on_{letter}/results.csv
+
+    Also handles a _testing suffix on the run directory (produced when evaluate_model.py
+    is called with --testing, which appends _testing to the model name).
     """
     rows = []
     for dataset in DATASETS:
         letter = DATASET_LETTERS[dataset]
         complement = leave_one_out_complement(letter)
-        for scenario in ("generic", "specialised"):
-            if scenario == "generic":
+        for scenario in ("lodo", "in_domain"):
+            if scenario == "lodo":
                 run = f"{model_prefix}_{complement}_on_{letter}"
             else:
                 run = f"{model_prefix}_{letter}_on_{letter}"
-            path = results_dir / f"{model_prefix}_{scenario}" / run / "results.csv"
-            if path.exists():
+            subdir = results_dir / f"{model_prefix}_{scenario}"
+            path = _find_results_csv(subdir, run)
+            if path is not None:
                 df = pd.read_csv(path)
                 df["dataset"] = dataset
                 df["type"] = scenario
@@ -196,11 +205,11 @@ def load_results(results_dir: Path, model_prefix: str) -> pd.DataFrame:
 
 
 def discover_models(results_dir: Path) -> list[str]:
-    """Return model prefixes found as *_generic/*_specialised pairs in results_dir."""
+    """Return model prefixes found as *_lodo/*_in_domain pairs in results_dir."""
     prefixes = []
-    for p in sorted(results_dir.glob("*_generic")):
-        prefix = p.name.removesuffix("_generic")
-        if (results_dir / f"{prefix}_specialised").exists():
+    for p in sorted(results_dir.glob("*_lodo")):
+        prefix = p.name.removesuffix("_lodo")
+        if (results_dir / f"{prefix}_in_domain").exists():
             prefixes.append(prefix)
     return prefixes
 
@@ -216,7 +225,7 @@ def load_tl_matrix(
     indexed by training set with test-set columns.
     """
     train_sets = (
-        TL_GENERIC_TRAIN_SETS if scenario == "generic" else TL_SPECIALISED_TRAIN_SETS
+        TL_LODO_TRAIN_SETS if scenario == "lodo" else TL_IN_DOMAIN_TRAIN_SETS
     )
     subdir = results_dir / f"{model_prefix}_{scenario}"
 
@@ -226,8 +235,8 @@ def load_tl_matrix(
 
     for train in train_sets:
         for test in TL_TEST_SETS:
-            csv_path = subdir / f"{model_prefix}_{train}_on_{test}" / "results.csv"
-            if csv_path.exists():
+            csv_path = _find_results_csv(subdir, f"{model_prefix}_{train}_on_{test}")
+            if csv_path is not None:
                 row = pd.read_csv(csv_path).iloc[0]
                 auroc.loc[train, test] = _parse_pct(row["rocauc"])
                 auprc.loc[train, test] = _parse_pct(row["auprc"])
@@ -302,7 +311,7 @@ def plot_roc_curves(
 
 
 def _heatmap_fig(results_df: pd.DataFrame, col_map: dict[str, str], title: str):
-    """Generic Generic/Specialised heatmap for any recall-column mapping."""
+    """General-purpose LODO/in-domain heatmap for any recall-column mapping."""
     available = {k: v for k, v in col_map.items() if k in results_df.columns}
     if not available:
         print(f"  [skip] no matching columns: {title}")
@@ -314,10 +323,10 @@ def _heatmap_fig(results_df: pd.DataFrame, col_map: dict[str, str], title: str):
     fig = make_subplots(
         rows=1,
         cols=2,
-        subplot_titles=["Generic", "Specialised"],
+        subplot_titles=["LODO", "In-domain"],
         horizontal_spacing=0.15,
     )
-    for col_idx, model_type in enumerate(("generic", "specialised"), 1):
+    for col_idx, model_type in enumerate(("lodo", "in_domain"), 1):
         subset = results_df[results_df["type"] == model_type].sort_values("dataset")
         z = [[row[c] for c in col_keys] for _, row in subset.iterrows()]
         text = [[f"{v:.1f}" for v in row] for row in z]
@@ -427,19 +436,19 @@ def plot_combined_metric(
 
 
 def _tl_heatmap_combined(
-    generic_matrix: pd.DataFrame,
-    specialised_matrix: pd.DataFrame,
+    lodo_matrix: pd.DataFrame,
+    in_domain_matrix: pd.DataFrame,
     title: str,
 ) -> go.Figure:
-    """Side-by-side heatmap: generic (left) and specialised (right) TL matrices."""
+    """Side-by-side heatmap: LODO (left) and in-domain (right) TL matrices."""
     fig = make_subplots(
         rows=1,
         cols=2,
-        subplot_titles=["Generic", "Specialised"],
+        subplot_titles=["LODO", "In-domain"],
         horizontal_spacing=0.15,
     )
 
-    for col_idx, matrix in enumerate((generic_matrix, specialised_matrix), 1):
+    for col_idx, matrix in enumerate((lodo_matrix, in_domain_matrix), 1):
         flat = matrix.values.astype(float)
         has_data = ~pd.isna(flat)
         is_pct = flat[has_data].max() > 1 if has_data.any() else False
@@ -514,22 +523,22 @@ def plot_tl_matrices(
     model_prefix: str,
     label: str,
 ) -> dict[str, go.Figure]:
-    """Generate combined TL matrix figures (generic + specialised side-by-side) for one model."""
+    """Generate combined TL matrix figures (LODO + in-domain side-by-side) for one model."""
     figs: dict[str, go.Figure] = {}
 
-    generic_matrices = load_tl_matrix(results_dir, model_prefix, "generic")
-    specialised_matrices = load_tl_matrix(results_dir, model_prefix, "specialised")
+    lodo_matrices = load_tl_matrix(results_dir, model_prefix, "lodo")
+    in_domain_matrices = load_tl_matrix(results_dir, model_prefix, "in_domain")
 
-    has_generic = any(m.notna().any().any() for m in generic_matrices.values())
-    has_specialised = any(m.notna().any().any() for m in specialised_matrices.values())
+    has_lodo = any(m.notna().any().any() for m in lodo_matrices.values())
+    has_in_domain = any(m.notna().any().any() for m in in_domain_matrices.values())
 
-    if not has_generic and not has_specialised:
+    if not has_lodo and not has_in_domain:
         print(f"  [skip] no TL matrix data for {label}")
         return figs
 
-    for metric_key in generic_matrices:
-        g_mat = generic_matrices[metric_key]
-        s_mat = specialised_matrices[metric_key]
+    for metric_key in lodo_matrices:
+        g_mat = lodo_matrices[metric_key]
+        s_mat = in_domain_matrices[metric_key]
         g_has = g_mat.notna().any().any()
         s_has = s_mat.notna().any().any()
 
@@ -551,7 +560,7 @@ def plot_all_models_tl_matrix(
     models: list[dict],
     metric_key: str,
 ) -> go.Figure | None:
-    """2-row combined TL matrix for all models: row 1 = generic, row 2 = specialised.
+    """2-row combined TL matrix for all models: row 1 = LODO, row 2 = in-domain.
 
     Each column corresponds to one model. Intended for multi-model comparison.
     """
@@ -575,10 +584,10 @@ def plot_all_models_tl_matrix(
     for col_idx, m in enumerate(models, 1):
         prefix = m["prefix"]
         all_matrices = {
-            "generic": load_tl_matrix(results_dir, prefix, "generic"),
-            "specialised": load_tl_matrix(results_dir, prefix, "specialised"),
+            "lodo": load_tl_matrix(results_dir, prefix, "lodo"),
+            "in_domain": load_tl_matrix(results_dir, prefix, "in_domain"),
         }
-        for row_idx, scenario in enumerate(("generic", "specialised"), 1):
+        for row_idx, scenario in enumerate(("lodo", "in_domain"), 1):
             matrix = all_matrices[scenario][metric_key]
             flat = matrix.values.astype(float)
             has_data = ~pd.isna(flat)
@@ -743,9 +752,9 @@ def export_auroc_delta_csv(
     models: list[dict],
     output_dir: Path,
     split_col: str = "type",
-    cat_a: str = "specialised",
-    cat_b: str = "generic",
-    filename: str = "auroc_generic_vs_specialised.csv",
+    cat_a: str = "in_domain",
+    cat_b: str = "lodo",
+    filename: str = "auroc_lodo_vs_in_domain.csv",
 ) -> None:
     """Export a CSV with AUROC for two categories and their delta (cat_a - cat_b) per model×dataset."""
     rows = []
@@ -801,7 +810,7 @@ def export_figure(fig: go.Figure, stem: Path, formats: list[str]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate generic vs specialised comparison + TL matrix reports "
+            "Generate LODO vs in-domain comparison + TL matrix reports "
             "for all model types."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -812,8 +821,8 @@ def main() -> int:
         required=True,
         type=Path,
         help=(
-            "Root results directory. Must contain flat {prefix}_generic/ and "
-            "{prefix}_specialised/ subdirectories (e.g. ae_li_generic/, ae_li_specialised/)."
+            "Root results directory. Must contain flat {prefix}_lodo/ and "
+            "{prefix}_in_domain/ subdirectories (e.g. ae_li_lodo/, ae_li_in_domain/)."
         ),
     )
     parser.add_argument(
@@ -832,7 +841,7 @@ def main() -> int:
         default=Path("output/results"),
         help=(
             "Root output directory (default: output/results). "
-            "Figures go to {output_dir}/generic-vs-specialised/ and {output_dir}/tl-matrix/."
+            "All figures and CSVs are saved under {output_dir}/lodo-vs-in-domain/."
         ),
     )
     parser.add_argument(
@@ -869,7 +878,7 @@ def main() -> int:
         prefixes = discover_models(results_dir)
         if not prefixes:
             if not discover_concept_drift_models(results_dir):
-                print(f"ERROR: no *_generic/*_specialised pairs found in {results_dir}")
+                print(f"ERROR: no *_lodo/*_in_domain pairs found in {results_dir}")
                 return 1
         else:
             print(f"Discovered models: {prefixes}")
@@ -885,15 +894,13 @@ def main() -> int:
             all_results[m["prefix"]] = df
             print(f"  {m['prefix']}: {len(df)} rows")
 
-    gvs_dir = args.output_dir / "generic-vs-specialised"
-    tl_dir = args.output_dir / "tl-matrix"
+    out_dir = args.output_dir / "lodo-vs-in-domain"
     if models:
-        gvs_dir.mkdir(parents=True, exist_ok=True)
-        tl_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
         print("\n=== AUROC delta CSV ===")
-        export_auroc_delta_csv(all_results, models, gvs_dir)
+        export_auroc_delta_csv(all_results, models, out_dir)
 
-    # # Generic vs Specialised (ROC curves + recall plots — commented out, focusing on TL AUROC matrix)
+    # # LODO vs In-domain (ROC curves + recall plots — commented out, focusing on TL AUROC matrix)
     # for m in models:
     #     prefix, label = m["prefix"], m["label"]
     #     df = all_results[prefix]
@@ -902,7 +909,7 @@ def main() -> int:
     #     per_model_figs = {
     #         f"roc_{prefix}": plot_roc_curves(
     #             df,
-    #             f"ROC Curves: Generic vs Specialised ({label})",
+    #             f"ROC Curves: LODO vs In-domain ({label})",
     #             scenarios=[
     #                 (
     #                     "generic",
@@ -923,31 +930,31 @@ def main() -> int:
     #             ],
     #         ),
     #         f"recall_technique_{prefix}": plot_recall_per_technique(
-    #             df, f"Recall per Attack Technique: Generic vs Specialised ({label})"
+    #             df, f"Recall per Attack Technique: LODO vs In-domain ({label})"
     #         ),
     #         f"recall_stmt_{prefix}": plot_recall_per_statement_type(
-    #             df, f"Recall per Statement Type: Generic vs Specialised ({label})"
+    #             df, f"Recall per Statement Type: LODO vs In-domain ({label})"
     #         ),
     #     }
     #     for name, fig in per_model_figs.items():
     #         if fig is not None:
     #             export_figure(fig, gvs_dir / name, args.format)
 
-    # Transfer Learning Matrices
+    # Transfer Learning Matrices (AUROC only)
     print("\n=== Transfer Learning Matrices ===")
     if len(models) > 1:
-        for metric_key in ("auroc", "auprc", "f1"):
-            fig = plot_all_models_tl_matrix(results_dir, models, metric_key)
-            if fig is not None:
-                export_figure(fig, tl_dir / f"tl_combined_{metric_key}", args.format)
-            else:
-                print(f"  [skip] combined {metric_key}: no data")
+        fig = plot_all_models_tl_matrix(results_dir, models, "auroc")
+        if fig is not None:
+            export_figure(fig, out_dir / "tl_combined_auroc", args.format)
+        else:
+            print("  [skip] combined auroc: no data")
     else:
         for m in models:
             print(f"\n=== TL: {m['label']} ===")
             tl_figs = plot_tl_matrices(results_dir, m["prefix"], m["label"])
-            for name, fig in tl_figs.items():
-                export_figure(fig, tl_dir / name, args.format)
+            auroc_key = f"tl_{m['prefix']}_auroc"
+            if auroc_key in tl_figs:
+                export_figure(tl_figs[auroc_key], out_dir / auroc_key, args.format)
 
     # Concept Drift (auto-detected)
     cd_prefixes = discover_concept_drift_models(results_dir)
@@ -980,8 +987,7 @@ def main() -> int:
 
     print(f"\nDone.")
     if models:
-        print(f"  Generic vs specialised : {gvs_dir.resolve()}")
-        print(f"  TL matrices            : {tl_dir.resolve()}")
+        print(f"  Output                 : {out_dir.resolve()}")
     return 0
 
 

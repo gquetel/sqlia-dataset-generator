@@ -492,7 +492,7 @@ def plot_scatter(means_df: pd.DataFrame, output_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Source-specialised feature discriminability evaluation"
+        description="Source-in-domain feature discriminability evaluation"
     )
     parser.add_argument(
         "--dataset",

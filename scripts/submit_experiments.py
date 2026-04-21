@@ -3,7 +3,7 @@
 Unified experiment launcher.
 
 Generates SLURM scripts (or runs locally) for training and evaluating models
-across generic, specialised, and wafamole experiment modes.
+across lodo, in_domain, and wafamole experiment modes.
 """
 
 import argparse
@@ -104,9 +104,9 @@ DATASETS = {
     "E": "wafamole",
 }
 
-# Generic mode: leave-one-out (train on 3, test on all 4)
+# LODO mode: leave-one-out (train on 3, test on all 4)
 # Scenario N trains on the dataset that *excludes* dataset N from {A,B,C,D}
-GENERIC_SCENARIOS = {
+LODO_SCENARIOS = {
     1: {
         "train_label": "BCD",
         "train_dataset": "OurAirports",
@@ -129,8 +129,8 @@ GENERIC_SCENARIOS = {
     },
 }
 
-# Specialised mode: train on single dataset, test on all 4
-SPECIALISED_SCENARIOS = {
+# In-domain mode: train on single dataset, test on all 4
+IN_DOMAIN_SCENARIOS = {
     1: {
         "train_label": "A",
         "train_dataset": "OurAirports",
@@ -195,12 +195,16 @@ def conda_env_for(model: str) -> str:
     return CONDA_ENV
 
 
-def dataset_filename(mode: str, db_name: str) -> str:
-    """Return the CSV filename for a dataset.
+def lodo_filename(test_letter: str) -> str:
+    """Return the CSV filename for a LODO scenario with `test_letter` as the held-out dataset."""
+    train = "".join(sorted(l for l in "ABCD" if l != test_letter)).lower()
+    return f"{train}-{test_letter.lower()}.csv"
 
-    mode is 'generic' or 'specialised'.
-    """
-    return f"{mode}-{db_name}.csv"
+
+def in_domain_filename(letter: str) -> str:
+    """Return the CSV filename for an in-domain scenario."""
+    l = letter.lower()
+    return f"{l}-{l}.csv"
 
 
 def log_dir_for(model: str, job_suffix: str) -> str:
@@ -317,7 +321,7 @@ def eval_cmd(
     return cmd
 
 
-def generate_generic_script(
+def generate_lodo_script(
     model: str,
     scenario_num: int,
     testing: bool,
@@ -329,17 +333,17 @@ def generate_generic_script(
     n_samples: int | None = None,
     run_id: int | None = None,
 ) -> str:
-    """Generate a script for a generic (leave-one-out) scenario."""
-    scenario = GENERIC_SCENARIOS[scenario_num]
+    """Generate a script for a LODO (leave-one-dataset-out) scenario."""
+    scenario = LODO_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
-    train_file = dataset_filename("generic", scenario["train_dataset"])
-    run_suffix = f"_repro{run_id}" if run_id is not None else ""
-    models_dir = f"./output/checkpoints/{model}_generic{run_suffix}"
-    results_dir = f"./output/results/{model}_generic{run_suffix}"
-    # The held-out (test) dataset for this generic scenario
+    # The held-out (test) dataset for this LODO scenario
     training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
+    train_file = lodo_filename(training_test_label)
+    run_suffix = f"_repro{run_id}" if run_id is not None else ""
+    models_dir = f"./output/checkpoints/{model}_lodo{run_suffix}"
+    results_dir = f"./output/results/{model}_lodo{run_suffix}"
 
-    job_suffix = f"generic_s{scenario_num}{run_suffix}"
+    job_suffix = f"lodo_s{scenario_num}{run_suffix}"
     log_dir = log_dir_for(model, job_suffix)
     timestamp = make_timestamp()
     log_file = f"{timestamp}.log"
@@ -349,8 +353,17 @@ def generate_generic_script(
         test_labels = [training_test_label]
     else:
         test_labels = scenario["test_labels"]
+    # Primary held-out dataset: use LODO file; other datasets: use in-domain files
     test_datasets = [
-        (dataset_filename("generic", DATASETS[label]), label) for label in test_labels
+        (
+            (
+                lodo_filename(label)
+                if label == training_test_label
+                else in_domain_filename(label)
+            ),
+            label,
+        )
+        for label in test_labels
     ]
 
     parts = []
@@ -364,14 +377,14 @@ def generate_generic_script(
             testing, datasets_dir, log_dir, log_file, conda_env_for(model), n_samples
         )
     )
-    parts.append(f'echo "Running generic scenario {scenario_num}: {model_name}"')
+    parts.append(f'echo "Running LODO scenario {scenario_num}: {model_name}"')
     parts.append("")
     if not eval_only:
         parts.append(f"# Train {model_name}")
         parts.append(
             train_cmd(
                 model,
-                "generic",
+                "lodo",
                 train_file,
                 model_name,
                 models_dir,
@@ -397,7 +410,7 @@ def generate_generic_script(
     return "\n".join(parts)
 
 
-def generate_specialised_script(
+def generate_in_domain_script(
     model: str,
     scenario_num: int,
     testing: bool,
@@ -409,17 +422,16 @@ def generate_specialised_script(
     n_samples: int | None = None,
     run_id: int | None = None,
 ) -> str:
-    """Generate a script for a specialised (single-dataset) scenario."""
-    scenario = SPECIALISED_SCENARIOS[scenario_num]
+    """Generate a script for an in-domain (single-dataset) scenario."""
+    scenario = IN_DOMAIN_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
-    train_file = dataset_filename("specialised", scenario["train_dataset"])
-    run_suffix = f"_repro{run_id}" if run_id is not None else ""
-    models_dir = f"./output/checkpoints/{model}_specialised{run_suffix}"
-    results_dir = f"./output/results/{model}_specialised{run_suffix}"
-    # For specialised, the test set during training is the same dataset as training
     training_test_label = scenario["train_label"]
+    train_file = in_domain_filename(training_test_label)
+    run_suffix = f"_repro{run_id}" if run_id is not None else ""
+    models_dir = f"./output/checkpoints/{model}_in_domain{run_suffix}"
+    results_dir = f"./output/results/{model}_in_domain{run_suffix}"
 
-    job_suffix = f"specialised_s{scenario_num}{run_suffix}"
+    job_suffix = f"in_domain_s{scenario_num}{run_suffix}"
     log_dir = log_dir_for(model, job_suffix)
     timestamp = make_timestamp()
     log_file = f"{timestamp}.log"
@@ -429,10 +441,7 @@ def generate_specialised_script(
         test_labels = [scenario["train_label"]]
     else:
         test_labels = scenario["test_labels"]
-    test_datasets = [
-        (dataset_filename("specialised", DATASETS[label]), label)
-        for label in test_labels
-    ]
+    test_datasets = [(in_domain_filename(label), label) for label in test_labels]
 
     parts = []
     if slurm:
@@ -445,14 +454,14 @@ def generate_specialised_script(
             testing, datasets_dir, log_dir, log_file, conda_env_for(model), n_samples
         )
     )
-    parts.append(f'echo "Running specialised scenario {scenario_num}: {model_name}"')
+    parts.append(f'echo "Running in-domain scenario {scenario_num}: {model_name}"')
     parts.append("")
     if not eval_only:
         parts.append(f"# Train {model_name}")
         parts.append(
             train_cmd(
                 model,
-                "specialised",
+                "in_domain",
                 train_file,
                 model_name,
                 models_dir,
@@ -488,11 +497,11 @@ def generate_wafamole_script(
     no_train: bool = False,
 ) -> str:
     """Generate a script for wafamole experiments (3 phases)."""
-    spec_models_dir = f"./output/checkpoints/{model}_specialised"
-    gen_models_dir = f"./output/checkpoints/{model}_generic"
-    spec_results_dir = f"./output/results/{model}_specialised"
-    gen_results_dir = f"./output/results/{model}_generic"
-    wafamole_file = dataset_filename("specialised", "wafamole")
+    spec_models_dir = f"./output/checkpoints/{model}_in_domain"
+    gen_models_dir = f"./output/checkpoints/{model}_lodo"
+    spec_results_dir = f"./output/results/{model}_in_domain"
+    gen_results_dir = f"./output/results/{model}_lodo"
+    wafamole_file = in_domain_filename("E")
 
     job_suffix = "wafamole"
     log_dir = log_dir_for(model, job_suffix)
@@ -513,11 +522,11 @@ def generate_wafamole_script(
     # Phase 1: Train E model
     model_name_e = f"{model}_E"
     if not no_train:
-        parts.append("# ── Phase 1: Train E (specialised on wafamole) ──")
+        parts.append("# ── Phase 1: Train E (in-domain on wafamole) ──")
         parts.append(
             train_cmd(
                 model,
-                "specialised",
+                "in_domain",
                 wafamole_file,
                 model_name_e,
                 spec_models_dir,
@@ -533,8 +542,8 @@ def generate_wafamole_script(
         parts.append("# ── Phase 2: Evaluate all models on wafamole (E) ──")
         wafamole_test = [(wafamole_file, "E")]
 
-        parts.append('echo "Evaluating generic models on wafamole..."')
-        for scenario in GENERIC_SCENARIOS.values():
+        parts.append('echo "Evaluating LODO models on wafamole..."')
+        for scenario in LODO_SCENARIOS.values():
             gname = f"{model}_{scenario['train_label']}"
             parts.append(
                 eval_cmd(
@@ -548,8 +557,8 @@ def generate_wafamole_script(
             )
             parts.append("")
 
-        parts.append('echo "Evaluating specialised models on wafamole..."')
-        for scenario in SPECIALISED_SCENARIOS.values():
+        parts.append('echo "Evaluating in-domain models on wafamole..."')
+        for scenario in IN_DOMAIN_SCENARIOS.values():
             sname = f"{model}_{scenario['train_label']}"
             parts.append(
                 eval_cmd(
@@ -579,8 +588,7 @@ def generate_wafamole_script(
     if not no_train:
         parts.append("# ── Phase 3: Evaluate E model on other datasets ──")
         other_test = [
-            (dataset_filename("specialised", DATASETS[label]), label)
-            for label in ["A", "B", "C", "D"]
+            (in_domain_filename(label), label) for label in ["A", "B", "C", "D"]
         ]
         parts.append(
             eval_cmd(
@@ -625,10 +633,11 @@ def generate_malignancy_script(
     no_cache: bool = False,
 ) -> str:
     """Generate a script for one malignancy scenario: train model if absent, then run malignancy."""
-    scenario = GENERIC_SCENARIOS[scenario_num]
+    scenario = LODO_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
-    train_file = dataset_filename("generic", scenario["train_dataset"])
-    models_dir = f"./output/checkpoints/{model}_generic"
+    training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
+    train_file = lodo_filename(training_test_label)
+    models_dir = f"./output/checkpoints/{model}_lodo"
     results_dir = "./output/results/malignancy"
 
     job_suffix = f"malignancy_s{scenario_num}"
@@ -652,12 +661,11 @@ def generate_malignancy_script(
     # Train only if model not already saved
     parts.append(f"if [ ! -f {models_dir}/{model_name}.pth ]; then")
     parts.append(f'    echo "Training {model_name} ..."')
-    training_test_label = next(l for l in "ABCD" if l not in scenario["train_label"])
     parts.append(
         "    "
         + train_cmd(
             model,
-            "generic",
+            "lodo",
             train_file,
             model_name,
             models_dir,
@@ -712,19 +720,20 @@ def generate_shap_script(
     no_cache: bool = False,
 ) -> str:
     """Generate a SHAP script: train model if absent, then run SHAP analysis."""
-    if mode == "generic":
-        scenario = GENERIC_SCENARIOS[scenario_num]
-        models_dir = f"./output/checkpoints/{model}_generic"
+    if mode == "lodo":
+        scenario = LODO_SCENARIOS[scenario_num]
+        models_dir = f"./output/checkpoints/{model}_lodo"
         training_test_label = next(
             l for l in "ABCD" if l not in scenario["train_label"]
         )
+        train_file = lodo_filename(training_test_label)
     else:
-        scenario = SPECIALISED_SCENARIOS[scenario_num]
-        models_dir = f"./output/checkpoints/{model}_specialised"
+        scenario = IN_DOMAIN_SCENARIOS[scenario_num]
+        models_dir = f"./output/checkpoints/{model}_in_domain"
         training_test_label = scenario["train_label"]
+        train_file = in_domain_filename(training_test_label)
 
     model_name = f"{model}_{scenario['train_label']}"
-    train_file = dataset_filename(mode, scenario["train_dataset"])
     output_dir = "./output/results/shap"
 
     job_suffix = f"shap_{mode}_s{scenario_num}"
@@ -870,16 +879,16 @@ def generate_fine_tuning_script(
     slurm: bool,
     no_cache: bool = False,
 ) -> str:
-    """Generate a fine-tuning script for one generic scenario.
+    """Generate a fine-tuning script for one LODO scenario.
 
-    Loads the pre-trained generic model (trains it if absent) and sweeps k normal
+    Loads the pre-trained LODO model (trains it if absent) and sweeps k normal
     samples from the held-out target domain to fine-tune the AE.
     """
-    scenario = GENERIC_SCENARIOS[scenario_num]
+    scenario = LODO_SCENARIOS[scenario_num]
     model_name = f"{model}_{scenario['train_label']}"
     target_label = next(l for l in "ABCD" if l not in scenario["train_label"])
-    target_file = dataset_filename("specialised", DATASETS[target_label])
-    models_dir = f"./output/checkpoints/{model}_generic"
+    target_file = in_domain_filename(target_label)
+    models_dir = f"./output/checkpoints/{model}_lodo"
     results_dir = f"./output/results/{model}_fine_tuning"
 
     job_suffix = f"fine_tuning_s{scenario_num}"
@@ -904,7 +913,7 @@ def generate_fine_tuning_script(
     )
     parts.append("")
 
-    train_file = dataset_filename("generic", scenario["train_dataset"])
+    train_file = lodo_filename(target_label)
     training_test_label = target_label
     parts.append(
         f"if [ ! -f {models_dir}/{model_name}${{MODEL_NAME_SUFFIX}}.pth ]; then"
@@ -914,7 +923,7 @@ def generate_fine_tuning_script(
         "    "
         + train_cmd(
             model,
-            "generic",
+            "lodo",
             train_file,
             model_name,
             models_dir,
@@ -968,10 +977,10 @@ def generate_domain_shift_script(
     parts.append("")
     cmd = (
         f"python3 experiments/domain_shift.py \\\n"
-        f"    --dataset A $DATASETS_DIR/generic-OurAirports.csv \\\n"
-        f"    --dataset B $DATASETS_DIR/generic-sakila.csv \\\n"
-        f"    --dataset C $DATASETS_DIR/generic-AdventureWorks.csv \\\n"
-        f"    --dataset D $DATASETS_DIR/generic-OHR.csv \\\n"
+        f"    --dataset A $DATASETS_DIR/bcd-a.csv \\\n"
+        f"    --dataset B $DATASETS_DIR/acd-b.csv \\\n"
+        f"    --dataset C $DATASETS_DIR/abd-c.csv \\\n"
+        f"    --dataset D $DATASETS_DIR/abc-d.csv \\\n"
         f"    --extractor {model} \\\n"
         f"    --workers ${{SLURM_CPUS_PER_TASK:-16}} \\\n"
         f"    $TESTING_FLAG"
@@ -1042,8 +1051,8 @@ def main():
         type=str,
         required=True,
         choices=[
-            "generic",
-            "specialised",
+            "lodo",
+            "in_domain",
             "wafamole",
             "domain_shift",
             "malignancy",
@@ -1084,7 +1093,7 @@ def main():
         dest="repro_runs",
         choices=range(1, 5),
         metavar="{1-4}",
-        help="Number of independent runs to submit with identical settings (for reproducibility checks). Each run gets isolated output dirs (e.g. _repro1, _repro2, ...). Only applies to generic and specialised modes.",
+        help="Number of independent runs to submit with identical settings (for reproducibility checks). Each run gets isolated output dirs (e.g. _repro1, _repro2, ...). Only applies to lodo and in_domain modes.",
     )
     parser.add_argument(
         "--dry-run",
@@ -1099,7 +1108,7 @@ def main():
     parser.add_argument(
         "--no-matrix",
         action="store_true",
-        help="Only evaluate on the key dataset (left-out for generic, trained for specialised); skips wafamole phase 2",
+        help="Only evaluate on the key dataset (left-out for lodo, trained for in_domain); skips wafamole phase 2",
     )
     parser.add_argument(
         "--no-train",
@@ -1114,7 +1123,7 @@ def main():
     parser.add_argument(
         "--eval-only",
         action="store_true",
-        help="Skip training and only run evaluation (requires a pre-trained model). Only applies to generic and specialised modes.",
+        help="Skip training and only run evaluation (requires a pre-trained model). Only applies to lodo and in_domain modes.",
     )
     args = parser.parse_args()
 
@@ -1244,7 +1253,7 @@ def main():
             except ValueError:
                 parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
         for n in scenario_nums:
-            for shap_mode in ("generic", "specialised"):
+            for shap_mode in ("lodo", "in_domain"):
                 script = generate_shap_script(
                     args.model,
                     shap_mode,
@@ -1274,9 +1283,7 @@ def main():
                 parser.error(f"--scenario must be 1-4 or 'all', got '{args.scenario}'")
 
         generator = (
-            generate_generic_script
-            if args.mode == "generic"
-            else generate_specialised_script
+            generate_lodo_script if args.mode == "lodo" else generate_in_domain_script
         )
         run_ids = range(1, args.repro_runs + 1) if args.repro_runs > 1 else [None]
         for n in scenario_nums:

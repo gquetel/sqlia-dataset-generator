@@ -10,7 +10,7 @@ fi
 
 # MODELS=(ae_li ae_gaur ae_li_gaur_lex ae_li_gaur_synt ae_li_gaur_sem)
 MODELS=(ae_li_gaur_synt ae_li_gaur_sem)
-MODES=(generic specialised)
+MODES=(lodo in_domain)
 
 for model in "${MODELS[@]}"; do
     for mode in "${MODES[@]}"; do
