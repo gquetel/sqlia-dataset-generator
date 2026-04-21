@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelConfig:
-    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "loginov", "gaur", "codebert", "codet5", "unixcoder", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
+    extractor_type: str  # "li", "countvect", "securebert", "securebert2", "modernbert", "roberta", "kakisim", "w2v", "loginov", "gaur", "codebert", "codet5", "flan_t5", "sentbert", "llm2vec", "qwen3_emb"
     model_type: str  # "ocsvm", "lof", "ae"
     use_scaler: bool = False
     display_name: str = ""
@@ -162,15 +162,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
         extractor_kwargs=dict(vector_size=256),
     ),
-    # ---- BiLSTM W2V ----
-    "ocsvm_bilstm_w2v": ModelConfig(
-        extractor_type="bilstm_w2v",
-        model_type="ocsvm",
-        use_scaler=False,
-        display_name="BiLSTM-W2V and OCSVM",
-        hyperparams=dict(nu=0.05, kernel="rbf", gamma="scale", max_iter=10000),
-        extractor_kwargs=dict(w2v_vector_size=256, lstm_hidden_size=128),
-    ),
     # ---- Loginov ----
     "ocsvm_loginov": ModelConfig(
         extractor_type="loginov",
@@ -277,14 +268,6 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         display_name="Li + GAUR Sem + AE",
         hyperparams=dict(lr=0.005, epochs=100, batch_size=8192),
         extractor_kwargs=dict(gaur_features="SEMANTIC_TAGS"),
-    ),
-    # ---- UniXcoder ----
-    "ae_unixcoder": ModelConfig(
-        extractor_type="unixcoder",
-        model_type="ae",
-        display_name="UniXcoder and AE",
-        hyperparams=dict(lr=0.001, epochs=100, batch_size=64),
-        extractor_kwargs=dict(batch_size=64),
     ),
     # ---- CodeBERT ----
     "ae_codebert": ModelConfig(
@@ -429,13 +412,6 @@ def _make_extractor(
         ext.cache_dir = cache_dir
         return ext
 
-    if config.extractor_type == "bilstm_w2v":
-        from extractors.bilstm_w2v import BiLSTMW2VExtractor
-
-        ext = BiLSTMW2VExtractor(device=device, **kwargs)
-        ext.cache_dir = cache_dir
-        return ext
-
     if config.extractor_type == "loginov":
         return LoginovExtractor()
 
@@ -452,15 +428,6 @@ def _make_extractor(
         ext = GaurAblationExtractor(**kwargs)
         ext.cache_dir = cache_dir
         return ext
-
-    if config.extractor_type == "unixcoder":
-        from extractors.unixcoder import UniXcoderExtractor
-
-        return UniXcoderExtractor(
-            device=device,
-            embeddings_path=embeddings_path,
-            **kwargs,
-        )
 
     if config.extractor_type == "codebert":
         from extractors.codebert import CodeBERTExtractor
@@ -533,10 +500,8 @@ def _output_activation(config: ModelConfig) -> str:
     if config.extractor_type in (
         "securebert",
         "roberta",
-        "bilstm_w2v",
         "codebert",
         "codet5",
-        "unixcoder",
         "flan_t5",
         "sentbert",
         "llm2vec",

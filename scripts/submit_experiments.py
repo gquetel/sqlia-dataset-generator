@@ -84,7 +84,6 @@ MODEL_PROFILES = {
     "ae_li_gaur_sem": "cpu",
     "ae_codebert": "A100",
     "ae_codet5": "A100_long",  # Can't use V100 using this requirements.txt
-    "ae_unixcoder": "A100_long",
     "ae_flan_t5": "A100_long",
     "ae_sentbert": "V100",
     "ae_llm2vec": "A100_long",  # Requires 32Gb+ GPU, and 64+ memory

@@ -264,7 +264,6 @@ def main():
             "ae_li_gaur_sem",
             "ae_codebert",
             "ae_codet5",
-            "ae_unixcoder",
             "ae_flan_t5",
             "ae_sentbert",
             "ae_llm2vec",

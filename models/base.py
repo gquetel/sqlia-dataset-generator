@@ -352,16 +352,6 @@ class BaseAutoEncoderModel:
             meta["vectorizer"] = self.extractor.vectorizer
             if hasattr(self.extractor.vectorizer, "_views"):
                 meta["views"] = list(self.extractor.vectorizer._views)
-        # BiLSTM-W2V extractor state
-        if hasattr(self.extractor, "_bilstm") and self.extractor._bilstm is not None:
-            meta["bilstm_state"] = self.extractor._bilstm.cpu().state_dict()
-            self.extractor._bilstm.to(self.device)
-        if hasattr(self.extractor, "_w2v") and self.extractor._w2v is not None:
-            meta["w2v_model"] = self.extractor._w2v
-        if hasattr(self.extractor, "w2v_vector_size"):
-            meta["w2v_vector_size"] = self.extractor.w2v_vector_size
-        if hasattr(self.extractor, "lstm_hidden_size"):
-            meta["lstm_hidden_size"] = self.extractor.lstm_hidden_size
         return meta
 
     def load_model(self, load_path: str):
@@ -416,19 +406,5 @@ class BaseAutoEncoderModel:
             self.extractor.vectorizer = metadata["vectorizer"]
             self.extractor._fitted = True
             self.feature_columns = self.extractor.vectorizer.get_feature_names_out()
-        # BiLSTM-W2V extractor state
-        if "bilstm_state" in metadata and hasattr(self.extractor, "_bilstm"):
-            from extractors.bilstm_w2v import BiLSTMSeqAutoEncoder
-
-            w2v_dim = metadata.get("w2v_vector_size", 256)
-            hidden = metadata.get("lstm_hidden_size", 128)
-            self.extractor._bilstm = BiLSTMSeqAutoEncoder(
-                w2v_dim=w2v_dim, hidden_size=hidden
-            )
-            self.extractor._bilstm.load_state_dict(metadata["bilstm_state"])
-            self.extractor._bilstm.to(self.device)
-            self.extractor._bilstm.eval()
         if "w2v_model" in metadata and hasattr(self.extractor, "_w2v"):
             self.extractor._w2v = metadata["w2v_model"]
-        if hasattr(self.extractor, "_fitted") and "bilstm_state" in metadata:
-            self.extractor._fitted = True
