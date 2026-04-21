@@ -1,3 +1,8 @@
+# Update
+
+See [gquetel/cross-domain-SQLAD-datasets-generation](https://github.com/gquetel/cross-domain-SQLAD-datasets-generation) for an improved version of this codebase capable of generating cross-domain dataset ! 
+
+
 # SQL Injection Detection Dataset Generator
 
 This repository contains the code used to generate high-quality SQL Injection Detection Datasets for evaluating unsupervised detection systems. Samples are built using query templates filled with legitimate values (normal samples) and [sqlmap](https://github.com/sqlmapproject/sqlmap/tree/1.8.7)-generated payloads (attack samples). This codebase was used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037), published at ANUBIS 2025.
