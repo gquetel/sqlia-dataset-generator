@@ -1,10 +1,10 @@
-# SQL Injection Detection Dataset Generator
+# Cross-domain SQL attack Dataset Generator
 
-This repository contains the code used to generate high-quality SQL Injection Detection Datasets for evaluating unsupervised detection systems. Samples are built using query templates filled with legitimate values (normal samples) and [sqlmap](https://github.com/sqlmapproject/sqlmap/tree/1.8.7)-generated payloads (attack samples). This codebase was used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037), published at ANUBIS 2025.
+This repository contains the code used to generate high-quality SQL attack Datasets for evaluating unsupervised detection systems. Samples are built using query templates filled with legitimate values (normal samples) and [sqlmap](https://github.com/sqlmapproject/sqlmap/tree/1.8.7)-generated payloads (attack samples). This codebase was used to generate the [Superviz26-SQL Dataset](https://zenodo.org/records/19627322).
 
 ## Dataset Generation Strategy
 
-This generator creates realistic SQL injection detection datasets through controlled emulation of web application endpoints and database attacks. It produces labelled datasets suitable for training and evaluating unsupervised anomaly detection systems.
+This generator creates realistic SQL attack detection datasets through controlled emulation of web application endpoints and database attacks. It produces labelled datasets suitable for training and evaluating unsupervised anomaly detection systems.
 
 <p align="center">
   <img width="720" src="data/img/dataset-generation-process.png">
@@ -68,93 +68,24 @@ Example normal sample:
 SELECT * FROM airport WHERE icao_code = 'LFPN'
 ```
 
-More details are available in the paper: [Superviz25-SQL: High-Quality Dataset to Empower Unsupervised SQL Injection Detection Systems](https://hal.science/hal-05314211).
-
-______________________________________________________________________
-
-## Reproducing Superviz25-SQL
-
-> **Note**: The published Superviz25-SQL dataset was generated using an earlier version of this codebase that used INI configuration files (`--ini`) instead of the current TOML format (`--config-file`). The Docker container reflects this older version. For new datasets, use the current TOML-based approach documented below.
-
-This codebase was used to generate the [Superviz25-SQL Dataset](https://zenodo.org/records/17086037), published at ANUBIS 2025. The dataset uses the **OurAirports** database schema (derived from the OurAirports.com project) with query templates covering various SQL statement types.
-
-**Citation**: If you use the dataset or code for your research, please cite:
-
-```bibtex
-@inproceedings{quetel:hal-05314211,
-  TITLE = {{Superviz25-SQL: High-Quality Dataset to Empower Unsupervised SQL Injection Detection Systems}},
-  AUTHOR = {Quetel, Gregor and Alata, Eric and Gimenez, Pierre-Francois and Robert, Thomas and Pautet, Laurent},
-  URL = {https://hal.science/hal-05314211},
-  BOOKTITLE = {{ANUBIS 2025 - 1st International Workshop on Assessment with New methodologies, Unified Benchmarks, and environments, of Intrusion detection and response Systems}},
-  ADDRESS = {Toulouse, France},
-  PAGES = {1-20},
-  YEAR = {2025},
-  MONTH = Sep,
-  PDF = {https://hal.science/hal-05314211v1/file/anubis.pdf},
-  HAL_ID = {hal-05314211},
-  HAL_VERSION = {v1},
-}
-```
-
-Full dataset generation takes approximately 10 hours.
-
-### Environment Setup
-
-Docker Container
-
-> **Note**: The Docker container uses the older INI-based configuration (`--ini ini.ini`) that was used to generate the published dataset. Current development uses TOML configuration (`--config-file config.toml`).
-
-Pull the pre-built container:
-
-```bash
-docker pull ghcr.io/gquetel/sqlia-dataset:1.0.0
-```
-
-Run the container:
-
-```bash
-$ docker run -it ghcr.io/gquetel/sqlia-dataset:1.0.0
-
-Welcome to the Superviz-SQL25 Dataset Generator Container
-----------------------------------------------------------
-
-Available commands:
-
-  ./setup-mysql.sh
-      Initialize the MySQL server.
-
-  python3 ./launcher.py --ini ini.ini --testing
-      Run the generator in test mode.
-
-  python3 ./launcher.py --ini ini.ini
-      Generate the full dataset.
-
-  docker cp <containerId>:/generator/dataset.csv ./dataset.csv
-      (From the host) Copy the generated dataset to the host machine.
-
-bash-5.2$
-```
-
 ## Development
 
-For development, or generating a dataset given other dataset specifications, we provide a Nix shell environment. Enter it using `nix-shell`. The environment contains all the runtime dependencies to generate such dataset and adds the `scripts/` directory to your `PATH`.
-
-MySQL can then be managed with the provided helper scripts:
+For development, or generating a dataset given other dataset specifications, we provide a Nix shell environment. Enter it using:
 
 ```bash
-mysql-start        # Initialize and start the local MySQL dev server (port 61337)
-mysql-stop         # Stop the MySQL dev server
-mysql-stop --clean # Stop MySQL and remove all data
+nix-shell
 ```
 
-Alternatively, an equivalent environment can be manually created by using the following software versions:
+The environment contains all runtime dependencies and adds the `scripts/` directory to your `PATH`. The launcher **manages MySQL automatically** (start/stop per dataset), so no manual MySQL setup is required to run generation.
+
+Alternatively, an equivalent environment can be manually created using the following software versions:
 
 - MySQL 8.4.5
 - sqlmap 1.9.4
 - pt-kill 3.2.0
 - python 3.13, the dependency packages versions used are further detailed in requirements.txt.
 
-Then, you could initialize MySQL as follows:
+Then, initialize MySQL as follows:
 
 ```bash
 $ mkdir /usr/local/mysqld_1/
@@ -173,14 +104,14 @@ This creates the unprivileged user required for query validation and sqlmap atta
 
 ### Creating New Datasets
 
-To generate a dataset with different database schema, we require the following inputs:
+To generate a dataset with a different database schema, you need:
 
-- **Query templates**: in the form of CSV files. The file must contain the fields `template`, `ID`, optional `description` columns with `{placeholders}`.
-- **Dictionaries**: Text files containing legitimate values, one per line
+- **Query templates**: CSV files with `template`, `ID`, and optional `description` columns. Placeholders use `{curly_braces}` and must match dictionary filenames.
+- **Dictionaries**: Text files containing legitimate values, one per line.
 
-Optionally, you can include SQL scripts of normal queries as inputs. This is typically useful when you already possess small dumps of normal queries. Then, for each type of statement, write the associated template and labels the queries using comments (See [OHR script](data/datasets/OHR/insert.sql) for an example). Then, the tool will measure the repartition of templates. If more samples are required than those provided in the script, the tool will generate more using the normal samples and the template while respecting the specified template repartition.
+Optionally, you can include SQL scripts of normal queries. This is useful when you already have small dumps of normal queries. For each statement type, annotate templates with `-- template-ID` comments (see [OHR script](data/datasets/OHR/insert.sql) for an example). The tool measures the template repartition and generates additional samples to meet the configured target count while respecting it.
 
-In practice, you should create a folder under `data/datasets/` containing:
+Create a folder under `data/datasets/` containing:
 
 ```
 data/datasets/<dataset_name>/
@@ -221,78 +152,118 @@ Then add a template using `{conditions}` in the corresponding `queries/select.cs
 "SELECT film_id FROM film WHERE {conditions}",sakila-S12,Search films using a flexible set of filter conditions.
 ```
 
-During normal generation, the generator picks a random number of fields (within `[min_conditions, max_conditions]`) and a random pattern per field. For attack generation, one concrete condition set is frozen so sqlmap can inject into the resulting placeholders. An improvement would be to use the `--forms` option, but that's for future work.
+During normal generation, the generator picks a random number of fields (within `[min_conditions, max_conditions]`) and a random pattern per field. For attack generation, one concrete condition set is frozen so sqlmap can inject into the resulting placeholders.
 
-You can test your specification through the `pytest` test suite by parametrizing the test functions in [test_launcher_integration](tests/test_database_schemas.py) with your dataset name.
+Add the dataset to `config.toml` under `[[datasets]]`, then validate it with the test suite:
 
-Then, adjust the generation configuration options present the in `config.toml` file. They are as follows:
+```bash
+mysql-start
+pytest tests/test_database_schemas.py -v
+```
 
-- **General settings**: `attacks_ratio`, `normal_only_template_ratio`, `seed`, `output_path`
-- **MySQL connection**: `user`, `password`, `host`, `port`, privileged credentials
-- **Dataset definitions**: Name and statement type proportions (must sum to 1)
+#### Running Generation
 
-Then, you can test your setup with a small subset (a few templates, error-based technique only):
+Test your setup with a small subset (a few templates, error-based technique only):
 
 ```bash
 python3 ./launcher.py --config-file config.toml --testing
 ```
 
-If everything works fine, you can generate the complete dataset:
+If everything works fine, generate the complete dataset:
 
 ```bash
 python3 ./launcher.py --config-file config.toml
 ```
 
-#### Additional Options
+Additional options:
 
 - `--debug`: Verbose output with sqlmap payload details (verbosity level 3)
 - `--no-syn-check`: Skip syntax validation of normal queries (faster generation)
 - `--output-dir`: Specify output directory (default: `./output/`)
 - `--ithreat-only`: Generate only insider threat attacks
 
-**Note**: Random seeds are not fixed for sqlmap to preserve payload diversity. Therefore, generated datasets are structurally similar but may differ slightly in attack samples.
+**Note**: Random seeds are not fixed for sqlmap to preserve payload diversity. Generated datasets are structurally similar but may differ slightly in attack samples across runs.
 
 ### Testing
 
-The repository includes some integration tests which can be run using:
+The repository includes integration tests which can be run using:
 
 ```bash
 pytest
 ```
 
-## Baseline Evaluation
+The tests approximately takes 10min to run.
 
-The repository includes code to evaluate classical SQL injection detection pipelines on generated datasets.
+## Datasets
 
-#### Pipeline Components
+### Superviz26-SQL
 
-**Feature Extraction** (3 methods):
+[Superviz26-SQL](https://zenodo.org/records/19627322) is a cross-domain dataset spanning four application domains: **OurAirports** (aviation), **sakila** (DVD rental), **AdventureWorks** (bicycle sales ERP), and **OHR** (human resources). It was designed to evaluate the transfer-learning capabilities of SQL injection detection models across domains.
 
-- **CountVectorizer**: Word count-based approach
-- **Manual Features**: SQL injection-specific features from ["A SQL Injection Detection Method Based on Adaptive Deep Forest"](https://doi.org/10.1109/ACCESS.2019.2944951)
-- **SecureBERT**: Cybersecurity-specific BERT model from ["SecureBERT: A Domain-Specific Language Model for Cybersecurity"](https://doi.org/10.1007/978-3-031-25538-0_3)
+**Citation**: TODO.
 
-**Novelty Detectors** (3 methods):
-
-- **Autoencoder**: PyTorch implementation
-- **Local Outlier Factor**: scikit-learn implementation
-- **One-Class SVM**: scikit-learn implementation
-
-Total: **9 pipeline combinations**
-
-#### Running Evaluation
-
-Code is available in the [models](./models/) folder. After generating a dataset:
+To reproduce, enter the Nix shell and run the launcher for each domain using the current TOML-based configuration. However, the generation of the dataset is sequential, generating the 4 datasets as follows might take a lot of time (days). Consider invoking in parallel different configurations.
 
 ```bash
-cd models && python3 ./training.py
-
-# Save a trained model to disk for later evaluation
-cd models && python3 ./training.py --save-model-path /path/to/model.pth
+nix-shell
+python3 ./launcher.py --config-file config.toml
 ```
 
-To evaluate a saved model on a different test dataset, use `experiments/evaluate_model.py`.
+The in-domain and LODO datasets were then generated using the [generate_splits](experiments/generate_splits.py) script.
 
-## TODO:
+<!-- ### Superviz25-SQL
 
-- Standardize all output paths in scripts & notebooks loading data.
+[Superviz25-SQL](https://zenodo.org/records/17086037) is a single-domain dataset built on the **OurAirports** database schema (aviation domain). It was published at ANUBIS 2025.
+
+**Citation**:
+
+```bibtex
+@inproceedings{quetel:hal-05314211,
+  TITLE = {{Superviz25-SQL: High-Quality Dataset to Empower Unsupervised SQL Injection Detection Systems}},
+  AUTHOR = {Quetel, Gregor and Alata, Eric and Gimenez, Pierre-Francois and Robert, Thomas and Pautet, Laurent},
+  URL = {https://hal.science/hal-05314211},
+  BOOKTITLE = {{ANUBIS 2025 - 1st International Workshop on Assessment with New methodologies, Unified Benchmarks, and environments, of Intrusion detection and response Systems}},
+  ADDRESS = {Toulouse, France},
+  PAGES = {1-20},
+  YEAR = {2025},
+  MONTH = Sep,
+  PDF = {https://hal.science/hal-05314211v1/file/anubis.pdf},
+  HAL_ID = {hal-05314211},
+  HAL_VERSION = {v1},
+}
+```
+
+To reproduce, use the Docker container which reflects the older INI-based configuration used for that release:
+
+```bash
+docker pull ghcr.io/gquetel/sqlia-dataset:1.0.0
+docker run -it ghcr.io/gquetel/sqlia-dataset:1.0.0
+```
+
+Inside the container:
+
+```bash
+./setup-mysql.sh
+python3 ./launcher.py --ini ini.ini   # --testing for a quick test
+```
+
+Full dataset generation takes approximately 10 hours. -->
+
+## Detection Models
+
+The `models/` directory implements SQL attack detection pipelines used to evaluate in-domain and cross-domain detection performance.
+
+**Feature extractors** range from hand-crafted SQL-specific feature sets (Li, Loginov, GAUR, Kakisim) and token-frequency baselines (CountVectorizer) to transformer-based embeddings (SecureBERT, ModernBERT, CodeBERT, CodeT5, Qwen3-Embedding, and others).
+
+**Novelty detectors** are One-Class SVM, Local Outlier Factor, and Autoencoder combined with extractors to form named pipelines (e.g. `ae_li`, `ocsvm_securebert`). All studied pipelines can be found in [`models/registry.py`](models/registry.py).
+
+Two evaluation protocols are supported:
+
+- **Specialised**: train and test on the same domain.
+- **Generic**: train on three domains, test on the held-out fourth (leave-one-domain-out).
+
+Entry point: `models/training.py`. See [`models/README.md`](models/README.md) for the full list of models, CLI options, and caching details.
+
+## Experiments
+
+The `experiments/` directory contains scripts for dataset analysis: dataset statistics, diversity metrics (lexical, syntactic, semantic). It also contains script to analyse models performances: generic vs. specialised performance comparisons, recall heatmaps per attack technique and statement type, and transfer-learning matrices. See [`experiments/readme.md`](experiments/readme.md) for a description of each script and example commands.
